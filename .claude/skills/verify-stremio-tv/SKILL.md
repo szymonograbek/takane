@@ -5,7 +5,7 @@ description: Drive Takane (this repo's Stremio app) to prove a change works. tvO
 
 # Verify Takane
 
-The app is a SwiftUI client over stremio-core (Rust, `core/`) with mpv playback. It ships as a macOS app and a tvOS app built from `app/Shared` (screens in `app/Shared/UI`) plus one platform folder each for the video surface. The feature map in `features/` lists what a user can do.
+The app is a SwiftUI client over stremio-core (Rust, `core/`) with AetherEngine playback. It ships as a macOS app and a tvOS app built from `app/Shared` (screens in `app/Shared/UI`) plus one platform folder each for assets. The feature map in `features/` lists what a user can do.
 
 Two harnesses:
 
@@ -64,7 +64,8 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `poster.<imdb id>` | each poster in Home rows and search results |
 | `details.resume`, `details.play`, `episode.<id>` | Details actions |
 | `streams.row` | each playable stream (unplayable ones are not listed) |
-| `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · hwdec <name>` |
+| `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · <decoder>`, such as `libavcodec H264 (SW)` |
+| `player.subtitle` | the text subtitle on screen; its label is the cue's text. Bitmap subtitles have no element |
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
 | `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls |
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
@@ -75,7 +76,7 @@ Feature recipes with exact steps: `features/README.md`.
 
 ## Evidence
 
-`$T evidence <name>` writes to `build/verify/<run-id>/`: `<name>.png` (simulator screenshot, 3840×2160), `<name>.ax.jsonl` (raw accessibility tree, one JSON node per line), and `app.log` (Swift, Rust and mpv logs; long tokens are masked). Capture before and after each user action that matters.
+`$T evidence <name>` writes to `build/verify/<run-id>/`: `<name>.png` (simulator screenshot, 3840×2160), `<name>.ax.jsonl` (raw accessibility tree, one JSON node per line), and `app.log` (Swift, Rust and AetherEngine logs; long tokens are masked). Capture before and after each user action that matters.
 
 Proof standards:
 
@@ -107,4 +108,4 @@ Copies the final app log into the run directory, closes the agent-device session
 - macOS UI is not driven by this skill. agent-device's macOS backend uses XCTest automation, which asks for a one-time system permission. Use `scripts/smoke.sh` on macOS until that permission is granted and a recipe is proven.
 - agent-device's tvOS remote has no play/pause button. The player maps select to pause/resume, so use `select`.
 - agent-device's normal `snapshot`/`is`/`get` fail once the stream list is on screen ("node escaped its cumulative clip"). `tv.sh` reads raw snapshots for that reason; do the same in ad-hoc commands (`agent-device snapshot -i --raw --session stremio-tv-verify`).
-- The simulator decodes video in software and cannot read frames back from mpv (that crashes its Metal driver). Hardware decoding, HDR and passthrough need a real Apple TV.
+- The simulator plays on the software route (`libavcodec … (SW)`). Hardware decoding, HDR, Dolby Vision and passthrough need a real Apple TV.

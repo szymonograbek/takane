@@ -1,6 +1,6 @@
 # stremio-apple-tv
 
-SwiftUI macOS and tvOS client over stremio-core (Rust bridge in `core/`) with mpv playback. The design, with its reasons, is in [docs/architecture.md](docs/architecture.md). Read its **App architecture** section before adding a screen, a service or a provider.
+SwiftUI macOS and tvOS client over stremio-core (Rust bridge in `core/`) with AetherEngine playback. The design, with its reasons, is in [docs/architecture.md](docs/architecture.md). Read its **App architecture** section before adding a screen, a service or a provider.
 
 ## Layers
 
@@ -8,10 +8,10 @@ Dependencies point inward: UI → Features → Domain ← Adapters. The composit
 
 - **Domain** (`app/Shared/Domain`) holds values, branded identifiers, ports and their errors. A port is a protocol named for a capability (`StreamService`, `PlaybackEngine`), never for a provider. Foundation, CoreGraphics and QuartzCore only.
 - **Features** (`app/Shared/Features`) holds one finite state machine per behavior: a `Feature` with `State`, `Event`, `Effect`, a pure `reduce` and a policy-free `run`. Features see ports, never adapters.
-- **Adapters** (`app/Shared/Adapters/<Provider>`) implement ports: `Core` over stremio-core, `MPV` over libmpv. Wire formats, FFI and provider quirks stay inside the adapter folder.
-- **UI** (`app/Shared/UI`, plus each platform's video surface in `app/macOS`, `app/tvOS`) renders `FeatureStore.state` and calls `send`. Views parse user input into domain types (`ManifestURL(text)`, `PlayableID(text)`) before sending.
+- **Adapters** (`app/Shared/Adapters/<Provider>`) implement ports: `Core` over stremio-core, `Aether` over AetherEngine. Wire formats, FFI and provider quirks stay inside the adapter folder.
+- **UI** (`app/Shared/UI`) renders `FeatureStore.state` and calls `send`. Views parse user input into domain types (`ManifestURL(text)`, `PlayableID(text)`) before sending.
 
-The test target compiles Domain and Features without the bridge or mpv, so an import of an adapter from those layers fails the build. Keep it that way.
+The test target compiles Domain and Features without the bridge or AetherEngine, so an import of an adapter from those layers fails the build. Keep it that way.
 
 ## Rules
 
@@ -46,7 +46,7 @@ Takane follows Apple's tvOS conventions in a burgundy palette. The component lis
 
 ## Commits
 
-Write [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary` in the imperative, lowercase, no trailing period, at most 72 characters. Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`. Scope names the area touched: `domain`, `features`, `core`, `mpv`, `ui`, `bridge` (Rust), `scripts`. Mark breaking changes with `!` after the scope. One logical change per commit.
+Write [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary` in the imperative, lowercase, no trailing period, at most 72 characters. Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`. Scope names the area touched: `domain`, `features`, `core`, `aether`, `ui`, `bridge` (Rust), `scripts`. Mark breaking changes with `!` after the scope. One logical change per commit.
 
 ## Commands
 
