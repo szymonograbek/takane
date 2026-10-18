@@ -1,0 +1,145 @@
+import Foundation
+
+/// An add-on content type: "movie", "series", "channel", "tv" or anything an add-on declares.
+struct ContentType: Hashable, Sendable, CustomStringConvertible {
+    static let movie = ContentType(known: "movie")
+    static let series = ContentType(known: "series")
+
+    let rawValue: String
+
+    init?(_ rawValue: String) {
+        guard !rawValue.isEmpty, !rawValue.contains(where: \.isWhitespace) else { return nil }
+        self.rawValue = rawValue
+    }
+
+    private init(known rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    var description: String { rawValue }
+}
+
+/// One catalog of one add-on, as its manifest declares it.
+struct CatalogID: Hashable, Sendable {
+    let addon: ManifestURL
+    let type: ContentType
+    let id: String
+}
+
+enum PosterShape: Hashable, Sendable {
+    case poster
+    case landscape
+    case square
+}
+
+/// A title in a catalog.
+struct MetaPreview: Identifiable, Hashable, Sendable {
+    let media: MediaID
+    let type: ContentType
+    let name: String
+    let poster: URL?
+    let posterShape: PosterShape
+    let background: URL?
+    let logo: URL?
+    let releaseInfo: String?
+    let description: String?
+
+    var id: MediaID { media }
+}
+
+enum CatalogError: Error, Equatable, Sendable {
+    case addonFailed(reason: String)
+}
+
+/// One catalog's titles. A failing add-on fails its own row, never the board or the search.
+struct CatalogRow: Identifiable, Equatable, Sendable {
+    let id: CatalogID
+    let addonName: String
+    /// The catalog's name from the manifest, such as "Popular", or the add-on's name when it has none.
+    let name: String
+    /// Pages loaded so far, flattened, each title once. `.loading` until the first page answers;
+    /// a catalog that answered with nothing is `.loaded([])`.
+    let items: Remote<[MetaPreview], CatalogError>
+    /// `CatalogService.loadMore` would fetch another page.
+    let canLoadMore: Bool
+}
+
+/// The home screen's rows.
+enum Board: Equatable, Sendable {
+    case loading
+    /// No installed add-on offers a catalog; the user has to install one.
+    case noCatalogAddons
+    case rows([CatalogRow])
+}
+
+/// A search query, trimmed and never empty.
+struct SearchText: Hashable, Sendable, CustomStringConvertible {
+    let rawValue: String
+
+    init?(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        rawValue = trimmed
+    }
+
+    var description: String { rawValue }
+}
+
+enum SearchResults: Equatable, Sendable {
+    /// Until the provider took this query; rows then load inside `.rows`.
+    case searching(SearchText)
+    /// No installed add-on supports search.
+    case noSearchAddons
+    /// Rows hold the first page of results; `canLoadMore` is always false.
+    case rows(SearchText, [CatalogRow])
+}
+
+/// One playable video of a title, such as a series episode.
+struct Video: Identifiable, Hashable, Sendable {
+    let playable: PlayableID
+    let name: String
+    let season: Int?
+    let episode: Int?
+    let released: Date?
+    let thumbnail: URL?
+    let overview: String?
+
+    var id: PlayableID { playable }
+}
+
+struct TitleDetails: Equatable, Sendable {
+    let preview: MetaPreview
+    let genres: [String]
+    let runtime: String?
+    let imdbRating: String?
+    /// The add-on's videos whose ids are `PlayableID`s (`tt0944947:1:1`), in its order. Videos with
+    /// other ids are left out, so non-IMDb add-ons may list none. Movies usually have none.
+    let videos: [Video]
+}
+
+enum DetailsError: Error, Equatable, Sendable {
+    /// No installed add-on serves metadata for this type.
+    case noMetaAddons
+    /// Every add-on that serves it failed or had nothing.
+    case notFound
+    /// The provider refused the request or did not answer in time.
+    case unavailable(reason: String)
+}
+
+/// Browses and describes titles across the user's add-ons.
+protocol CatalogService: Sendable {
+    /// The board now, then after every change, including add-on installs and removals.
+    /// Calling it starts loading the rows.
+    func board() -> AsyncStream<Board>
+
+    /// Asks a board row for its next page; `board()` reports it. Ignored when the row can't load more.
+    func loadMore(_ row: CatalogID)
+
+    /// Results now, then after every change. Finishes when a newer `search(_:)` call replaces this
+    /// one: providers may serve one search at a time.
+    func search(_ text: SearchText) -> AsyncStream<SearchResults>
+
+    /// Waits for the first add-on that answers with metadata. Providers may share one selection with
+    /// `StreamService`, so this can finish a running `streams(for:)` lookup.
+    func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails
+}

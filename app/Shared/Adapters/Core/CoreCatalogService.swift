@@ -1,0 +1,188 @@
+import Foundation
+
+/// Catalogs and metadata from the user's add-ons through core's `board`, `search` and
+/// `meta_details` models.
+///
+/// Core holds one selection per model. A new search replaces the previous one and finishes its
+/// stream. `details` shares `meta_details` with `CoreStreamService`: it replaces a running stream
+/// lookup, and a stream lookup for the same title (an episode's show) reuses the metadata it loaded.
+struct CoreCatalogService: CatalogService {
+    let runtime: CoreRuntime
+
+    func board() -> AsyncStream<Board> {
+        load(.board, into: .board, pending: Board.loading) { state, addons in
+            state.catalogs.isEmpty ? .noCatalogAddons : .rows(Self.rows(state, addons: addons, paging: true))
+        }
+    }
+
+    func loadMore(_ row: CatalogID) {
+        do {
+            let state = try runtime.state(.board, as: CatalogsState.self)
+            guard let index = state.catalogs.firstIndex(where: { $0.first.flatMap { Self.catalogID($0.request) } == row }) else {
+                Log.core.warning("no board row \(row.addon) \(row.type)/\(row.id) to load more of")
+                return
+            }
+            try runtime.dispatch(.catalogs(.loadNextPage(index: index)), to: .board)
+        } catch {
+            Log.core.error("loading more of \(row.type)/\(row.id) failed: \(error)")
+        }
+    }
+
+    func search(_ text: SearchText) -> AsyncStream<SearchResults> {
+        load(.search(text), into: .search, pending: SearchResults.searching(text)) { state, addons in
+            state.catalogs.isEmpty ? .noSearchAddons : .rows(text, Self.rows(state, addons: addons, paging: false))
+        }
+    }
+
+    func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails {
+        let metaPath = ResourcePath.meta(type: type.rawValue, id: media.rawValue)
+        do {
+            return try await runtime.request(
+                .load(.metaDetails(metaPath: metaPath, streamPath: nil)), to: .metaDetails, observing: .metaDetails,
+                as: MetaDetailsState.self, timeout: .seconds(30)
+            ) { details -> Probe<TitleDetails, DetailsError> in
+                guard details.selected?.metaPath == metaPath else { return .pending }
+                // Core asks every add-on with the `meta` resource for this type and id; none means none installed.
+                guard !details.metaItems.isEmpty else { return .failed(.noMetaAddons) }
+                if let item = details.metaItems.lazy.compactMap({ $0.content?.readyContent }).first {
+                    return Self.details(item).map(Probe.done) ?? .failed(.notFound)
+                }
+                return details.metaItems.allSatisfy { $0.content?.isSettled ?? false } ? .failed(.notFound) : .pending
+            }
+        } catch {
+            switch error {
+            case .rejected(let error): throw .unavailable(reason: "\(error)")
+            case .timedOut: throw .unavailable(reason: "timed out")
+            case .failed(let error): throw error
+            }
+        }
+    }
+
+    /// Loads `selection` into `field`, then yields `pending` until core holds it and `transform` of
+    /// every state after. Finishes when another selection replaces it.
+    private func load<Value: Sendable>(
+        _ selection: CatalogsSelection,
+        into field: CoreField,
+        pending: Value,
+        _ transform: @escaping @Sendable (CatalogsState, [Addon]) -> Value
+    ) -> AsyncStream<Value> {
+        let (values, continuation) = AsyncStream.makeStream(of: Value.self, bufferingPolicy: .bufferingNewest(1))
+        // Subscribe before dispatching so no change is missed.
+        let states = runtime.states(field, as: CatalogsState.self)
+        do {
+            try runtime.dispatch(.load(.catalogsWithExtra(selection)), to: field)
+        } catch {
+            Log.core.error("loading \(field.rawValue) rejected: \(error)")
+            continuation.finish()
+            return values
+        }
+        let runtime = runtime
+        let task = Task {
+            var isSelected = false
+            for await state in states {
+                guard state.selected == selection else {
+                    // Before our load lands the previous selection still shows; after, another load replaced ours.
+                    if isSelected { break }
+                    continuation.yield(pending)
+                    continue
+                }
+                isSelected = true
+                // Core lists catalogs without requesting them, on load and when add-ons change.
+                if state.catalogs.contains(where: { $0.first?.content == nil }) {
+                    do {
+                        try runtime.dispatch(.catalogs(.loadRange(0..<state.catalogs.count)), to: field)
+                    } catch {
+                        Log.core.error("requesting \(field.rawValue) catalogs rejected: \(error)")
+                    }
+                }
+                continuation.yield(transform(state, Self.addons(runtime)))
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        return values
+    }
+
+    private static func addons(_ runtime: CoreRuntime) -> [Addon] {
+        do {
+            return try runtime.state(.ctx, as: CtxState.self).profile.addons
+        } catch {
+            Log.core.error("reading addons failed: \(error)")
+            return []
+        }
+    }
+
+    private static func catalogID(_ request: ResourceRequest) -> CatalogID? {
+        guard let addon = ManifestURL(request.base), let type = ContentType(request.path.type) else { return nil }
+        return CatalogID(addon: addon, type: type, id: request.path.id)
+    }
+
+    private static func rows(_ state: CatalogsState, addons: [Addon], paging: Bool) -> [CatalogRow] {
+        state.catalogs.compactMap { pages in
+            guard let first = pages.first, let id = catalogID(first.request),
+                  let addon = addons.first(where: { $0.transportUrl == first.request.base }),
+                  let catalog = addon.manifest.catalogs.first(where: { $0.id == id.id && $0.type == id.type.rawValue })
+            else { return nil }
+            let items: Remote<[MetaPreview], CatalogError> = switch first.content {
+            case .none, .loading: .loading
+            case .failed(let error) where error == emptyContent: .loaded([])
+            case .failed(let error): .failed(.addonFailed(reason: error.compactDescription))
+            case .ready: .loaded(previews(pages))
+            }
+            // Core's own rule for `LoadNextPage`: the last page loaded and the catalog accepts `skip`.
+            let canLoadMore = paging && pages.last?.content?.readyContent != nil && catalog.extraNames.contains("skip")
+            return CatalogRow(
+                id: id, addonName: addon.manifest.name, name: catalog.name ?? addon.manifest.name,
+                items: items, canLoadMore: canLoadMore
+            )
+        }
+    }
+
+    /// core's error for an add-on that answered with an empty list.
+    private static let emptyContent = JSONValue.object(["type": .string("EmptyContent")])
+
+    private static func previews(_ pages: [ResourceLoadable<[MetaItemPreview]>]) -> [MetaPreview] {
+        // Pages may overlap; a title shows once, where it first appeared.
+        var seen = Set<MediaID>()
+        return pages.compactMap { $0.content?.readyContent }.joined().compactMap(preview).filter { seen.insert($0.media).inserted }
+    }
+
+    private static func preview(_ item: MetaItemPreview) -> MetaPreview? {
+        guard let media = MediaID(item.id), let type = ContentType(item.type) else { return nil }
+        let shape: PosterShape = switch item.posterShape {
+        case "landscape": .landscape
+        case "square": .square
+        default: .poster
+        }
+        return MetaPreview(
+            media: media, type: type, name: item.name,
+            poster: item.poster.flatMap(URL.init(string:)), posterShape: shape,
+            background: item.background.flatMap(URL.init(string:)), logo: item.logo.flatMap(URL.init(string:)),
+            releaseInfo: item.releaseInfo, description: item.description
+        )
+    }
+
+    private static func details(_ item: MetaDetailsState.MetaItem) -> TitleDetails? {
+        guard let preview = preview(item.preview) else { return nil }
+        return TitleDetails(
+            preview: preview,
+            genres: item.preview.links.filter { $0.category == "Genres" }.map(\.name),
+            runtime: item.preview.runtime,
+            imdbRating: item.preview.links.first { $0.category == "imdb" }?.name,
+            videos: item.videos.compactMap { video in
+                PlayableID(video.id).map { playable in
+                    Video(
+                        playable: playable, name: video.title, season: video.season, episode: video.episode,
+                        released: video.released.flatMap(date), thumbnail: video.thumbnail.flatMap(URL.init(string:)),
+                        overview: video.overview
+                    )
+                }
+            }
+        )
+    }
+
+    /// Core writes whole seconds without a fraction and other times with one.
+    private static func date(_ text: String) -> Date? {
+        (try? Date(text, strategy: .iso8601)) ?? (try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
+    }
+}

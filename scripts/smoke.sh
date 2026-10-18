@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# Builds and launches the app in smoke-test mode: install the add-on, resolve streams, play one,
-# confirm core recorded progress, then quit. Exit code 0 means every step passed.
+# Builds and launches the app in smoke-test mode: browse the board, page a row, search and load a
+# title's details from the default add-ons, install the add-on, resolve streams, play one, confirm
+# core recorded progress, then quit. Exit code 0 means every step passed.
 #
 # The add-on URL contains debrid credentials, so it is read from STREMIO_SMOKE_ADDON_URL
 # or from the git-ignored .env.smoke file, never from the repo.
 #
-# Usage: scripts/smoke.sh [--tvos] [type/id]
+# Usage: scripts/smoke.sh [--tvos] [--no-addons] [type/id]
 #   scripts/smoke.sh                          macOS, movie/tt0111161
 #   scripts/smoke.sh --tvos series/tt0944947:1:1
+#   scripts/smoke.sh --no-addons              core starts without its default add-ons; checks that
+#                                             board, search and details report none installed, then
+#                                             that installing Cinemeta fills the board
 # On tvOS it runs on the "Stremio Apple TV" simulator (created on first use) and also saves
 # a simulator screenshot taken while the stream is on screen.
 set -euo pipefail
@@ -16,6 +20,11 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 platform=macos
 if [[ "${1:-}" == "--tvos" ]]; then
     platform=tvos
+    shift
+fi
+no_addons=0
+if [[ "${1:-}" == "--no-addons" ]]; then
+    no_addons=1
     shift
 fi
 item="${1:-movie/tt0111161}"
@@ -49,6 +58,8 @@ if [[ "$platform" == macos ]]; then
     STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
     STREMIO_SMOKE_ITEM="$item" \
     STREMIO_SMOKE_EXIT=1 \
+    STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
+    EMPTY_OFFICIAL_ADDONS="$no_addons" \
     STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
         "$app/Contents/MacOS/StremioTV" >/dev/null 2>&1 || status=$?
     echo "exit code: $status"
@@ -71,6 +82,8 @@ SIMCTL_CHILD_STREMIO_STORAGE_DIRECTORY="$storage" \
 SIMCTL_CHILD_STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
 SIMCTL_CHILD_STREMIO_SMOKE_ITEM="$item" \
 SIMCTL_CHILD_STREMIO_SMOKE_EXIT=1 \
+SIMCTL_CHILD_STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
+SIMCTL_CHILD_EMPTY_OFFICIAL_ADDONS="$no_addons" \
 SIMCTL_CHILD_STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
     xcrun simctl launch --terminate-running-process "$device" "$bundle_id" >/dev/null
 

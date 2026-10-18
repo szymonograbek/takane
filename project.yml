@@ -112,3 +112,27 @@ targets:
         CODE_SIGN_IDENTITY: "-"
     scheme:
       testTargets: [StremioTVTests]
+  # Unit tests for the HTTP adapters, against recorded responses served by a URLProtocol stub.
+  # Live tests run against the real services when STREMIO_LIVE_TESTS=1 (see scripts/test.sh).
+  StremioTVAdapterTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: app/Shared/Domain
+      - path: app/Shared/Logging
+      - path: app/Shared/App/LaunchOptions.swift
+      - path: app/Shared/Adapters/HTTP
+      - path: app/Shared/Adapters/SkipDB
+      - path: app/Tests/Fixtures.swift
+      - path: app/AdapterTests
+    buildToolPlugins:
+      - plugin: SwiftLintBuildToolPlugin
+        package: SwiftLintPlugins
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.stremio-tv.adapter-tests
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+    scheme:
+      testTargets: [StremioTVAdapterTests]

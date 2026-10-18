@@ -17,4 +17,15 @@ struct IdentifierTests {
         #expect(ManifestURL("ftp://addon.example/manifest.json") == nil)
         #expect(ManifestURL("manifest.json") == nil)
     }
+
+    @Test func trimsSearchTextAndRejectsBlankQueries() {
+        #expect(SearchText("  shawshank\n")?.rawValue == "shawshank")
+        #expect(SearchText(" \t ") == nil)
+    }
+
+    @Test func parsesAddonContentTypes() {
+        #expect(ContentType("series") == .series)
+        #expect(ContentType("channel")?.rawValue == "channel")
+        #expect(ContentType("") == nil)
+    }
 }

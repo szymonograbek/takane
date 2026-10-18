@@ -57,6 +57,32 @@ struct Addon: Decodable, Sendable, Identifiable {
         let id: String
         let name: String
         let version: String
+        let catalogs: [Catalog]
+    }
+
+    /// core's `ManifestCatalog`.
+    struct Catalog: Decodable, Sendable {
+        let id: String
+        let type: String
+        let name: String?
+        /// The extra properties the catalog accepts, such as `search` and `skip`.
+        let extraNames: [String]
+
+        private struct ExtraProp: Decodable { let name: String }
+        private enum CodingKeys: String, CodingKey { case id, type, name, extra, extraSupported }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            type = try container.decode(String.self, forKey: .type)
+            name = try container.decodeIfPresent(String.self, forKey: .name)
+            // core keeps the manifest's own form: `extra` objects, or the legacy `extraSupported` names.
+            if let props = try container.decodeIfPresent([ExtraProp].self, forKey: .extra) {
+                extraNames = props.map(\.name)
+            } else {
+                extraNames = try container.decodeIfPresent([String].self, forKey: .extraSupported) ?? []
+            }
+        }
     }
 
     let manifest: Manifest
@@ -92,17 +118,69 @@ struct AddonDetailsState: Decodable, Sendable {
     let remoteAddon: RemoteAddon?
 }
 
+// MARK: - board, search
+
+/// core's `CatalogsWithExtra`.
+struct CatalogsState: Decodable, Sendable {
+    /// Nil until the model is loaded.
+    let selected: CatalogsSelection?
+    /// One entry per catalog the selection matched, each a list of pages. A page with no `content`
+    /// is listed but not requested yet.
+    let catalogs: [[ResourceLoadable<[MetaItemPreview]>]]
+}
+
+/// core's `MetaItemPreview`. Core folds an add-on's `genres` and `imdbRating` into `links`.
+struct MetaItemPreview: Decodable, Sendable {
+    struct Link: Decodable, Sendable {
+        let name: String
+        let category: String
+    }
+
+    let id: String
+    let type: String
+    let name: String
+    // URLs are decoded as text so one malformed URL drops that image instead of failing the state.
+    let poster: String?
+    let background: String?
+    let logo: String?
+    let description: String?
+    let releaseInfo: String?
+    let runtime: String?
+    /// `poster`, `landscape` or `square`.
+    let posterShape: String
+    let links: [Link]
+}
+
 // MARK: - meta_details
 
 struct MetaDetailsState: Decodable, Sendable {
     struct Selected: Decodable, Sendable {
+        let metaPath: ResourcePath
         let streamPath: ResourcePath?
     }
 
+    /// core's `MetaItem`: the preview fields plus the title's videos.
     struct MetaItem: Decodable, Sendable {
+        let preview: MetaItemPreview
+        let videos: [Video]
+
+        private enum CodingKeys: String, CodingKey { case videos }
+
+        init(from decoder: any Decoder) throws {
+            preview = try MetaItemPreview(from: decoder)
+            videos = try decoder.container(keyedBy: CodingKeys.self).decode([Video].self, forKey: .videos)
+        }
+    }
+
+    struct Video: Decodable, Sendable {
         let id: String
-        let type: String
-        let name: String
+        let title: String
+        /// RFC 3339.
+        let released: String?
+        let overview: String?
+        let thumbnail: String?
+        let season: Int?
+        let episode: Int?
     }
 
     let selected: Selected?

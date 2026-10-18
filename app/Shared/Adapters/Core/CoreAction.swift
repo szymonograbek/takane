@@ -5,6 +5,8 @@ enum CoreField: String, Codable, Sendable {
     case ctx
     case continueWatchingPreview = "continue_watching_preview"
     case addonDetails = "addon_details"
+    case board
+    case search
     case metaDetails = "meta_details"
     case player
 }
@@ -14,15 +16,25 @@ enum CoreField: String, Codable, Sendable {
 /// core/src/lib.rs has a test that parses these exact shapes.
 enum CoreAction: Sendable {
     case load(Load)
+    case catalogs(Catalogs)
     case ctx(Ctx)
     case player(Player)
     case unload
 
     enum Load: Sendable {
         case addonDetails(transportURL: URL)
+        case catalogsWithExtra(CatalogsSelection)
         case metaDetails(metaPath: ResourcePath, streamPath: ResourcePath?)
         /// Core's player selection, as `CoreStreamService` built it into a candidate's tracking token.
         case player(selection: JSONValue)
+    }
+
+    /// Paging of the `CatalogsWithExtra` model the action targets.
+    enum Catalogs: Sendable {
+        /// Requests the catalogs at these indices that are not requested yet.
+        case loadRange(Range<Int>)
+        /// Requests the next page of the catalog at this index, if its last page loaded and it pages.
+        case loadNextPage(index: Int)
     }
 
     enum Ctx: Sendable {
@@ -49,6 +61,31 @@ struct ResourcePath: Codable, Hashable, Sendable {
     static func stream(type: String, id: String) -> ResourcePath {
         ResourcePath(resource: "stream", type: type, id: id)
     }
+}
+
+/// core's `catalogs_with_extra::Selected`: which catalogs a `CatalogsWithExtra` model loads.
+struct CatalogsSelection: Codable, Equatable, Sendable {
+    /// Every type when nil.
+    var type: String?
+    /// `[name, value]` pairs, such as `["search", "shawshank"]`.
+    var extra: [[String]]
+
+    /// Every catalog without a required extra.
+    static let board = CatalogsSelection(type: nil, extra: [])
+
+    /// Every catalog that supports the `search` extra, asked for `text`.
+    static func search(_ text: SearchText) -> CatalogsSelection {
+        CatalogsSelection(type: nil, extra: [["search", text.rawValue]])
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        // core expects an explicit null for every type.
+        try container.encode(type, forKey: .type)
+        try container.encode(extra, forKey: .extra)
+    }
+
+    private enum CodingKeys: String, CodingKey { case type, extra }
 }
 
 struct ResourceRequest: Codable, Hashable, Sendable {
@@ -132,6 +169,7 @@ extension CoreAction: Encodable {
     func encode(to encoder: any Encoder) throws {
         switch self {
         case .load(let load): try action("Load", load).encode(to: encoder)
+        case .catalogs(let catalogs): try action("CatalogsWithExtra", catalogs).encode(to: encoder)
         case .ctx(let ctx): try action("Ctx", ctx).encode(to: encoder)
         case .player(let player): try action("Player", player).encode(to: encoder)
         case .unload: try action("Unload").encode(to: encoder)
@@ -151,11 +189,27 @@ extension CoreAction.Load: Encodable {
         switch self {
         case .addonDetails(let url):
             try model("AddonDetails", AddonDetailsArgs(transportUrl: url)).encode(to: encoder)
+        case .catalogsWithExtra(let selection):
+            try model("CatalogsWithExtra", selection).encode(to: encoder)
         case .metaDetails(let metaPath, let streamPath):
             try model("MetaDetails", MetaDetailsArgs(metaPath: metaPath, streamPath: streamPath, guessStream: false))
                 .encode(to: encoder)
         case .player(let selection):
             try model("Player", selection).encode(to: encoder)
+        }
+    }
+}
+
+extension CoreAction.Catalogs: Encodable {
+    private struct RangeArgs: Encodable { let start: Int; let end: Int }
+
+    func encode(to encoder: any Encoder) throws {
+        switch self {
+        case .loadRange(let range):
+            // core's range includes `end`; one index past the last catalog requests nothing more.
+            try action("LoadRange", RangeArgs(start: range.lowerBound, end: range.upperBound)).encode(to: encoder)
+        case .loadNextPage(let index):
+            try action("LoadNextPage", index).encode(to: encoder)
         }
     }
 }

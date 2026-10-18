@@ -2,13 +2,17 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// End-to-end check of the running app: install an addon through core, resolve streams,
-/// play one in mpv, and confirm core recorded progress.
+/// End-to-end check of the running app: browse, search and describe titles from the default
+/// add-ons, install an addon through core, resolve streams, play one in mpv, and confirm core
+/// recorded progress.
 ///
 /// Enabled by `LaunchOptions` (see scripts/smoke.sh):
 /// - `STREMIO_SMOKE_ADDON_URL`: addon manifest URL (required to run)
 /// - `STREMIO_SMOKE_ITEM`: `type/id`, default `movie/tt0111161`
 /// - `STREMIO_SMOKE_EXIT=1`: quit when done, exit code 0 on pass
+/// - `STREMIO_SMOKE_CATALOG_EMPTY=1`: instead, check that a profile without add-ons reports none for
+///   catalogs, search and metadata, then that installing Cinemeta fills the board (core starts
+///   without its default add-ons under `EMPTY_OFFICIAL_ADDONS=1`)
 ///
 /// Writes `smoke-result.json` and `smoke-frame.png` next to the log file.
 @MainActor
@@ -17,6 +21,7 @@ struct SmokeTest {
         let manifest: ManifestURL
         let item: PlayableID
         let exitWhenDone: Bool
+        let expectsNoAddons: Bool
 
         init?(options: [String: String]) {
             guard let addon = options["STREMIO_SMOKE_ADDON_URL"], let manifest = ManifestURL(addon) else { return nil }
@@ -25,11 +30,14 @@ struct SmokeTest {
             self.manifest = manifest
             self.item = item
             self.exitWhenDone = options["STREMIO_SMOKE_EXIT"] == "1"
+            self.expectsNoAddons = options["STREMIO_SMOKE_CATALOG_EMPTY"] == "1"
         }
     }
 
     private enum Failure: Error, CustomStringConvertible {
         case addon(AddonError)
+        case catalog(String)
+        case details(DetailsError)
         case noPlayableStream(addon: String, groups: [String: Int])
         case player(PlaybackError)
         case noAudioOutput([String: String])
@@ -38,6 +46,8 @@ struct SmokeTest {
         var description: String {
             switch self {
             case .addon(let error): "addon: \(error)"
+            case .catalog(let problem): "catalog: \(problem)"
+            case .details(let error): "details: \(error)"
             case .noPlayableStream(let addon, let groups): "no playable stream from \(addon); groups: \(groups)"
             case .player(let error): "player failed: \(error)"
             case .noAudioOutput(let output): "no audio output: \(output)"
@@ -46,9 +56,28 @@ struct SmokeTest {
         }
     }
 
+    private struct CatalogResult: Encodable {
+        /// `rows` or `noCatalogAddons`.
+        var board: String?
+        var boardRows: Int?
+        /// With `STREMIO_SMOKE_CATALOG_EMPTY=1`, after installing Cinemeta into the empty profile.
+        var boardRowsAfterInstall: Int?
+        var pagedRow: String?
+        var pagedRowItems: Int?
+        var pagedRowItemsAfterLoadMore: Int?
+        /// `rows` or `noSearchAddons`.
+        var search: String?
+        var searchRows: Int?
+        var searchHitRow: String?
+        /// The title's name, or the error.
+        var details: String?
+        var detailsVideos: Int?
+    }
+
     private struct Result: Encodable {
         var passed = false
         var failure: String?
+        var catalog = CatalogResult()
         var addon: String?
         var streamGroups: [String: Int] = [:]
         var playedStream: String?
@@ -71,7 +100,13 @@ struct SmokeTest {
         var result = Result()
         Log.smoke.info("SMOKE start: addon=\(configuration.manifest.url.host() ?? "?") item=\(configuration.item.coreType)/\(configuration.item)")
         do {
-            try await steps(&result)
+            if configuration.expectsNoAddons {
+                try await noAddonSteps(&result.catalog)
+                try await firstCatalogAddonSteps(&result.catalog)
+            } else {
+                try await catalogSteps(&result.catalog)
+                try await steps(&result)
+            }
             result.passed = true
         } catch {
             result.failure = "\(error)"
@@ -175,6 +210,167 @@ struct SmokeTest {
         } catch {
             Log.smoke.error("SMOKE result write failed: \(error)")
         }
+    }
+}
+
+// MARK: - Catalog journey
+
+extension SmokeTest {
+    private func catalogSteps(_ result: inout CatalogResult) async throws(Failure) {
+        try await boardSteps(&result)
+        try await searchAndDetailsSteps(&result)
+    }
+
+    private func boardSteps(_ result: inout CatalogResult) async throws(Failure) {
+        let catalog = app.services.catalog
+        let (rows, paged) = try await Self.until(catalog.board(), timeout: .seconds(45), "board rows") { board in
+            switch board {
+            case .loading: return Probe<([CatalogRow], CatalogRow), Failure>.pending
+            case .noCatalogAddons: return .failed(.catalog("no catalog add-ons on a fresh profile"))
+            case .rows(let rows):
+                guard let first = rows.first else { return .failed(.catalog("board has rows but none listed")) }
+                switch first.items {
+                case .loading: return .pending
+                case .failed(let error): return .failed(.catalog("\(first.name): \(error)"))
+                case .loaded where !first.canLoadMore: return .failed(.catalog("\(first.name) cannot load more"))
+                case .loaded: return .done((rows, first))
+                }
+            }
+        }
+        result.board = "rows"
+        result.boardRows = rows.count
+        result.pagedRow = "\(paged.addonName) \(paged.name) (\(paged.id.type))"
+        let before = paged.items.value?.count ?? 0
+        result.pagedRowItems = before
+        Log.smoke.info("SMOKE catalog 1/4 board: \(rows.count) rows, \(result.pagedRow ?? "") has \(before) items")
+
+        let board = catalog.board()
+        catalog.loadMore(paged.id)
+        result.pagedRowItemsAfterLoadMore = try await Self.until(board, timeout: .seconds(30), "next page of \(paged.name)") { board in
+            guard case .rows(let rows) = board, let count = rows.first(where: { $0.id == paged.id })?.items.value?.count, count > before else {
+                return Probe<Int, Failure>.pending
+            }
+            return .done(count)
+        }
+        Log.smoke.info("SMOKE catalog 2/4 load more: \(before) -> \(result.pagedRowItemsAfterLoadMore ?? 0) items")
+    }
+
+    private func searchAndDetailsSteps(_ result: inout CatalogResult) async throws(Failure) {
+        let catalog = app.services.catalog
+        let query = try Self.parsed(SearchText("shawshank"))
+        let searched = try Self.parsed(MediaID("tt0111161"))
+        let show = try Self.parsed(MediaID("tt0944947"))
+        let episode = PlayableID.episode(show, season: 1, episode: 1)
+
+        let (searchRows, hit) = try await Self.until(catalog.search(query), timeout: .seconds(45), "search \(query)") { results in
+            switch results {
+            case .searching: return Probe<(Int, CatalogRow), Failure>.pending
+            case .noSearchAddons: return .failed(.catalog("no search add-ons on a fresh profile"))
+            case .rows(_, let rows):
+                if let hit = rows.first(where: { $0.items.value?.contains { $0.media == searched } ?? false }) {
+                    return .done((rows.count, hit))
+                }
+                return rows.allSatisfy(\.items.isSettled) ? .failed(.catalog("no search row has \(searched)")) : .pending
+            }
+        }
+        result.search = "rows"
+        result.searchRows = searchRows
+        result.searchHitRow = "\(hit.addonName) \(hit.name) (\(hit.id.type))"
+        Log.smoke.info("SMOKE catalog 3/4 search \(query): \(searchRows) rows, \(searched) in \(result.searchHitRow ?? "")")
+
+        let details: TitleDetails
+        do {
+            details = try await catalog.details(show, type: .series)
+        } catch {
+            throw .details(error)
+        }
+        result.details = details.preview.name
+        result.detailsVideos = details.videos.count
+        guard details.preview.name == "Game of Thrones", details.videos.contains(where: { $0.playable == episode }) else {
+            throw .catalog("details of \(show): \(details.preview.name) with \(details.videos.count) videos, no \(episode)")
+        }
+        Log.smoke.info("SMOKE catalog 4/4 details: \(details.preview.name), \(details.videos.count) videos incl. \(episode)")
+    }
+
+    private func noAddonSteps(_ result: inout CatalogResult) async throws(Failure) {
+        let catalog = app.services.catalog
+        let query = try Self.parsed(SearchText("shawshank"))
+        let show = try Self.parsed(MediaID("tt0944947"))
+
+        result.board = try await Self.until(catalog.board(), timeout: .seconds(15), "empty board") { board in
+            switch board {
+            case .loading: Probe<String, Failure>.pending
+            case .noCatalogAddons: .done("noCatalogAddons")
+            case .rows(let rows): .failed(.catalog("expected no catalog add-ons, got \(rows.count) rows"))
+            }
+        }
+        result.search = try await Self.until(catalog.search(query), timeout: .seconds(15), "empty search") { results in
+            switch results {
+            case .searching: Probe<String, Failure>.pending
+            case .noSearchAddons: .done("noSearchAddons")
+            case .rows(_, let rows): .failed(.catalog("expected no search add-ons, got \(rows.count) rows"))
+            }
+        }
+        let details: Swift.Result<TitleDetails, DetailsError>
+        do {
+            details = .success(try await catalog.details(show, type: .series))
+        } catch {
+            details = .failure(error)
+        }
+        switch details {
+        case .failure(.noMetaAddons): result.details = "noMetaAddons"
+        case .failure(let error): throw .details(error)
+        case .success(let details): throw .catalog("expected no meta add-ons, got \(details.preview.name)")
+        }
+        Log.smoke.info("SMOKE no add-ons: board \(result.board ?? ""), search \(result.search ?? ""), details \(result.details ?? "")")
+    }
+
+    /// The board stream opened before the install must pick up the new add-on's rows by itself.
+    private func firstCatalogAddonSteps(_ result: inout CatalogResult) async throws(Failure) {
+        let cinemeta = try Self.parsed(ManifestURL("https://v3-cinemeta.strem.io/manifest.json"))
+        let board = app.services.catalog.board()
+        app.addons.send(.install(cinemeta))
+        let rows = try await Self.until(board, timeout: .seconds(45), "board rows after installing Cinemeta") { board in
+            guard case .rows(let rows) = board, rows.contains(where: { !($0.items.value ?? []).isEmpty }) else {
+                return Probe<[CatalogRow], Failure>.pending
+            }
+            return .done(rows)
+        }
+        result.boardRowsAfterInstall = rows.count
+        Log.smoke.info("SMOKE installed Cinemeta: board has \(rows.count) rows")
+    }
+
+    private static func parsed<Value>(_ value: Value?) throws(Failure) -> Value {
+        guard let value else { throw .catalog("invalid smoke input") }
+        return value
+    }
+
+    /// Waits until `probe` decides on a value of `values`.
+    private static func until<Value: Sendable, Output: Sendable>(
+        _ values: AsyncStream<Value>,
+        timeout: Duration,
+        _ what: String,
+        _ probe: @escaping @Sendable (Value) -> Probe<Output, Failure>
+    ) async throws(Failure) -> Output {
+        let outcome = await withTaskGroup(of: Swift.Result<Output, Failure>.self) { group in
+            group.addTask {
+                for await value in values {
+                    switch probe(value) {
+                    case .pending: continue
+                    case .done(let output): return .success(output)
+                    case .failed(let failure): return .failure(failure)
+                    }
+                }
+                return .failure(.catalog("\(what): stream finished"))
+            }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return .failure(.timedOut(what))
+            }
+            defer { group.cancelAll() }
+            return await group.next() ?? .failure(.timedOut(what))
+        }
+        return try outcome.get()
     }
 }
 

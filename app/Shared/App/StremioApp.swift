@@ -39,10 +39,12 @@ enum StartupError: Error, CustomStringConvertible {
 /// The provider behind each port. Swapping a provider is a change here and nowhere else.
 struct Services: Sendable {
     let addons: any AddonService
+    let catalog: any CatalogService
     let streams: any StreamService
     let library: any LibraryService
     let tracker: any PlaybackTracker
     let engine: any PlaybackEngine
+    let skipSegments: any SkipSegmentService
 
     @MainActor
     static func live(storageDirectory: URL) async throws(StartupError) -> Services {
@@ -60,10 +62,12 @@ struct Services: Sendable {
         }
         return Services(
             addons: CoreAddonService(runtime: core),
+            catalog: CoreCatalogService(runtime: core),
             streams: CoreStreamService(runtime: core),
             library: CoreLibraryService(runtime: core),
             tracker: CorePlaybackTracker(runtime: core),
-            engine: engine
+            engine: engine,
+            skipSegments: SkipDBSkipSegmentService()
         )
     }
 }
