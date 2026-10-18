@@ -49,7 +49,7 @@ The app is ports and adapters with a state machine per feature. Dependencies poi
 `app/Shared/Domain` holds what the app talks about, independent of where it comes from.
 
 - **Values and identifiers.** `PlayableID` (movie, or show plus season and episode), `MediaID` and `ManifestURL` are parsed once, at the boundary, by failable initializers. Inside the app the type proves the value is valid.
-- **Ports.** One protocol per capability: `AddonService`, `StreamService`, `LibraryService`, `PlaybackTracker`, `PlaybackEngine`. Each has its own error enum (`AddonError`, `StreamSourceError`, `PlaybackError`) and uses typed throws. Changing state is an `AsyncStream` that yields the current value first, then every change.
+- **Ports.** One protocol per capability: `AddonService`, `StreamService`, `LibraryService`, `PlaybackTracker`, `PlaybackEngine`, `SkipSegmentService`. Each has its own error enum (`AddonError`, `StreamSourceError`, `PlaybackError`, `SkipSegmentError`) and uses typed throws. Changing state is an `AsyncStream` that yields the current value first, then every change.
 - **`Remote<Value, Failure>`** (loading, loaded, failed) for anything fetched, and **`Probe`** (pending, done, failed) for one look at changing state while waiting.
 - **`TrackingToken`** is the one opaque value: the stream provider puts what it needs to track playback into the candidate it returns and the tracker reads it back. For core that is the player selection JSON.
 
@@ -76,6 +76,7 @@ Features today: `PlayerFeature` (idle, active session with phase opening/playing
 ### Adapters
 
 - **Core.** `CoreClient` is the only code that touches the FFI. `CoreRuntime` turns core's protocol (dispatch an action, later receive `NewState` naming the changed fields) into async APIs: `states`/`observe` stream a field's state (current first), and `request` subscribes, dispatches and waits until a probe accepts a state. No polling. Because the current state is probed first, every probe checks that the state answers its own request (transport URL, selected stream path). `CoreAddonService`, `CoreStreamService`, `CoreLibraryService` and `CorePlaybackTracker` implement the ports. `CoreAction.swift` encodes actions; `CoreWire.swift` decodes only the fields the adapters read. Core keeps one `meta_details` selection, so a new stream lookup replaces the previous one and finishes its stream.
+- **SkipDB.** `SkipDBSkipSegmentService` conforms to `SkipSegmentService` over the open SkipDB API (skipdb.tv, no key): recap, intro, outro and preview ranges for an IMDb id, fitted to the stream's duration and clamped to it. It shares `URLSession.json` (`Adapters/HTTP`) for requests, logging and the `HTTPFailure` it maps to `SkipSegmentError`. The `StremioTVAdapterTests` target tests it against recorded responses through a `URLProtocol` stub; set `TEST_RUNNER_STREMIO_LIVE_TESTS=1` to run its live tests too.
 - **MPV.** `MPVEngine` conforms to `PlaybackEngine`: it translates mpv events into `PlaybackEvent` on its event queue, renders into a `CAMetalLayer`, and runs commands on the main actor.
 
 ### Adding a provider
