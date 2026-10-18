@@ -1,0 +1,204 @@
+//! C ABI over stremio-core for the Swift app.
+//!
+//! Data crosses the boundary as JSON in stremio-core's own serde shapes:
+//! actions go in through `sb_dispatch`, model state comes out through `sb_get_state`,
+//! and runtime events are pushed to the host's `emit` callback.
+
+mod env;
+mod executor;
+mod fetch;
+mod host;
+mod logging;
+mod model;
+mod storage;
+
+use std::path::PathBuf;
+use std::sync::OnceLock;
+
+use futures::{future, StreamExt};
+use serde::Deserialize;
+use stremio_core::runtime::msg::Action;
+use stremio_core::runtime::{EnvError, Runtime, RuntimeAction};
+
+use crate::env::AppleEnv;
+use crate::fetch::FetchOutcome;
+use crate::host::{SBBytes, SBHost, SBOwnedBytes};
+use crate::model::{AppModel, AppModelField};
+
+static RUNTIME: OnceLock<Runtime<AppleEnv, AppModel>> = OnceLock::new();
+
+#[derive(Deserialize, Debug)]
+struct DispatchRequest {
+    action: Action,
+    field: Option<AppModelField>,
+}
+
+fn initialize(host: SBHost, storage_directory: PathBuf) -> Result<(), String> {
+    if !host::install(host) {
+        return Err("sb_initialize was already called".to_owned());
+    }
+    logging::install();
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "initializing stremio bridge");
+    storage::install(storage_directory).map_err(|error| error.message())?;
+
+    let (model, effects) = executor::runtime()
+        .block_on(AppModel::load())
+        .map_err(|error: EnvError| error.message())?;
+    let (runtime, events) = Runtime::<AppleEnv, AppModel>::new(model, effects.into_iter().collect(), 1000);
+    executor::spawn_concurrent(events.for_each(|event| {
+        match serde_json::to_vec(&event) {
+            Ok(json) => host::emit(&json),
+            Err(error) => tracing::error!(%error, "runtime event failed to serialize"),
+        }
+        future::ready(())
+    }));
+    RUNTIME
+        .set(runtime)
+        .map_err(|_| "runtime was already initialized".to_owned())?;
+    tracing::info!("stremio bridge ready");
+    Ok(())
+}
+
+fn runtime() -> Result<&'static Runtime<AppleEnv, AppModel>, String> {
+    RUNTIME
+        .get()
+        .ok_or_else(|| "sb_initialize has not completed".to_owned())
+}
+
+fn dispatch(request: &[u8]) -> Result<(), String> {
+    let request: DispatchRequest = serde_json::from_slice(request)
+        .map_err(|error| format!("invalid dispatch request: {error}"))?;
+    tracing::debug!(field = ?request.field, action = ?request.action, "dispatch");
+    runtime()?.dispatch(RuntimeAction {
+        field: request.field,
+        action: request.action,
+    });
+    Ok(())
+}
+
+fn get_state(field: &[u8]) -> Result<Vec<u8>, String> {
+    let field: AppModelField = serde_json::from_slice(field)
+        .map_err(|error| format!("invalid model field: {error}"))?;
+    let model = runtime()?
+        .model()
+        .map_err(|error| format!("model lock poisoned: {error}"))?;
+    let state = model
+        .state_json(&field)
+        .map_err(|error| format!("{field:?} failed to serialize: {error}"))?;
+    tracing::trace!(?field, bytes = state.len(), "get_state");
+    Ok(state)
+}
+
+/// Writes `result`'s error into `error_out` and reports success as a bool.
+///
+/// # Safety
+/// `error_out` must be null or point to writable memory for one `SBOwnedBytes`.
+unsafe fn report(result: Result<(), String>, error_out: *mut SBOwnedBytes) -> bool {
+    match result {
+        Ok(()) => true,
+        Err(message) => {
+            tracing::error!(%message, "bridge call failed");
+            if !error_out.is_null() {
+                error_out.write(SBOwnedBytes::from_vec(message.into_bytes()));
+            }
+            false
+        }
+    }
+}
+
+/// Starts stremio-core. Blocks until persisted state is loaded. Call once.
+///
+/// # Safety
+/// `storage_directory` must be valid UTF-8 bytes; `error_out` as in [`report`].
+#[no_mangle]
+pub unsafe extern "C" fn sb_initialize(
+    host: SBHost,
+    storage_directory: SBBytes,
+    error_out: *mut SBOwnedBytes,
+) -> bool {
+    let result = std::str::from_utf8(storage_directory.as_slice())
+        .map_err(|error| format!("storage directory is not UTF-8: {error}"))
+        .and_then(|directory| initialize(host, PathBuf::from(directory)));
+    report(result, error_out)
+}
+
+/// Dispatches `{"action": <core Action>, "field": <model field or null>}`.
+///
+/// # Safety
+/// `request` must be valid for reads; `error_out` as in [`report`].
+#[no_mangle]
+pub unsafe extern "C" fn sb_dispatch(request: SBBytes, error_out: *mut SBOwnedBytes) -> bool {
+    report(dispatch(request.as_slice()), error_out)
+}
+
+/// Serializes one model field, named by its JSON string (e.g. `"meta_details"`), into `state_out`.
+///
+/// # Safety
+/// `field` must be valid for reads; `state_out` must be writable; `error_out` as in [`report`].
+#[no_mangle]
+pub unsafe extern "C" fn sb_get_state(
+    field: SBBytes,
+    state_out: *mut SBOwnedBytes,
+    error_out: *mut SBOwnedBytes,
+) -> bool {
+    let result = get_state(field.as_slice()).map(|state| {
+        state_out.write(SBOwnedBytes::from_vec(state));
+    });
+    report(result, error_out)
+}
+
+/// Completes a host fetch with an HTTP response.
+///
+/// # Safety
+/// `body` must be valid for reads.
+#[no_mangle]
+pub unsafe extern "C" fn sb_fetch_resolve(request_id: u64, status: u16, body: SBBytes) {
+    fetch::complete(
+        request_id,
+        FetchOutcome::Response {
+            status,
+            body: body.as_slice().to_vec(),
+        },
+    );
+}
+
+/// Completes a host fetch that failed before producing a response.
+///
+/// # Safety
+/// `message` must be valid for reads.
+#[no_mangle]
+pub unsafe extern "C" fn sb_fetch_reject(request_id: u64, message: SBBytes) {
+    let message = String::from_utf8_lossy(message.as_slice()).into_owned();
+    fetch::complete(request_id, FetchOutcome::TransportError(message));
+}
+
+/// Releases bytes returned by the bridge.
+///
+/// # Safety
+/// `bytes` must come from the bridge and be freed exactly once.
+#[no_mangle]
+pub unsafe extern "C" fn sb_bytes_free(bytes: SBOwnedBytes) {
+    drop(bytes.into_vec());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// These literals are what the Swift `CoreAction` encoder produces.
+    /// If core changes an action's shape, this test fails before the app does.
+    #[test]
+    fn swift_action_shapes_parse_as_core_actions() {
+        let requests = [
+            r#"{"field":"addon_details","action":{"action":"Load","args":{"model":"AddonDetails","args":{"transportUrl":"https://example.com/manifest.json"}}}}"#,
+            r#"{"field":"meta_details","action":{"action":"Load","args":{"model":"MetaDetails","args":{"metaPath":{"resource":"meta","type":"movie","id":"tt0111161","extra":[]},"streamPath":{"resource":"stream","type":"movie","id":"tt0111161","extra":[]},"guessStream":false}}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"Login","email":"a@b.c","password":"x","facebook":false}}}}"#,
+            r#"{"field":"player","action":{"action":"Player","args":{"action":"TimeChanged","args":{"time":1000,"duration":60000,"device":"macos"}}}}"#,
+            r#"{"field":"player","action":{"action":"Unload"}}"#,
+        ];
+        for request in requests {
+            let parsed = serde_json::from_str::<DispatchRequest>(request);
+            assert!(parsed.is_ok(), "{request}\n{:?}", parsed.err());
+        }
+    }
+}

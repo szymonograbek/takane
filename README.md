@@ -2,4 +2,45 @@
 
 # stremio-apple-tv
 
-Created in [T3 Code](https://t3.codes).
+Custom macOS and tvOS client for Stremio, built on [stremio-core](https://github.com/Stremio/stremio-core) and [MPVKit](https://github.com/mpvkit/MPVKit). Design notes live in [docs/](docs/README.md).
+
+## Requirements
+
+- Xcode 27, macOS 15 or later on Apple silicon
+- `rustup` (the nightly toolchain in `rust-toolchain.toml` installs on first build)
+- `brew install xcodegen`
+- For tvOS: the tvOS simulator runtime (`xcodebuild -downloadPlatform tvOS`)
+
+## Build and run
+
+```sh
+scripts/build-app.sh                      # macOS: generates StremioTV.xcodeproj, builds Debug
+open build/DerivedData/Build/Products/Debug/StremioTV.app
+scripts/build-app.sh tvos-sim             # tvOS simulator
+scripts/build-app.sh tvos-device          # tvOS device, unsigned (compile and link check)
+```
+
+Or `xcodegen generate`, open `StremioTV.xcodeproj` in Xcode and run the `StremioTV-macOS` or `StremioTV-tvOS` scheme. The `StremioBridge_*` targets rebuild the Rust bridge before every app build. Signing uses the personal team (`F43U35GPD2`) with the `Apple Development: szymon@ograbek.com` identity.
+
+The current screen is a diagnostic view: core status, installed add-ons, add-on install by manifest URL, continue watching, a stream lookup by IMDb id (`tt0111161`, or `tt0944947:1:1` for an episode) and an mpv player. On tvOS the player is full screen: play/pause toggles, left/right seek 10 s, Menu stops.
+
+## Logs
+
+macOS: `~/Library/Logs/com.ograbek.stremio-tv/app.log` (previous run: `app.previous.log`). tvOS simulator: `Library/Caches/Logs/app.log` inside the app's data container (`xcrun simctl get_app_container booted com.ograbek.stremio-tv data`). Also in Console.app under subsystem `com.ograbek.stremio-tv`. Swift, Rust and mpv logs share the file, tagged by category. `STREMIO_LOG_LEVEL=trace|debug|info|warning|error` sets the threshold.
+
+## Smoke test
+
+`scripts/smoke.sh [--tvos] [type/id]` builds the app, launches it against a fresh core profile, installs an add-on through core, resolves streams, plays the first playable one for 10 s, pauses, and checks the item appears in continue watching with the right progress. It exits 0 on pass and writes `smoke-result.json` next to the log, plus `smoke-frame.png` (mpv frame, macOS) or `smoke-screen.png` (simulator screenshot, tvOS). `--tvos` runs on a "Stremio Apple TV" simulator, created on first use.
+
+The add-on URL contains debrid credentials, so it is read from `STREMIO_SMOKE_ADDON_URL` or a git-ignored `.env.smoke`:
+
+```sh
+echo 'STREMIO_SMOKE_ADDON_URL=https://…/manifest.json' > .env.smoke
+scripts/smoke.sh                       # movie/tt0111161
+scripts/smoke.sh series/tt0944947:1:1
+scripts/smoke.sh --tvos
+```
+
+UI verification on tvOS (agent-device driving the simulator with remote presses, evidence under `build/verify/`): see `.claude/skills/verify-stremio-tv/SKILL.md` and its feature map.
+
+Rust tests: `cd core && rustup run nightly-2026-10-18 cargo test` (the toolchain in `rust-toolchain.toml`; a Homebrew `cargo` on PATH would ignore it).

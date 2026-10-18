@@ -1,0 +1,5 @@
+[toolchain]
+# Nightly because tvOS targets are tier 3: their std is built from source (-Zbuild-std).
+channel = "nightly-2026-10-18"
+components = ["rust-src", "clippy"]
+targets = ["aarch64-apple-darwin"]

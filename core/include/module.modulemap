@@ -1,0 +1,4 @@
+module StremioBridge {
+    header "stremio_bridge.h"
+    export *
+}

@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Builds and launches the app in smoke-test mode: install the add-on, resolve streams, play one,
+# confirm core recorded progress, then quit. Exit code 0 means every step passed.
+#
+# The add-on URL contains debrid credentials, so it is read from STREMIO_SMOKE_ADDON_URL
+# or from the git-ignored .env.smoke file, never from the repo.
+#
+# Usage: scripts/smoke.sh [--tvos] [type/id]
+#   scripts/smoke.sh                          macOS, movie/tt0111161
+#   scripts/smoke.sh --tvos series/tt0944947:1:1
+# On tvOS it runs on the "Stremio Apple TV" simulator (created on first use) and also saves
+# a simulator screenshot taken while the stream is on screen.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+platform=macos
+if [[ "${1:-}" == "--tvos" ]]; then
+    platform=tvos
+    shift
+fi
+item="${1:-movie/tt0111161}"
+bundle_id=com.ograbek.stremio-tv
+
+if [[ -z "${STREMIO_SMOKE_ADDON_URL:-}" && -f "$root/.env.smoke" ]]; then
+    source "$root/.env.smoke"
+fi
+: "${STREMIO_SMOKE_ADDON_URL:?set STREMIO_SMOKE_ADDON_URL or add it to .env.smoke}"
+
+report() {
+    local logs="$1"
+    echo "log: $logs/app.log"
+    grep -E "SMOKE" "$logs/app.log" | sed -E 's/^[^ ]+ //' || true
+    cat "$logs/smoke-result.json" 2>/dev/null || echo "no smoke-result.json"
+}
+
+if [[ "$platform" == macos ]]; then
+    # Always test what the sources build today, never a stale app.
+    "$root/scripts/build-app.sh" macos >/dev/null
+    app="$root/build/DerivedData/Build/Products/Debug/StremioTV.app"
+    logs="$HOME/Library/Logs/$bundle_id"
+    rm -f "$logs/smoke-result.json" "$logs/smoke-frame.png"
+
+    # A fresh core profile per run, so results never depend on state left by earlier runs.
+    storage="$(mktemp -d -t stremio-smoke)"
+    trap 'rm -rf "$storage"' EXIT
+
+    status=0
+    STREMIO_STORAGE_DIRECTORY="$storage" \
+    STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
+    STREMIO_SMOKE_ITEM="$item" \
+    STREMIO_SMOKE_EXIT=1 \
+    STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
+        "$app/Contents/MacOS/StremioTV" >/dev/null 2>&1 || status=$?
+    echo "exit code: $status"
+    report "$logs"
+    exit "$status"
+fi
+
+"$root/scripts/build-app.sh" tvos-sim >/dev/null
+app="$root/build/DerivedData/Build/Products/Debug-appletvsimulator/StremioTV.app"
+
+device="$("$root/scripts/tvos-simulator.sh")"
+xcrun simctl install "$device" "$app"
+
+data="$(xcrun simctl get_app_container "$device" "$bundle_id" data)"
+logs="$data/Library/Caches/Logs"
+storage="$data/tmp/smoke-storage"
+rm -rf "$storage" "$logs/smoke-result.json" "$logs/smoke-frame.png" "$logs/smoke-screen.png"
+
+SIMCTL_CHILD_STREMIO_STORAGE_DIRECTORY="$storage" \
+SIMCTL_CHILD_STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
+SIMCTL_CHILD_STREMIO_SMOKE_ITEM="$item" \
+SIMCTL_CHILD_STREMIO_SMOKE_EXIT=1 \
+SIMCTL_CHILD_STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
+    xcrun simctl launch --terminate-running-process "$device" "$bundle_id" >/dev/null
+
+# The app writes the result, then keeps the frame on screen for 2 s before quitting.
+for _ in $(seq 1 600); do
+    [[ -f "$logs/smoke-result.json" ]] && break
+    sleep 0.2
+done
+xcrun simctl io "$device" screenshot "$logs/smoke-screen.png" >/dev/null 2>&1 || true
+sleep 3
+
+rm -rf "$storage"
+
+echo "simulator: $device"
+echo "screenshot: $logs/smoke-screen.png"
+report "$logs"
+grep -q '"passed" : true' "$logs/smoke-result.json" 2>/dev/null

@@ -1,0 +1,33 @@
+[package]
+name = "stremio-bridge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+stremio-core = { git = "https://github.com/Stremio/stremio-core", rev = "c4806e8614452fd49d5dbb22db74afa88959b554", features = [
+    "derive",
+    "env-future-send",
+] }
+
+chrono = "0.4"
+futures = "0.3"
+http = "1.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_path_to_error = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+opt-level = 3
+debug = 1

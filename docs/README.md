@@ -1,0 +1,20 @@
+# Documentation
+
+Custom Apple TV / macOS client for Stremio accounts, built on [stremio-core](https://github.com/Stremio/stremio-core).
+
+- [Feasibility](feasibility.md) — what is open, what is not, and the scope decisions that follow.
+- [Architecture](architecture.md) — layers, the Rust ↔ Swift bridge, stream handling, player.
+- [Roadmap](roadmap.md) — build order and how each step is verified.
+
+## Scope at a glance
+
+| In scope | Out of scope |
+|---|---|
+| Home: continue watching, discover | Torrent playback |
+| Add-ons with stremio-core parity | Stremio streaming server |
+| Search | Archive / Usenet streams |
+| Player with subtitle and audio track selection | App Store distribution |
+| Player settings (languages, subtitle style) | |
+| Debrid / HTTP streams | |
+
+Distribution is sideload only. Nightly Rust is acceptable.
