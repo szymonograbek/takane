@@ -43,6 +43,7 @@ struct Services: Sendable {
     let library: any LibraryService
     let tracker: any PlaybackTracker
     let engine: any PlaybackEngine
+    let skipSegments: any SkipSegmentService
 
     @MainActor
     static func live(storageDirectory: URL) async throws(StartupError) -> Services {
@@ -63,7 +64,8 @@ struct Services: Sendable {
             streams: CoreStreamService(runtime: core),
             library: CoreLibraryService(runtime: core),
             tracker: CorePlaybackTracker(runtime: core),
-            engine: engine
+            engine: engine,
+            skipSegments: SkipDBSkipSegmentService()
         )
     }
 }
