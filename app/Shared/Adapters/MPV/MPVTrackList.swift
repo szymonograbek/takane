@@ -1,7 +1,8 @@
+import Foundation
 import Libmpv
 
 /// Reads mpv's `track-list` node: an array of maps with `id`, `type` (`audio`, `sub`, `video`),
-/// `title`, `lang`, `codec`, `demux-channel-count`, `forced`, `external` and `selected`.
+/// `title`, `lang`, `codec`, `demux-channel-count`, `forced`, `external-filename` and `selected`.
 enum MPVTrackList {
     static func tracks(in list: mpv_node) -> [MediaTrack] {
         guard list.format == MPV_FORMAT_NODE_ARRAY, let array = list.u.list?.pointee, let values = array.values else { return [] }
@@ -28,7 +29,7 @@ enum MPVTrackList {
             codec: fields["codec"].flatMap(string),
             channelCount: fields["demux-channel-count"].flatMap(int),
             isForced: isSet(fields["forced"]),
-            isExternal: isSet(fields["external"]),
+            externalFile: fields["external-filename"].flatMap(string).flatMap { URL(string: $0) },
             isSelected: isSet(fields["selected"])
         )
     }

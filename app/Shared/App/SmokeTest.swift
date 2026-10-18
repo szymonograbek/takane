@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 /// Enabled by `LaunchOptions` (see scripts/smoke.sh):
 /// - `STREMIO_SMOKE_ADDON_URL`: addon manifest URL (required to run)
 /// - `STREMIO_SMOKE_ITEM`: `type/id`, default `movie/tt0111161`
+/// - `STREMIO_SMOKE_SUBTITLES_ADDON_URL`: a subtitles add-on to install; the journey then waits for its
+///   files for the stream playing and plays the first one
 /// - `STREMIO_SMOKE_EXIT=1`: quit when done, exit code 0 on pass
 /// - `STREMIO_SMOKE_CATALOG_EMPTY=1`: instead, check that a profile without add-ons reports none for
 ///   catalogs, search and metadata, then that installing Cinemeta fills the board (core starts
@@ -19,6 +21,7 @@ import UniformTypeIdentifiers
 struct SmokeTest {
     struct Configuration {
         let manifest: ManifestURL
+        let subtitlesManifest: ManifestURL?
         let item: PlayableID
         let exitWhenDone: Bool
         let expectsNoAddons: Bool
@@ -28,17 +31,19 @@ struct SmokeTest {
             let parts = (options["STREMIO_SMOKE_ITEM"] ?? "movie/tt0111161").split(separator: "/", maxSplits: 1)
             guard parts.count == 2, let item = PlayableID(String(parts[1])), item.coreType == parts[0] else { return nil }
             self.manifest = manifest
+            self.subtitlesManifest = options["STREMIO_SMOKE_SUBTITLES_ADDON_URL"].flatMap { ManifestURL($0) }
             self.item = item
             self.exitWhenDone = options["STREMIO_SMOKE_EXIT"] == "1"
             self.expectsNoAddons = options["STREMIO_SMOKE_CATALOG_EMPTY"] == "1"
         }
     }
 
-    private enum Failure: Error, CustomStringConvertible {
+    enum Failure: Error, CustomStringConvertible {
         case addon(AddonError)
         case catalog(String)
         case details(DetailsError)
         case noPlayableStream(addon: String, groups: [String: Int])
+        case noSubtitles(addon: String, SubtitleSourceError?)
         case player(PlaybackError)
         case noAudioOutput([String: String])
         case timedOut(String)
@@ -49,6 +54,7 @@ struct SmokeTest {
             case .catalog(let problem): "catalog: \(problem)"
             case .details(let error): "details: \(error)"
             case .noPlayableStream(let addon, let groups): "no playable stream from \(addon); groups: \(groups)"
+            case .noSubtitles(let addon, let error): "no subtitles from \(addon): \(error.map(String.init(describing:)) ?? "none found")"
             case .player(let error): "player failed: \(error)"
             case .noAudioOutput(let output): "no audio output: \(output)"
             case .timedOut(let what): "timed out waiting for \(what)"
@@ -56,7 +62,7 @@ struct SmokeTest {
         }
     }
 
-    private struct CatalogResult: Encodable {
+    struct CatalogResult: Encodable {
         /// `rows` or `noCatalogAddons`.
         var board: String?
         var boardRows: Int?
@@ -74,7 +80,7 @@ struct SmokeTest {
         var detailsVideos: Int?
     }
 
-    private struct Result: Encodable {
+    struct Result: Encodable {
         var passed = false
         var failure: String?
         var catalog = CatalogResult()
@@ -82,6 +88,10 @@ struct SmokeTest {
         var streamGroups: [String: Int] = [:]
         var playedStream: String?
         var playedURLHost: String?
+        /// Files found per subtitles add-on, built-in tracks under "built-in".
+        var subtitleCounts: [String: Int] = [:]
+        var subtitleLabels: [String] = []
+        var playedSubtitle: String?
         var videoSize: String?
         var hardwareDecoder: String?
         var playbackPositionSeconds: Double?
@@ -126,17 +136,25 @@ struct SmokeTest {
         }
     }
 
-    private func steps(_ result: inout Result) async throws(Failure) {
-        let manifest = configuration.manifest
+    private func install(_ manifest: ManifestURL) async throws(Failure) -> InstalledAddon {
         app.addons.send(.install(manifest))
-        let addon = try await app.addons.until(timeout: .seconds(45), onTimeout: Failure.timedOut("addon install")) { state in
+        return try await app.addons.until(timeout: .seconds(45), onTimeout: Failure.timedOut("addon install")) { state in
             switch state.install {
             case .installed(let addon) where addon.manifestURL == manifest: .done(addon)
             case .failed(let failed, let error) where failed == manifest: .failed(Failure.addon(error))
             case .idle, .installing, .installed, .failed: .pending
             }
         }
+    }
+
+    private func steps(_ result: inout Result) async throws(Failure) {
+        let manifest = configuration.manifest
+        let addon = try await install(manifest)
         result.addon = "\(addon.name) \(addon.version)"
+        if let subtitles = configuration.subtitlesManifest {
+            let installed = try await install(subtitles)
+            Log.smoke.info("SMOKE subtitles addon installed: \(installed.name) \(installed.version)")
+        }
         Log.smoke.info("SMOKE step 1/4 addon installed: \(result.addon ?? "")")
 
         let item = configuration.item
@@ -170,6 +188,7 @@ struct SmokeTest {
         Log.smoke.info(
             "SMOKE step 3/4 playing: \(session.position) of \(session.duration), \(result.videoSize ?? "?"), hwdec=\(session.hardwareDecoder ?? "none")"
         )
+        if let subtitles = configuration.subtitlesManifest { try await subtitleSteps(subtitles, &result) }
         let engine = app.services.engine
         result.output = engine.diagnostics()
         Log.smoke.info("SMOKE output: \(result.output.sorted { $0.key < $1.key })")

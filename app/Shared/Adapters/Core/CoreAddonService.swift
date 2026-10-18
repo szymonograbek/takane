@@ -1,3 +1,5 @@
+import Foundation
+
 /// Add-ons as core's profile holds them.
 struct CoreAddonService: AddonService {
     let runtime: CoreRuntime
@@ -90,5 +92,18 @@ private extension Addon {
         return InstalledAddon(
             manifestURL: manifestURL, name: manifest.name, version: manifest.version, isRemovable: !(flags?.isProtected ?? false)
         )
+    }
+}
+
+extension CoreRuntime {
+    /// Installed add-ons' names by transport URL, for labelling their answers.
+    func addonNames() -> [URL: String] {
+        do {
+            let ctx = try state(.ctx, as: CtxState.self)
+            return Dictionary(ctx.profile.addons.map { ($0.transportUrl, $0.manifest.name) }) { first, _ in first }
+        } catch {
+            Log.core.error("reading addon names failed: \(error)")
+            return [:]
+        }
     }
 }

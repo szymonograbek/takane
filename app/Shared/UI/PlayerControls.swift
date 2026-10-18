@@ -23,7 +23,7 @@ struct PlayerControls: View {
             HStack(spacing: 20) {
                 transportButtons
                 Spacer()
-                SubtitleMenu(tracks: state.tracks(.subtitle), interacted: interacted)
+                SubtitleMenu(session: session, interacted: interacted)
                     .focused(focus, equals: .subtitles)
                 AudioMenu(tracks: state.tracks(.audio), interacted: interacted)
                     .focused(focus, equals: .audio)
@@ -65,27 +65,97 @@ struct PlayerControls: View {
     }
 }
 
+/// The stream's own tracks first, then a submenu per add-on with its files grouped by language.
 private struct SubtitleMenu: View {
     @Environment(AppContext.self) private var app
-    let tracks: [MediaTrack]
+    let session: PlayerFeature.Session
     let interacted: () -> Void
 
     var body: some View {
+        let selection = Binding(get: { session.subtitleChoice }, set: choose)
         Menu {
-            Picker("Subtitles", selection: Binding(get: { tracks.first(where: \.isSelected)?.id }, set: choose)) {
-                Text("Off").tag(MediaTrack.ID?.none)
-                ForEach(tracks) { Text($0.label).tag(Optional($0.id)) }
+            Section("Built-in") {
+                Picker("Built-in", selection: selection) {
+                    Text("Off").tag(PlayerFeature.SubtitleChoice.off)
+                    ForEach(session.builtInSubtitles) { Text($0.label).tag(PlayerFeature.SubtitleChoice.builtIn($0.id)) }
+                }
+                .pickerStyle(.inline)
             }
-            .pickerStyle(.inline)
+            if !session.addonSubtitles.isEmpty {
+                Section("Add-ons") {
+                    ForEach(session.addonSubtitles) { source in
+                        AddonSubtitleMenu(
+                            source: source,
+                            preferred: app.preferences.state.playback?.languages.subtitles,
+                            selection: selection
+                        )
+                    }
+                }
+            }
         } label: {
             Label("Subtitles", systemImage: "captions.bubble").labelStyle(.iconOnly)
         }
         .accessibilityIdentifier("player.subtitles")
     }
 
-    private func choose(_ track: MediaTrack.ID?) {
-        app.player.send(track.map(PlayerFeature.Event.select) ?? .turnOffSubtitles)
+    private func choose(_ choice: PlayerFeature.SubtitleChoice) {
+        app.player.send(.chooseSubtitles(choice))
         interacted()
+    }
+}
+
+/// One add-on's files, a section per language with the preferred language first.
+private struct AddonSubtitleMenu: View {
+    private struct LanguageGroup: Identifiable {
+        let language: String
+        var files: [AddonSubtitle]
+
+        var id: String { language }
+    }
+
+    let source: SubtitleSource
+    let preferred: Language?
+    let selection: Binding<PlayerFeature.SubtitleChoice>
+
+    var body: some View {
+        Menu(source.addonName) {
+            switch source.subtitles {
+            case .loading:
+                Text("Loading…")
+            case .failed:
+                Text("Unavailable")
+            case .loaded(let files) where files.isEmpty:
+                Text("None Found")
+            case .loaded(let files):
+                ForEach(groups(files)) { group in
+                    let name = languageName(group.language)
+                    Section(name) {
+                        Picker(name, selection: selection) {
+                            ForEach(Array(group.files.enumerated()), id: \.element.id) { index, file in
+                                Text(file.label ?? "\(name) \(index + 1)").tag(PlayerFeature.SubtitleChoice.addon(file.id))
+                            }
+                        }
+                        .pickerStyle(.inline)
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier("player.subtitles.addon")
+    }
+
+    private func groups(_ files: [AddonSubtitle]) -> [LanguageGroup] {
+        var groups: [LanguageGroup] = []
+        for file in files {
+            if let index = groups.firstIndex(where: { $0.language == file.language }) {
+                groups[index].files.append(file)
+            } else {
+                groups.append(LanguageGroup(language: file.language, files: [file]))
+            }
+        }
+        if let preferred, let index = groups.firstIndex(where: { Language($0.language) == preferred }) {
+            groups.insert(groups.remove(at: index), at: 0)
+        }
+        return groups
     }
 }
 
@@ -139,7 +209,7 @@ private struct SpeedMenu: View {
 extension MediaTrack {
     /// "English · 5.1 · eac3", "Polish (Forced)", or the track number when the stream says nothing.
     var label: String {
-        let language = language.map { Locale.current.localizedString(forLanguageCode: $0) ?? $0 }
+        let language = language.map(languageName)
         var name = [title, language].compactMap(\.self).first ?? "Track \(id.number)"
         if let language, let title, !title.localizedCaseInsensitiveContains(language) { name = "\(language) · \(title)" }
         if isForced { name += " (Forced)" }
@@ -158,6 +228,11 @@ extension MediaTrack {
         default: "\(count) ch"
         }
     }
+}
+
+/// "English" for `eng` or `en`, or the code itself when the system does not know it.
+private func languageName(_ code: String) -> String {
+    Locale.current.localizedString(forLanguageCode: code) ?? code
 }
 
 extension PlaybackSpeed {

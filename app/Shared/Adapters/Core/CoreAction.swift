@@ -67,6 +67,8 @@ enum CoreAction: Sendable {
         case timeChanged(timeMs: UInt64, durationMs: UInt64, device: String)
         case pausedChanged(paused: Bool)
         case ended
+        /// What subtitle add-ons match the file by. Core prefers what the stream itself declares.
+        case videoParamsChanged(hash: String?, size: UInt64?, filename: String?)
     }
 }
 
@@ -82,6 +84,10 @@ struct ResourcePath: Codable, Hashable, Sendable {
 
     static func stream(type: String, id: String) -> ResourcePath {
         ResourcePath(resource: "stream", type: type, id: id)
+    }
+
+    static func subtitles(type: String, id: String) -> ResourcePath {
+        ResourcePath(resource: "subtitles", type: type, id: id)
     }
 }
 
@@ -259,6 +265,15 @@ extension CoreAction.Ctx: Encodable {
 extension CoreAction.Player: Encodable {
     private struct TimeChangedArgs: Encodable { let time: UInt64; let duration: UInt64; let device: String }
     private struct PausedChangedArgs: Encodable { let paused: Bool }
+    private struct VideoParamsChangedArgs: Encodable {
+        struct VideoParams: Encodable {
+            let hash: String?
+            let size: UInt64?
+            let filename: String?
+        }
+
+        let videoParams: VideoParams
+    }
 
     func encode(to encoder: any Encoder) throws {
         switch self {
@@ -268,6 +283,9 @@ extension CoreAction.Player: Encodable {
             try action("PausedChanged", PausedChangedArgs(paused: paused)).encode(to: encoder)
         case .ended:
             try action("Ended").encode(to: encoder)
+        case .videoParamsChanged(let hash, let size, let filename):
+            let params = VideoParamsChangedArgs.VideoParams(hash: hash, size: size, filename: filename)
+            try action("VideoParamsChanged", VideoParamsChangedArgs(videoParams: params)).encode(to: encoder)
         }
     }
 }

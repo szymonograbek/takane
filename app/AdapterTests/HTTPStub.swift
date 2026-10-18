@@ -8,6 +8,7 @@ final class HTTPStub: Sendable {
     struct Response: Sendable {
         let status: Int
         let body: Data
+        var headers: [String: String] = [:]
 
         static func json(_ text: String, status: Int = 200) -> Response {
             Response(status: status, body: Data(text.utf8))
@@ -53,7 +54,7 @@ private final class StubURLProtocol: URLProtocol {
             return
         }
         let answer = stub.answer(request)
-        guard let response = HTTPURLResponse(url: url, statusCode: answer.status, httpVersion: "HTTP/1.1", headerFields: nil) else {
+        guard let response = HTTPURLResponse(url: url, statusCode: answer.status, httpVersion: "HTTP/1.1", headerFields: answer.headers) else {
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }

@@ -1,3 +1,4 @@
+import Foundation
 import QuartzCore
 import os
 import Testing
@@ -21,6 +22,7 @@ private final class FakeEngine: PlaybackEngine {
     func seek(to position: Duration) { commands.append("seek to \(position)") }
     func select(_ track: MediaTrack.ID) { commands.append("select \(track.number)") }
     func turnOffSubtitles() { commands.append("subtitles off") }
+    func addSubtitles(_ file: URL, title: String, language: String) { commands.append("add \(file.lastPathComponent)") }
     func setSpeed(_ speed: PlaybackSpeed) { commands.append("speed \(speed.rawValue)") }
     func stop() { commands.append("stop") }
     func diagnostics() -> [String: String] { [:] }
@@ -47,7 +49,8 @@ struct FeatureStoreTests {
         let store = FeatureStore<PlayerFeature>(
             .idle,
             dependencies: PlayerFeature.Dependencies(
-                engine: engine, tracker: tracker, skipSegments: NoSegments(), preferences: FixedPreferences()
+                engine: engine, tracker: tracker, skipSegments: NoSegments(), preferences: FixedPreferences(),
+                subtitles: OneSubtitleSource()
             ),
             start: [.listen]
         )
@@ -56,9 +59,10 @@ struct FeatureStoreTests {
         engine.emit.yield(.loaded)
         engine.emit.yield(.position(.seconds(2)))
         let session = try await store.until(timeout: .seconds(2), onTimeout: TimedOut()) { state in
-            state.session.map { $0.position == .seconds(2) ? .done($0) : .pending } ?? .pending
+            state.session.map { $0.position == .seconds(2) && !$0.addonSubtitles.isEmpty ? .done($0) : .pending } ?? .pending
         }
         #expect(session.phase == .playing)
+        #expect(session.addonSubtitles == [OneSubtitleSource.source])
         #expect(engine.commands == ["load movie.mkv from 30.0 seconds pol", "paused false"])
         var reports = tracker.reports.stream.makeAsyncIterator()
         #expect(await reports.next() == "begin movie.mkv")
@@ -89,6 +93,14 @@ struct FeatureStoreTests {
 private struct NoStreams: StreamService {
     func streams(for item: PlayableID) -> AsyncStream<StreamResults> {
         AsyncStream { $0.finish() }
+    }
+}
+
+private struct OneSubtitleSource: SubtitleService {
+    static let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitles", subtitles: .loaded([]))
+
+    func subtitles(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<[SubtitleSource]> {
+        AsyncStream { $0.yield([Self.source]) }
     }
 }
 
