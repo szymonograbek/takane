@@ -39,7 +39,7 @@ echo "installing on ${choice#*$'\t'}"
 
 xcodegen generate --quiet
 # The first build needs every XCFramework slice to exist before Xcode plans the build.
-[[ -f build/StremioBridge.xcframework/Info.plist ]] || scripts/build-core.sh Debug all >/dev/null
+[[ -f build/StremioBridge.xcframework/macos-arm64/Headers/StremioBridge/module.modulemap ]] || scripts/build-core.sh Debug all >/dev/null
 
 log=build/xcodebuild-tvos-install.log
 if ! xcodebuild -project StremioTV.xcodeproj -scheme StremioTV-tvOS -configuration Debug \
