@@ -3,7 +3,9 @@ import SwiftUI
 /// Full-screen playback. Only the video shows until the viewer asks for the controls.
 ///
 /// Remote: select shows the controls, play/pause pauses, left and right skip 10 s while the
-/// controls are hidden, Menu hides the controls and then leaves. macOS: space, arrows and Esc.
+/// controls are hidden, Menu hides the controls and then leaves. On the focused progress bar,
+/// left and right jump (further with each quick tap) or, held, rewind and fast forward until
+/// select, play/pause or Menu. macOS: space, arrows and Esc.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
     @State private var controlsVisible = true
@@ -56,10 +58,10 @@ struct PlayerScreen: View {
             // Moving between controls counts as using them.
             if focused != nil, focused != .surface { interactions += 1 }
         }
-        .task(id: Autohide(interactions: interactions, isPlaying: state.session?.phase == .playing)) {
+        .task(id: Autohide(interactions: interactions, isPlaying: isPlaying)) {
             guard (try? await Task.sleep(for: .seconds(5))) != nil else { return }
             // Focus leaves the controls while one of their menus is open; the menu keeps them up.
-            guard player.state.session?.phase == .playing, focus != nil else { return }
+            guard isPlaying, focus != nil else { return }
             controlsVisible = false
         }
         #if os(tvOS)
@@ -76,12 +78,19 @@ struct PlayerScreen: View {
         }
         #endif
         .onExitCommand {
-            if controlsVisible, state.session != nil {
+            if state.session?.scan != nil {
+                player.send(.togglePause)
+            } else if controlsVisible, state.session != nil {
                 controlsVisible = false
             } else {
                 player.send(.stop)
             }
         }
+    }
+
+    /// Playing at normal speed, so the controls may hide. A scan keeps them up.
+    private var isPlaying: Bool {
+        app.player.state.session.map { $0.phase == .playing && $0.scan == nil } ?? false
     }
 
     private func poke() {
@@ -116,6 +125,7 @@ private struct RemoteSurface: View {
 /// What holds focus: the bare video (remote commands), a control, or the skip offer.
 enum PlayerFocus: Hashable {
     case surface
+    case progress
     case back, playPause, forward
     case subtitles, audio, speed
     case skip

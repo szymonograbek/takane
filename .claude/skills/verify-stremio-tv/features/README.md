@@ -32,6 +32,6 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Onboarding and sign-in](./onboarding.md) covers Welcome, the link code, email sign-in errors and continuing without an account.
 - [Install an add-on](./install-addon.md) covers Settings › Add-ons: install by manifest URL, remove, persistence.
 - [Find streams](./find-streams.md) covers Home, Search and Details leading to the stream list.
-- [Playback](./playback.md) covers the player: controls, speed, subtitles, audio, seek and stop.
+- [Playback](./playback.md) covers the player: controls, speed, subtitles, audio, seek, timeline scrubbing and stop.
 - [Continue watching](./continue-watching.md) covers the Home row and resuming from the saved position.
 - [Playback settings](./playback-settings.md) covers preferred subtitle and audio languages.

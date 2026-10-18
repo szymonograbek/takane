@@ -13,11 +13,16 @@ struct PlayerControls: View {
             Spacer()
             Text(session.title.isEmpty ? session.candidate.name ?? "" : session.title)
                 .font(.title3).bold()
-            ProgressLine(fraction: session.duration > .zero ? session.position / session.duration : 0)
+            TimelineBar(session: session, focus: focus, interacted: interacted)
             HStack {
-                Text(session.position.clock)
+                Text(session.displayedPosition.clock)
                 Spacer()
-                Text("−" + (session.duration - session.position).clock)
+                if let scan = session.scan {
+                    Label("\(scan.rate.rawValue)×", systemImage: scan.direction == .forward ? "forward.fill" : "backward.fill")
+                        .foregroundStyle(Palette.text)
+                }
+                Spacer()
+                Text("−" + (session.duration - session.displayedPosition).clock)
             }
             .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             HStack(spacing: 20) {
@@ -64,6 +69,122 @@ struct PlayerControls: View {
         }
     }
 }
+
+/// The progress line, focusable: left and right tap to jump or hold to scan, select plays or pauses.
+private struct TimelineBar: View {
+    /// A left or right press still down, until it has lasted long enough to count as a hold.
+    private enum Press {
+        case pending(PlayerFeature.Direction, Task<Void, Never>)
+        case held
+    }
+
+    private static let holdThreshold = Duration.milliseconds(500)
+
+    @Environment(AppContext.self) private var app
+    let session: PlayerFeature.Session
+    var focus: FocusState<PlayerFocus?>.Binding
+    let interacted: () -> Void
+    @State private var press: Press?
+
+    var body: some View {
+        let focused = focus.wrappedValue == .progress
+        ProgressLine(
+            fraction: session.duration > .zero ? session.displayedPosition / session.duration : 0,
+            height: focused ? Metrics.focusedProgressHeight : Metrics.progressHeight
+        )
+        .frame(height: Metrics.focusedProgressHeight)
+        .animation(.easeOut(duration: 0.15), value: focused)
+        #if os(tvOS)
+        .overlay {
+            RemotePresses(arrow: pressed, select: togglePause)
+                .focused(focus, equals: .progress)
+        }
+        .focusSection()
+        #else
+        .contentShape(.rect)
+        .focusable()
+        .focused(focus, equals: .progress)
+        .onTapGesture(perform: togglePause)
+        .onKeyPress(keys: [.leftArrow, .rightArrow], phases: [.down, .up]) { key in
+            pressed(key.phase == .down, key.key == .leftArrow ? .backward : .forward)
+            return .handled
+        }
+        #endif
+        .accessibilityIdentifier("player.progress")
+    }
+
+    private func togglePause() {
+        app.player.send(.togglePause)
+        interacted()
+    }
+
+    private func pressed(_ isDown: Bool, _ direction: PlayerFeature.Direction) {
+        if isDown { began(direction) } else { ended() }
+        interacted()
+    }
+
+    private func began(_ direction: PlayerFeature.Direction) {
+        guard press == nil else { return }
+        press = .pending(direction, Task {
+            guard (try? await Task.sleep(for: Self.holdThreshold)) != nil else { return }
+            press = .held
+            app.player.send(.timeline(.hold(direction)))
+        })
+    }
+
+    private func ended() {
+        if case .pending(let direction, let task) = press {
+            task.cancel()
+            app.player.send(.timeline(.step(direction, at: .now)))
+        }
+        press = nil
+    }
+}
+
+#if os(tvOS)
+/// A focusable UIKit view that reports the remote's arrows going down and up. SwiftUI on tvOS
+/// sees the Siri Remote's arrows only as move commands, with no release to tell a tap from a hold.
+private struct RemotePresses: UIViewRepresentable {
+    let arrow: (Bool, PlayerFeature.Direction) -> Void
+    let select: () -> Void
+
+    func makeUIView(context: Context) -> PressView { PressView() }
+
+    func updateUIView(_ view: PressView, context: Context) {
+        view.arrow = arrow
+        view.select = select
+    }
+
+    final class PressView: UIView {
+        var arrow: (Bool, PlayerFeature.Direction) -> Void = { _, _ in }
+        var select: () -> Void = {}
+
+        override var canBecomeFocused: Bool { true }
+
+        override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+            super.pressesBegan(presses.filter { !handle($0, isDown: true) }, with: event)
+        }
+
+        override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+            super.pressesEnded(presses.filter { !handle($0, isDown: false) }, with: event)
+        }
+
+        override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+            super.pressesCancelled(presses.filter { !handle($0, isDown: false) }, with: event)
+        }
+
+        private func handle(_ press: UIPress, isDown: Bool) -> Bool {
+            switch press.type {
+            case .leftArrow: arrow(isDown, .backward)
+            case .rightArrow: arrow(isDown, .forward)
+            case .select: if !isDown { select() }
+            default: return false
+            }
+            return true
+        }
+    }
+}
+#endif
 
 /// The stream's own tracks first, then a submenu per add-on with its files grouped by language.
 private struct SubtitleMenu: View {

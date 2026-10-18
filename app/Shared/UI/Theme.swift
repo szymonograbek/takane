@@ -37,6 +37,9 @@ enum Metrics {
     /// Space between a section's title and its rows.
     static let headerSpacing: CGFloat = 20
     static let welcomeLogoSize: CGFloat = 300
+    static let progressHeight: CGFloat = 5
+    /// The player's progress bar while it has focus.
+    static let focusedProgressHeight: CGFloat = 14
     #else
     static let posterWidth: CGFloat = 140
     static let wideCardWidth: CGFloat = 280
@@ -49,6 +52,8 @@ enum Metrics {
     static let emblemSize: CGFloat = 180
     static let headerSpacing: CGFloat = 8
     static let welcomeLogoSize: CGFloat = 160
+    static let progressHeight: CGFloat = 5
+    static let focusedProgressHeight: CGFloat = 9
     #endif
 }
 

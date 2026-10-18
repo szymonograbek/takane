@@ -51,7 +51,7 @@ line_length:
   ignores_comments: true
   ignores_urls: true
 identifier_name:
-  excluded: [id, by, of, to, ui, x, y]
+  excluded: [id, at, by, of, to, ui, x, y]
 type_name:
   excluded: [ID]
 nesting:
