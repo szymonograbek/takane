@@ -10,7 +10,7 @@ The app is a SwiftUI client over stremio-core (Rust, `core/`) with mpv playback.
 Two harnesses:
 
 - **tvOS UI drive.** `.claude/skills/verify-stremio-tv/scripts/tv.sh` (below). Drives the real tvOS UI with remote presses through `agent-device`. This is the user path; prefer it.
-- **Smoke journey.** `scripts/smoke.sh [--tvos] [type/id]`. Launches the app in a mode that runs install → streams → play 10 s → pause → continue watching by itself and writes `smoke-result.json`. It sends the same feature events the UI buttons send, but drives no UI. Use it for macOS (no UI driver is set up there) and as a fast regression check on both platforms. It is not proof that a UI control works.
+- **Smoke journey.** `scripts/smoke.sh [--tvos] [type/id]`. Launches the app in a mode that runs install → streams → play 10 s → pause → continue watching by itself and writes `smoke-result.json`. It sends the same feature events the UI buttons send, but drives no UI. Use it for macOS (no UI driver is set up there) and as a fast regression check on both platforms. It is not proof that a UI control works. With `STREMIO_SMOKE_SUBTITLES_ADDON_URL` set (environment or `.env.smoke`) it also installs that subtitles add-on, waits for its files for the stream and plays the first one; `smoke-result.json` then lists subtitle counts per add-on, the first labels and the track played.
 
 Both need the debrid add-on URL: `STREMIO_SMOKE_ADDON_URL` in the environment or in the git-ignored `.env.smoke` at the repo root (`STREMIO_SMOKE_ADDON_URL=https://…/manifest.json`). It holds credentials. Never print it, commit it, or paste it into evidence.
 
@@ -66,6 +66,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `streams.row` | each playable stream (unplayable ones are not listed) |
 | `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · hwdec <name>` |
 | `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls; Menu buttons report focus by label (`Subtitles`, `Audio`, `Speed`) |
+| `player.subtitles.addon` | one add-on's submenu inside the subtitles menu, labelled with the add-on's name |
 | `settings.account`, `settings.addons`, `settings.playback`, `settings.about` | Settings rows |
 | `addons.install`, `addons.manifestURL`, `addons.status`, `addons.row` | Settings › Add-ons |
 

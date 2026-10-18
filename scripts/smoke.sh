@@ -4,7 +4,8 @@
 # core recorded progress, then quit. Exit code 0 means every step passed.
 #
 # The add-on URL contains debrid credentials, so it is read from STREMIO_SMOKE_ADDON_URL
-# or from the git-ignored .env.smoke file, never from the repo.
+# or from the git-ignored .env.smoke file, never from the repo. STREMIO_SMOKE_SUBTITLES_ADDON_URL,
+# optional and read the same way, adds a subtitles add-on and plays one of its files.
 #
 # Usage: scripts/smoke.sh [--tvos] [--no-addons] [type/id]
 #   scripts/smoke.sh                          macOS, movie/tt0111161
@@ -56,6 +57,7 @@ if [[ "$platform" == macos ]]; then
     status=0
     STREMIO_STORAGE_DIRECTORY="$storage" \
     STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
+    STREMIO_SMOKE_SUBTITLES_ADDON_URL="${STREMIO_SMOKE_SUBTITLES_ADDON_URL:-}" \
     STREMIO_SMOKE_ITEM="$item" \
     STREMIO_SMOKE_EXIT=1 \
     STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
@@ -80,6 +82,7 @@ rm -rf "$storage" "$logs/smoke-result.json" "$logs/smoke-frame.png" "$logs/smoke
 
 SIMCTL_CHILD_STREMIO_STORAGE_DIRECTORY="$storage" \
 SIMCTL_CHILD_STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
+SIMCTL_CHILD_STREMIO_SMOKE_SUBTITLES_ADDON_URL="${STREMIO_SMOKE_SUBTITLES_ADDON_URL:-}" \
 SIMCTL_CHILD_STREMIO_SMOKE_ITEM="$item" \
 SIMCTL_CHILD_STREMIO_SMOKE_EXIT=1 \
 SIMCTL_CHILD_STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
