@@ -1,22 +1,20 @@
 # Architecture
 
 ```
-┌──────────────────────────────────────────────┐
-│ SwiftUI app: app/macOS, app/tvOS (views)     │
-│  app/Shared/App (entry, smoke test)          │
-├──────────────────────────────────────────────┤
-│ Swift core client (app/Shared/Core)          │
-│  CoreStore: observable model state           │
-│  CoreClient: dispatch / state / events       │
-│  Host callbacks: URLSession fetch, logging   │
-├──────────────── FFI (C ABI) ─────────────────┤
-│ Rust bridge crate (core/)                    │
-│  AppleEnv · AppModel · JSON in and out       │
-├──────────────────────────────────────────────┤
-│ stremio-core (development branch, pinned rev)│
-└──────────────────────────────────────────────┘
-                     │
-          MPVKit ◄───┘ stream URL + headers (app/Shared/Player)
+┌───────────────────────────────────────────────────────────┐
+│ UI: app/macOS, app/tvOS (render FeatureStore state)       │
+├───────────────────────────────────────────────────────────┤
+│ Features: one state machine per behavior (pure reduce)    │
+├───────────────────────────────────────────────────────────┤
+│ Domain: values, branded ids, ports (protocols) + errors   │
+├─────────────────────────────┬─────────────────────────────┤
+│ Adapters/Core               │ Adapters/MPV                │
+│  CoreRuntime, Core*Service  │  MPVEngine: PlaybackEngine  │
+│  CoreClient (only FFI user) │                             │
+├──────── FFI (C ABI) ────────┤        MPVKit / libmpv      │
+│ Rust bridge crate (core/)   │                             │
+│ stremio-core (pinned rev)   │                             │
+└─────────────────────────────┴─────────────────────────────┘
 ```
 
 ## Rust bridge
@@ -42,12 +40,55 @@ Core's `Env` trait (`src/runtime/env.rs`) is what the host must provide:
 | `log` | `tracing`, forwarded with all bridge logs to the Swift logger. |
 | `flush_analytics` / `analytics_context` | No-op. |
 
-## Swift layer
+## App architecture
 
-- `CoreClient` is the only code that touches the FFI. `CoreAction` encodes actions; `CoreState.swift` decodes only the fields the app reads. Values the app hands back to core untouched (addon descriptors, streams) are kept as raw JSON.
-- `CoreStore` is the main-actor mirror of core state. On each `NewState` event it re-reads the changed fields.
-- `CoreWorkflows.swift` holds multi-step flows (install an addon, load streams) shared by the UI and the smoke test.
-- `app/Shared` is compiled into both apps. Only `RootView` and `MPVVideoView` exist per platform (`app/macOS`, `app/tvOS`): `NSView` versus `UIView` hosting of mpv's layer, and pointer versus focus/remote UI.
+The app is ports and adapters with a state machine per feature. Dependencies point inward: UI → Features → Domain ← Adapters. `app/Shared/App/StremioApp.swift` is the composition root and the only file that names concrete adapters.
+
+### Domain
+
+`app/Shared/Domain` holds what the app talks about, independent of where it comes from.
+
+- **Values and identifiers.** `PlayableID` (movie, or show plus season and episode), `MediaID` and `ManifestURL` are parsed once, at the boundary, by failable initializers. Inside the app the type proves the value is valid.
+- **Ports.** One protocol per capability: `AddonService`, `StreamService`, `LibraryService`, `PlaybackTracker`, `PlaybackEngine`. Each has its own error enum (`AddonError`, `StreamSourceError`, `PlaybackError`) and uses typed throws. Changing state is an `AsyncStream` that yields the current value first, then every change.
+- **`Remote<Value, Failure>`** (loading, loaded, failed) for anything fetched, and **`Probe`** (pending, done, failed) for one look at changing state while waiting.
+- **`TrackingToken`** is the one opaque value: the stream provider puts what it needs to track playback into the candidate it returns and the tracker reads it back. For core that is the player selection JSON.
+
+Metadata and artwork follow the same shape when screens need them: a `MetadataService` and an `ArtworkService` (posters, backgrounds, logos) in Domain, with a core adapter over add-on catalogs first and a TMDB adapter beside it. Neither exists yet because nothing renders metadata.
+
+### Features
+
+A `Feature` (`app/Shared/Features/Feature.swift`) is a finite state machine:
+
+```swift
+enum StreamsFeature: Feature {
+    enum State { case idle, lookingUp(PlayableID, results: StreamResults?) }
+    enum Event { case lookUp(PlayableID), resultsChanged(StreamResults) }
+    enum Effect { case watch(PlayableID) }
+    static func reduce(_ state: inout State, _ event: Event) -> [Effect]   // pure: every rule
+    static func run(_ effect: Effect, _ dependencies: Dependencies, _ send: …) async   // no rules
+}
+```
+
+`reduce` holds every rule: legal transitions, dropping stale answers (events carry the request they answer), progress throttling. Tests drive it with plain values. `run` performs one effect against the feature's ports and reports back as events. `FeatureStore<F>` is the `@Observable` runtime views read and `send` to; it starts each effect in a task, cancels them when it goes away and offers `until(timeout:onTimeout:probe)` for tests and the smoke test.
+
+Features today: `PlayerFeature` (idle, active session with phase opening/playing/paused/ended, failed), `AddonsFeature`, `StreamsFeature`, `OverviewFeature` (account and continue watching). `AppContext` holds the app-wide stores. `Launch` makes "services are ready" a state: screens exist only in `.ready(AppContext)`, so nothing can send to core before it started.
+
+### Adapters
+
+- **Core.** `CoreClient` is the only code that touches the FFI. `CoreRuntime` turns core's protocol (dispatch an action, later receive `NewState` naming the changed fields) into async APIs: `states`/`observe` stream a field's state (current first), and `request` subscribes, dispatches and waits until a probe accepts a state. No polling. Because the current state is probed first, every probe checks that the state answers its own request (transport URL, selected stream path). `CoreAddonService`, `CoreStreamService`, `CoreLibraryService` and `CorePlaybackTracker` implement the ports. `CoreAction.swift` encodes actions; `CoreWire.swift` decodes only the fields the adapters read. Core keeps one `meta_details` selection, so a new stream lookup replaces the previous one and finishes its stream.
+- **MPV.** `MPVEngine` conforms to `PlaybackEngine`: it translates mpv events into `PlaybackEvent` on its event queue, renders into a `CAMetalLayer`, and runs commands on the main actor.
+
+### Adding a provider
+
+A provider is a folder under `app/Shared/Adapters/` with types that conform to ports. To serve metadata from TMDB: add `Adapters/TMDB/` with a `TMDBMetadataService: MetadataService` and its private response types, map HTTP and decoding failures to `MetadataError`, and point `Services.live` at it. Features and views do not change. Keep results keyed by the same `MediaID` (IMDb) so stream lookups still match.
+
+### Strictness
+
+Swift 6 with complete concurrency checking, `ExistentialAny` and warnings as errors. SwiftLint runs as a build tool plugin on every app and test build in strict mode (`.swiftlint.yml`). Force unwraps, force casts, `try!`, `@unchecked Sendable`, `nonisolated(unsafe)` and `assumeIsolated` fail the build unless disabled on the line with a reason. The `StremioTVTests` target compiles Domain and Features without the bridge or mpv, so those layers cannot import an adapter.
+
+### Platforms
+
+`app/Shared` is compiled into both apps. `RootView` and `VideoSurfaceView` exist per platform (`app/macOS`, `app/tvOS`): `NSView` versus `UIView` hosting of the engine's layer, and pointer versus focus and remote UI. Views parse text input into domain types before sending events.
 
 ## Logging
 
@@ -66,7 +107,7 @@ Before display, filter `meta_details` streams to supported sources:
 
 ## Player
 
-MPVKit renders video with `vo=gpu-next` through MoltenVK into a `CAMetalLayer` (`app/Shared/Player/MPVEngine.swift`), the same path MPVKit's macOS and tvOS demos use. Hardware decoding uses VideoToolbox; the tvOS simulator falls back to software decoding. Reading frames back from mpv (`snapshot`) crashes the simulator's Metal driver, so it is disabled in simulators. Core's `player` model owns playback state (progress, watched, next episode); `PlaybackSession` forwards time, pause and end events to it. Core copies progress into the library (and so continue watching) on pause, unload and every 180 s, not on every time update.
+MPVKit renders video with `vo=gpu-next` through MoltenVK into a `CAMetalLayer` (`app/Shared/Adapters/MPV/MPVEngine.swift`), the same path MPVKit's macOS and tvOS demos use. Hardware decoding uses VideoToolbox; the tvOS simulator falls back to software decoding. Reading frames back from mpv (`snapshot`) crashes the simulator's Metal driver, so it is disabled in simulators. Core's `player` model owns playback state (progress, watched, next episode); `PlayerFeature` reports time (once per second), pause and end to it through `CorePlaybackTracker`. Core copies progress into the library (and so continue watching) on pause, unload and every 180 s, not on every time update.
 
 Settings map to mpv options:
 
