@@ -3,6 +3,8 @@ struct InstalledAddon: Identifiable, Hashable, Sendable {
     let manifestURL: ManifestURL
     let name: String
     let version: String
+    /// False for add-ons the provider keeps installed, such as its official catalog.
+    let isRemovable: Bool
 
     var id: ManifestURL { manifestURL }
 }
@@ -22,4 +24,7 @@ protocol AddonService: Sendable {
 
     /// Fetches the manifest and installs it. Installing an installed add-on returns it unchanged.
     func install(_ manifest: ManifestURL) async throws(AddonError) -> InstalledAddon
+
+    /// Removing an add-on that is not installed does nothing.
+    func uninstall(_ manifest: ManifestURL) async throws(AddonError)
 }

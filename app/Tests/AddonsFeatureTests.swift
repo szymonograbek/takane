@@ -1,7 +1,7 @@
 import Testing
 
 struct AddonsFeatureTests {
-    private let addon = InstalledAddon(manifestURL: Fixture.manifest, name: "Debrid", version: "1.0.0")
+    private let addon = InstalledAddon(manifestURL: Fixture.manifest, name: "Debrid", version: "1.0.0", isRemovable: true)
 
     @Test func installsOneManifestAtATime() {
         var state = AddonsFeature.State()
@@ -29,7 +29,7 @@ struct AddonsFeatureTests {
         var state = AddonsFeature.State()
         _ = AddonsFeature.reduce(&state, .install(Fixture.manifest))
         _ = AddonsFeature.reduce(&state, .installFinished(Fixture.manifest, .failure(.manifestUnavailable(reason: "404"))))
-        #expect(state.install.message == "manifest failed: 404")
+        #expect(state.install.message == "The add-on's manifest could not be loaded: 404")
         #expect(AddonsFeature.reduce(&state, .install(Fixture.manifest)) == [.install(Fixture.manifest)])
     }
 }

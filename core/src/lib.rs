@@ -200,10 +200,27 @@ mod tests {
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"Login","email":"a@b.c","password":"x","facebook":false}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"TimeChanged","args":{"time":1000,"duration":60000,"device":"macos"}}}}"#,
             r#"{"field":"player","action":{"action":"Unload"}}"#,
+            r#"{"field":"link","action":{"action":"Load","args":{"model":"Link"}}}"#,
+            r#"{"field":"link","action":{"action":"Link","args":{"action":"ReadData"}}}"#,
+            r#"{"field":"link","action":{"action":"Unload"}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"LoginWithToken","token":"key"}}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Logout"}}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);
             assert!(parsed.is_ok(), "{request}\n{:?}", parsed.err());
         }
+    }
+
+    /// The app updates settings by sending back the settings it read with a few keys changed.
+    #[test]
+    fn serialized_settings_parse_as_update_settings() {
+        let settings = serde_json::to_value(stremio_core::types::profile::Settings::default()).unwrap();
+        let request = serde_json::json!({
+            "field": null,
+            "action": {"action": "Ctx", "args": {"action": "UpdateSettings", "args": settings}},
+        });
+        let parsed = serde_json::from_value::<DispatchRequest>(request);
+        assert!(parsed.is_ok(), "{:?}", parsed.err());
     }
 }

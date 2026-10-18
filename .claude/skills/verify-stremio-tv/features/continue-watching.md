@@ -1,29 +1,28 @@
 # Continue watching
 
-After the user watches part of an item and pauses or stops, core records the position and the item appears under "Continue watching" with its offset and duration.
+After the user watches part of an item and stops, core records the position. Home shows it first under Continue Watching as a wide card with a progress line and the time left. Selecting the card opens its streams, which say where playback resumes, and the chosen stream starts there.
 
 ## Sub-features
 
-- `cw-after-stop` lists the item after stopping playback.
-- `cw-offset` shows the offset reached, in seconds.
+- `cw-row` lists the item on Home with time left.
+- `cw-resume` starts playback at the saved position.
 - `cw-persist` writes the progress to the profile's library on disk.
 
 ## How to get to it (user POV)
 
-- Left column, below the add-on list, after playing something.
+- Home, the row under the hero, after playing something.
 
 ## Driving it with tv.sh
 
 Preconditions:
 
-- [Playback](./playback.md) ran for at least 10 s in this run and was stopped with Menu.
+- [Playback](./playback.md) ran for at least 10 s in this run and was stopped.
 
-- **Listed.** Run `$T text continueWatching.item`. Prints `The Shawshank Redemption · <offset>s / <duration>s` with offset at least 10.
-- **Persisted.** Run `source build/verify/current.env; grep -o '"timeOffset":[0-9]*' "$storage/library_recent.json"`. The value in milliseconds matches the offset shown.
-- **Proof.** Run `$T evidence continue-watching`.
+- **Listed.** `$T focus house up`, `$T remote down`. `$T focused` prints `continueWatching.item`.
+- **Resume.** `$T select`, wait 12 s. The screen shows `Resumes at 0:20` (or the saved time). Select a stream; the log shows `set start=<seconds>` and `player.status` starts past that time.
+- **Persisted.** `source build/verify/current.env; grep -o '"timeOffset":[0-9]*' "$storage/library_recent.json"`.
 
 ## Gotchas
 
-- Core copies progress into the library only on pause, stop and every 180 s, not on every position update. A crash mid-playback loses up to 180 s.
-- Numbers use the device locale's grouping: duration `8553` shows as `8.553s` or `8,553s`.
-- A fresh profile has no items; an item listed before playback means the run is not on a fresh profile (check `$T doctor`).
+- Core copies progress into the library only on pause, stop and every 180 s.
+- Long-press (context menu) offers Remove from Continue Watching, which rewinds the item in core.

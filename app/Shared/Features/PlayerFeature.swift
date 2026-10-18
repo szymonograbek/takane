@@ -5,6 +5,8 @@ enum PlayerFeature: Feature {
     struct Dependencies: Sendable {
         let engine: any PlaybackEngine
         let tracker: any PlaybackTracker
+        let skipSegments: any SkipSegmentService
+        let preferences: any PreferencesService
     }
 
     enum Phase: String, Sendable {
@@ -13,6 +15,8 @@ enum PlayerFeature: Feature {
 
     struct Session: Equatable, Sendable {
         let candidate: StreamCandidate
+        /// What the viewer chose, such as "Twin Peaks · S1 E3", for the controls.
+        var title = ""
         var phase = Phase.opening
         var position = Duration.zero
         /// Zero until the engine knows it.
@@ -22,6 +26,10 @@ enum PlayerFeature: Feature {
         var hardwareDecoder: String?
         /// The whole second last reported to the tracker.
         var reportedSecond: Int64?
+        var tracks: [MediaTrack] = []
+        var speed = PlaybackSpeed.normal
+        /// Parts of the stream the viewer may skip, found once the duration is known.
+        var segments: Remote<[SkipSegment], SkipSegmentError>?
     }
 
     enum State: Equatable, Sendable {
@@ -31,11 +39,17 @@ enum PlayerFeature: Feature {
     }
 
     enum Event: Sendable {
-        case open(StreamCandidate)
+        /// Plays `candidate` from `start`, such as a saved position, labelled `title`.
+        case open(StreamCandidate, from: Duration = .zero, title: String = "")
         case togglePause
         case seek(by: Duration)
+        case select(MediaTrack.ID)
+        case turnOffSubtitles
+        case setSpeed(PlaybackSpeed)
+        case skip(SkipSegment)
         case stop
         case engine(PlaybackEvent)
+        case segmentsFound(PlayableID, Result<[SkipSegment], SkipSegmentError>)
     }
 
     enum Report: Equatable, Sendable {
@@ -47,20 +61,25 @@ enum PlayerFeature: Feature {
     enum Effect: Equatable, Sendable {
         /// Feeds engine events back as `.engine`. Start it once, when the store is created.
         case listen
-        case begin(StreamCandidate, PlaybackSource)
+        case begin(StreamCandidate, PlaybackSource, from: Duration)
         case setPaused(Bool)
         case seek(by: Duration)
+        case seekTo(Duration)
+        case select(MediaTrack.ID)
+        case turnOffSubtitles
+        case setSpeed(PlaybackSpeed)
+        case findSegments(PlayableID, duration: Duration)
         case stop
         case report(Report)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
         switch (state, event) {
-        case (_, .open(let candidate)):
+        case (_, .open(let candidate, let start, let title)):
             switch candidate.playability {
             case .playable(let source):
-                state = .active(Session(candidate: candidate))
-                return [.begin(candidate, source)]
+                state = .active(Session(candidate: candidate, title: title))
+                return [.begin(candidate, source, from: start)]
             case .unsupported(let kind):
                 let wasActive = state.session != nil
                 state = .failed(candidate, .unsupported(kind: kind))
@@ -77,6 +96,26 @@ enum PlayerFeature: Feature {
         case (.active, .seek(let offset)):
             return [.seek(by: offset)]
 
+        case (.active(let session), .select(let track)):
+            return session.tracks.contains { $0.id == track && !$0.isSelected } ? [.select(track)] : []
+
+        case (.active, .turnOffSubtitles):
+            return [.turnOffSubtitles]
+
+        case (.active(let session), .setSpeed(let speed)):
+            return speed == session.speed ? [] : [.setSpeed(speed)]
+
+        case (.active(let session), .skip(let segment)):
+            return session.segments?.value?.contains(segment) == true ? [.seekTo(segment.range.upperBound)] : []
+
+        case (.active(var session), .segmentsFound(let item, let result)) where item == session.candidate.item:
+            session.segments = switch result {
+            case .success(let segments): .loaded(segments)
+            case .failure(let error): .failed(error)
+            }
+            state = .active(session)
+            return []
+
         case (.active, .stop), (.failed, .stop):
             state = .idle
             return [.stop]
@@ -91,7 +130,10 @@ enum PlayerFeature: Feature {
             return effects
 
         case (.idle, .togglePause), (.idle, .seek), (.idle, .stop), (.idle, .engine),
-             (.failed, .togglePause), (.failed, .seek), (.failed, .engine):
+             (.failed, .togglePause), (.failed, .seek), (.failed, .engine),
+             (.idle, .select), (.idle, .turnOffSubtitles), (.idle, .setSpeed), (.idle, .skip), (.idle, .segmentsFound),
+             (.failed, .select), (.failed, .turnOffSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
+             (.active, .segmentsFound):
             return []
         }
     }
@@ -117,6 +159,9 @@ enum PlayerFeature: Feature {
             return [.report(.progress(position, of: session.duration))]
         case .duration(let duration):
             session.duration = duration
+            guard session.segments == nil, duration > .zero else { return [] }
+            session.segments = .loading
+            return [.findSegments(session.candidate.item, duration: duration)]
         case .paused(let paused):
             switch session.phase {
             case .playing where paused: session.phase = .paused
@@ -130,6 +175,10 @@ enum PlayerFeature: Feature {
             session.videoSize = size
         case .hardwareDecoder(let name):
             session.hardwareDecoder = name
+        case .tracks(let tracks):
+            session.tracks = tracks
+        case .speed(let speed):
+            session.speed = speed
         }
         return []
     }
@@ -143,14 +192,32 @@ enum PlayerFeature: Feature {
             for await event in engine.events {
                 send(.engine(event))
             }
-        case .begin(let candidate, let source):
+        case .begin(let candidate, let source, let start):
+            // The first value is the current one, so this does not wait on the network.
+            var preferences = dependencies.preferences.playback().makeAsyncIterator()
+            let languages = await preferences.next()?.languages ?? .streamDefaults
             tracker.begin(candidate)
-            engine.load(source)
+            engine.load(source, from: start, languages: languages)
             engine.setPaused(false)
         case .setPaused(let paused):
             engine.setPaused(paused)
         case .seek(let offset):
             engine.seek(by: offset)
+        case .seekTo(let position):
+            engine.seek(to: position)
+        case .select(let track):
+            engine.select(track)
+        case .turnOffSubtitles:
+            engine.turnOffSubtitles()
+        case .setSpeed(let speed):
+            engine.setSpeed(speed)
+        case .findSegments(let item, let duration):
+            do {
+                let found = try await dependencies.skipSegments.segments(for: item, duration: duration)
+                send(.segmentsFound(item, .success(found.segments)))
+            } catch {
+                send(.segmentsFound(item, .failure(error)))
+            }
         case .stop:
             engine.stop()
             tracker.stop()
@@ -176,6 +243,16 @@ extension PlayerFeature.State {
         case .active(let session): session.candidate
         case .failed(let candidate, _): candidate
         }
+    }
+
+    /// The skippable segment playing now. Segments whose timestamps may not fit this cut are left out.
+    var activeSegment: SkipSegment? {
+        guard let session else { return nil }
+        return session.segments?.value?.first { $0.fit != .uncertain && $0.range.contains(session.position) }
+    }
+
+    func tracks(_ kind: TrackKind) -> [MediaTrack] {
+        session?.tracks.filter { $0.id.kind == kind } ?? []
     }
 
     var phaseName: String {

@@ -9,6 +9,7 @@ enum CoreField: String, Codable, Sendable {
     case search
     case metaDetails = "meta_details"
     case player
+    case link
 }
 
 /// Actions the app sends to stremio-core, encoded in core's `Action` JSON shape
@@ -19,6 +20,7 @@ enum CoreAction: Sendable {
     case catalogs(Catalogs)
     case ctx(Ctx)
     case player(Player)
+    case link(Link)
     case unload
 
     enum Load: Sendable {
@@ -27,6 +29,8 @@ enum CoreAction: Sendable {
         case metaDetails(metaPath: ResourcePath, streamPath: ResourcePath?)
         /// Core's player selection, as `CoreStreamService` built it into a candidate's tracking token.
         case player(selection: JSONValue)
+        /// Requests a new sign-in code.
+        case link
     }
 
     /// Paging of the `CatalogsWithExtra` model the action targets.
@@ -39,6 +43,24 @@ enum CoreAction: Sendable {
 
     enum Ctx: Sendable {
         case installAddon(descriptor: JSONValue)
+        case uninstallAddon(descriptor: JSONValue)
+        case authenticate(Authentication)
+        case logout
+        /// Core's whole `Settings` object, as read from the profile with some keys changed.
+        case updateSettings(JSONValue)
+        /// Resets a library item's progress, which takes it out of continue watching.
+        case rewindLibraryItem(id: String)
+    }
+
+    /// core's `AuthRequest`.
+    enum Authentication: Sendable {
+        case login(email: String, password: String)
+        case loginWithToken(String)
+    }
+
+    enum Link: Sendable {
+        /// Asks whether the current code was confirmed; the answer lands in the `link` model.
+        case readData
     }
 
     enum Player: Sendable {
@@ -165,6 +187,10 @@ private func model<Args: Encodable>(_ name: String, _ args: Args) -> Tagged<Args
     Tagged(name: name, args: args, tagKey: "model", argsKey: "args")
 }
 
+private func model(_ name: String) -> Tagged<NoArgs> {
+    Tagged(name: name, args: nil, tagKey: "model", argsKey: "args")
+}
+
 extension CoreAction: Encodable {
     func encode(to encoder: any Encoder) throws {
         switch self {
@@ -172,6 +198,7 @@ extension CoreAction: Encodable {
         case .catalogs(let catalogs): try action("CatalogsWithExtra", catalogs).encode(to: encoder)
         case .ctx(let ctx): try action("Ctx", ctx).encode(to: encoder)
         case .player(let player): try action("Player", player).encode(to: encoder)
+        case .link(.readData): try action("Link", action("ReadData")).encode(to: encoder)
         case .unload: try action("Unload").encode(to: encoder)
         }
     }
@@ -196,6 +223,8 @@ extension CoreAction.Load: Encodable {
                 .encode(to: encoder)
         case .player(let selection):
             try model("Player", selection).encode(to: encoder)
+        case .link:
+            try model("Link").encode(to: encoder)
         }
     }
 }
@@ -218,6 +247,11 @@ extension CoreAction.Ctx: Encodable {
     func encode(to encoder: any Encoder) throws {
         switch self {
         case .installAddon(let descriptor): try action("InstallAddon", descriptor).encode(to: encoder)
+        case .uninstallAddon(let descriptor): try action("UninstallAddon", descriptor).encode(to: encoder)
+        case .authenticate(let request): try action("Authenticate", request).encode(to: encoder)
+        case .logout: try action("Logout").encode(to: encoder)
+        case .updateSettings(let settings): try action("UpdateSettings", settings).encode(to: encoder)
+        case .rewindLibraryItem(let id): try action("RewindLibraryItem", id).encode(to: encoder)
         }
     }
 }
@@ -235,5 +269,33 @@ extension CoreAction.Player: Encodable {
         case .ended:
             try action("Ended").encode(to: encoder)
         }
+    }
+}
+
+extension CoreAction.Authentication: Encodable {
+    private struct Login: Encodable {
+        let type = "Login"
+        let email: String
+        let password: String
+        let facebook = false
+    }
+
+    private struct LoginWithToken: Encodable {
+        let type = "LoginWithToken"
+        let token: String
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        switch self {
+        case .login(let email, let password): try Login(email: email, password: password).encode(to: encoder)
+        case .loginWithToken(let token): try LoginWithToken(token: token).encode(to: encoder)
+        }
+    }
+}
+
+extension CoreAction {
+    /// Carries a password or token, so logs show only its name.
+    var isSensitive: Bool {
+        if case .ctx(.authenticate) = self { true } else { false }
     }
 }

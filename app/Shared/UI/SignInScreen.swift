@@ -1,0 +1,151 @@
+import CoreImage.CIFilterBuiltins
+import SwiftUI
+
+/// Sign-in by code: confirm it on a phone or computer, no typing on the remote.
+struct SignInScreen: View {
+    @Environment(AppContext.self) private var app
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let account = app.account
+        VStack(spacing: 36) {
+            Text("Sign In with Stremio").font(.title2).bold()
+            switch account.state.signIn {
+            case .linking(.loaded(let code)):
+                LinkCodeView(code: code)
+            case .linking(.failed(let error)):
+                failure(error)
+            case .linking(.loading), .signingIn:
+                ProgressView().frame(height: 300)
+            case .idle, .failed:
+                // Back from a password attempt: offer a code again.
+                Button("Get a Code") { account.send(.startLinking) }.frame(height: 300)
+            }
+            NavigationLink("Use Email and Password Instead") {
+                PasswordSignInScreen()
+            }
+            .accessibilityIdentifier("signIn.password")
+        }
+        .padding(Metrics.screenPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.wash.ignoresSafeArea())
+        .onAppear { account.send(.startLinking) }
+        .onDisappear {
+            if case .linking = account.state.signIn { account.send(.cancel) }
+        }
+        .dismissWhenSignedIn(account.state.account, dismiss)
+    }
+
+    private func failure(_ error: AccountError) -> some View {
+        VStack(spacing: 20) {
+            Text(error.message).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
+            Button("Get a New Code") { app.account.send(.startLinking) }
+        }
+        .frame(height: 300)
+    }
+}
+
+private struct LinkCodeView: View {
+    let code: LinkCode
+
+    var body: some View {
+        HStack(spacing: 60) {
+            QRCode(text: code.link.absoluteString)
+                .frame(width: 300, height: 300)
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Scan with your phone, or go to").foregroundStyle(Palette.secondary)
+                Text(code.link.host() ?? code.link.absoluteString).font(.headline)
+                Text("and enter").foregroundStyle(Palette.secondary)
+                Text(code.code)
+                    .font(.system(size: 64, weight: .semibold, design: .monospaced))
+                    .kerning(12)
+                    .accessibilityIdentifier("signIn.code")
+                Label("Waiting for you to confirm…", systemImage: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(Palette.secondary)
+            }
+        }
+    }
+}
+
+/// A QR code drawn crisp at any size.
+private struct QRCode: View {
+    let text: String
+
+    var body: some View {
+        if let image = Self.image(for: text) {
+            Image(decorative: image, scale: 1)
+                .interpolation(.none)
+                .resizable()
+                .padding(16)
+                .background(.white, in: .rect(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private static func image(for text: String) -> CGImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(text.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        return CIContext().createCGImage(output, from: output.extent)
+    }
+}
+
+/// Sign-in with the Stremio account's email and password.
+struct PasswordSignInScreen: View {
+    @Environment(AppContext.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var password = ""
+
+    var body: some View {
+        let state = app.account.state.signIn
+        VStack(spacing: 30) {
+            Text("Sign In with Email").font(.title2).bold()
+            TextField("Email", text: $email)
+                .textContentType(.username)
+                .accessibilityIdentifier("signIn.email")
+            SecureField("Password", text: $password)
+                .textContentType(.password)
+                .accessibilityIdentifier("signIn.passwordField")
+            if case .failed(let error) = state {
+                Text(error.message)
+                    .foregroundStyle(Palette.secondary)
+                    .accessibilityIdentifier("signIn.error")
+            }
+            Button {
+                guard let address = EmailAddress(email), let secret = Password(password) else { return }
+                app.account.send(.signIn(address, secret))
+            } label: {
+                if case .signingIn = state { ProgressView() } else { Text("Sign In") }
+            }
+            .disabled(EmailAddress(email) == nil || Password(password) == nil)
+            .accessibilityIdentifier("signIn.submit")
+        }
+        .frame(maxWidth: 800)
+        .padding(Metrics.screenPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.wash.ignoresSafeArea())
+        .dismissWhenSignedIn(app.account.state.account, dismiss)
+    }
+}
+
+private extension View {
+    /// Sign-in screens pushed from Settings leave once the account signs in.
+    func dismissWhenSignedIn(_ account: Account, _ dismiss: DismissAction) -> some View {
+        onChange(of: account) { _, account in
+            if case .signedIn = account { dismiss() }
+        }
+    }
+}
+
+extension AccountError {
+    var message: String {
+        switch self {
+        case .rejected(let message): message
+        case .linkExpired: "The code expired before it was confirmed."
+        case .superseded: "A newer code replaced this one."
+        case .unavailable(let reason): "Stremio could not be reached (\(reason))."
+        }
+    }
+}

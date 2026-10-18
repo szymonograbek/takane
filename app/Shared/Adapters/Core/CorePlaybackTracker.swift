@@ -30,11 +30,7 @@ struct CorePlaybackTracker: PlaybackTracker {
     }
 
     private func send(_ action: CoreAction) {
-        do {
-            try runtime.dispatch(action, to: .player)
-        } catch {
-            Log.core.error("player dispatch failed: \(error)")
-        }
+        runtime.dispatchLogged(action, to: .player)
     }
 }
 

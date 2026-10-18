@@ -1,6 +1,6 @@
-<img src="assets/icon.svg" width="64" height="64" alt="">
+<img src="assets/logo.png" width="64" alt="">
 
-# stremio-apple-tv
+# Takane
 
 Custom macOS and tvOS client for Stremio, built on [stremio-core](https://github.com/Stremio/stremio-core) and [MPVKit](https://github.com/mpvkit/MPVKit). Design notes live in [docs/](docs/README.md).
 
@@ -22,7 +22,7 @@ scripts/build-app.sh tvos-device          # tvOS device, unsigned (compile and l
 
 Or `xcodegen generate`, open `StremioTV.xcodeproj` in Xcode and run the `StremioTV-macOS` or `StremioTV-tvOS` scheme. The `StremioBridge_*` targets rebuild the Rust bridge before every app build. Signing uses the personal team (`F43U35GPD2`) with the `Apple Development: szymon@ograbek.com` identity.
 
-The current screen is a diagnostic view: core status, installed add-ons, add-on install by manifest URL, continue watching, a stream lookup by IMDb id (`tt0111161`, or `tt0944947:1:1` for an episode) and an mpv player. On tvOS the player is full screen: play/pause toggles, left/right seek 10 s, Menu stops.
+The app is Takane. First launch asks to sign in with Stremio (a link code confirmed on another device, or email and password) or continue without an account. Then three tabs: Home (a featured title, Continue Watching, every add-on catalog), Settings (Account, Add-ons, Playback, About) and Search. A title opens Details, Play lists the add-ons' playable streams, and the player shows only the video until the remote asks for controls: progress, ±10 s, play/pause, subtitles, audio, speed and Skip Intro.
 
 ## Logs
 

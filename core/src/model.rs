@@ -10,9 +10,11 @@ use stremio_core::models::addon_details::AddonDetails;
 use stremio_core::models::catalogs_with_extra::CatalogsWithExtra;
 use stremio_core::models::continue_watching_preview::ContinueWatchingPreview;
 use stremio_core::models::ctx::Ctx;
+use stremio_core::models::link::Link;
 use stremio_core::models::meta_details::MetaDetails;
 use stremio_core::models::player::Player;
 use stremio_core::runtime::{Effects, Env, EnvError};
+use stremio_core::types::api::LinkAuthKey;
 use stremio_core::types::events::DismissedEventsBucket;
 use stremio_core::types::library::LibraryBucket;
 use stremio_core::types::notifications::NotificationsBucket;
@@ -37,6 +39,8 @@ pub struct AppModel {
     pub search: CatalogsWithExtra,
     pub meta_details: MetaDetails,
     pub player: Player,
+    /// Sign-in by code: a code to confirm on another device, then the auth key it grants.
+    pub link: Link<LinkAuthKey>,
 }
 
 impl AppModel {
@@ -97,6 +101,7 @@ impl AppModel {
             search: Default::default(),
             meta_details: Default::default(),
             player: Default::default(),
+            link: Default::default(),
         };
         Ok((model, continue_watching_effects))
     }
@@ -110,6 +115,7 @@ impl AppModel {
             AppModelField::Search => serde_json::to_vec(&self.search),
             AppModelField::MetaDetails => serde_json::to_vec(&self.meta_details),
             AppModelField::Player => serde_json::to_vec(&self.player),
+            AppModelField::Link => serde_json::to_vec(&self.link),
         }
     }
 }

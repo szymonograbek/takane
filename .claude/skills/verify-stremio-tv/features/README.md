@@ -1,10 +1,10 @@
-# Stremio TV verification map
+# Takane verification map
 
-The maintained source for verifying what a user can do in Stremio TV. Read this index, then drive the matching feature file. Commands use `T=.claude/skills/verify-stremio-tv/scripts/tv.sh` from the repo root.
+The maintained source for verifying what a user can do in Takane. Read this index, then drive the matching feature file. Commands use `T=.claude/skills/verify-stremio-tv/scripts/tv.sh` from the repo root.
 
 ## Baseline preconditions
 
-- `$T launch` succeeded and `$T doctor` passes: tvOS app in the "Stremio Apple TV" simulator, fresh core profile `verify-<run-id>`.
+- `$T launch` succeeded and `$T doctor` passes: tvOS app in the "Stremio Apple TV" simulator on the Welcome screen, fresh core profile `verify-<run-id>`.
 - A fresh profile has the six default add-ons (Cinemeta, YouTube, WatchHub, Public Domain Movies, OpenSubtitles v3, Local Files) and an empty continue-watching list.
 - `STREMIO_SMOKE_ADDON_URL` is set or present in `.env.smoke` (the user's AIOStreams debrid add-on).
 - Never drive an app instance this run did not launch.
@@ -29,8 +29,9 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 ## Features
 
-- [Core status](./core-status.md) covers launch, the core Ready state and the default add-ons.
-- [Install an add-on](./install-addon.md) covers installing by manifest URL and its persistence.
-- [Find streams](./find-streams.md) covers movie and episode lookup across installed add-ons.
-- [Playback](./playback.md) covers playing a stream full screen, pause, seek and stop.
-- [Continue watching](./continue-watching.md) covers progress recorded after playback.
+- [Onboarding and sign-in](./onboarding.md) covers Welcome, the link code, email sign-in errors and continuing without an account.
+- [Install an add-on](./install-addon.md) covers Settings › Add-ons: install by manifest URL, remove, persistence.
+- [Find streams](./find-streams.md) covers Home, Search and Details leading to the stream list.
+- [Playback](./playback.md) covers the player: controls, speed, subtitles, audio, seek and stop.
+- [Continue watching](./continue-watching.md) covers the Home row and resuming from the saved position.
+- [Playback settings](./playback-settings.md) covers preferred subtitle and audio languages.

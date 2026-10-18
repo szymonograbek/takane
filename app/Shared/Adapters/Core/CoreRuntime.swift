@@ -17,6 +17,7 @@ final class CoreRuntime: Sendable {
 
     private let client: CoreClient
     private let subscribers = OSAllocatedUnfairLock<[UUID: Subscriber]>(initialState: [:])
+    private let eventSubscribers = OSAllocatedUnfairLock<[UUID: AsyncStream<CoreEvent>.Continuation]>(initialState: [:])
 
     private init(client: CoreClient) {
         self.client = client
@@ -35,11 +36,37 @@ final class CoreRuntime: Sendable {
             }
             Log.core.warning("core change stream ended")
         }
+        let events = runtime.client.events
+        Task.detached { [weak runtime] in
+            for await event in events {
+                runtime?.eventSubscribers.withLock { subscribers in subscribers.values.forEach { $0.yield(event) } }
+            }
+        }
         return runtime
+    }
+
+    /// Core's events from now on.
+    func events() -> AsyncStream<CoreEvent> {
+        let (stream, continuation) = AsyncStream.makeStream(of: CoreEvent.self, bufferingPolicy: .unbounded)
+        let id = UUID()
+        continuation.onTermination = { [weak self] _ in
+            self?.eventSubscribers.withLock { $0[id] = nil }
+        }
+        eventSubscribers.withLock { $0[id] = continuation }
+        return stream
     }
 
     func dispatch(_ action: CoreAction, to field: CoreField? = nil) throws(CoreError) {
         try client.dispatch(action, to: field)
+    }
+
+    /// Dispatches an action nothing waits on; a rejection is logged.
+    func dispatchLogged(_ action: CoreAction, to field: CoreField? = nil) {
+        do {
+            try client.dispatch(action, to: field)
+        } catch {
+            Log.core.error("dispatch to \(field?.rawValue ?? "ctx") failed: \(error)")
+        }
     }
 
     func state<State: Decodable>(_ field: CoreField, as type: State.Type = State.self) throws(CoreError) -> State {
