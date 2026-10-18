@@ -49,6 +49,8 @@ struct Profile: Decodable, Sendable {
 
     let auth: Auth?
     let addons: [Addon]
+    /// core's `Settings`, kept whole so an update sends back every key it did not change.
+    let settings: JSONValue
 }
 
 /// An installed or remote addon. `descriptor` is core's full JSON, sent back as-is on install.
@@ -85,18 +87,38 @@ struct Addon: Decodable, Sendable, Identifiable {
         }
     }
 
+    struct Flags: Decodable, Sendable {
+        /// One of Stremio's own add-ons, which every new profile starts with.
+        let isOfficial: Bool
+        /// Core refuses to uninstall a protected add-on.
+        let isProtected: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case isOfficial = "official"
+            case isProtected = "protected"
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            isOfficial = try container.decodeIfPresent(Bool.self, forKey: .isOfficial) ?? false
+            isProtected = try container.decodeIfPresent(Bool.self, forKey: .isProtected) ?? false
+        }
+    }
+
     let manifest: Manifest
     let transportUrl: URL
+    let flags: Flags?
     let descriptor: JSONValue
 
     var id: URL { transportUrl }
 
-    private enum CodingKeys: String, CodingKey { case manifest, transportUrl }
+    private enum CodingKeys: String, CodingKey { case manifest, transportUrl, flags }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         manifest = try container.decode(Manifest.self, forKey: .manifest)
         transportUrl = try container.decode(URL.self, forKey: .transportUrl)
+        flags = try container.decodeIfPresent(Flags.self, forKey: .flags)
         descriptor = try JSONValue(from: decoder)
     }
 }
@@ -255,14 +277,41 @@ struct LibraryItem: Decodable, Sendable {
         let timeOffset: UInt64
         /// Milliseconds.
         let duration: UInt64
+        /// The video watched last, such as `tt0944947:1:2`.
+        let videoId: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case timeOffset, duration
+            case videoId = "video_id"
+        }
     }
 
     let id: String
     let name: String
+    let type: String
+    /// Decoded as text so one malformed URL drops the image instead of the item.
+    let poster: String?
     let state: State
 
     private enum CodingKeys: String, CodingKey {
         case id = "_id"
-        case name, state
+        case name, type, poster, state
     }
+}
+
+// MARK: - link
+
+/// core's `Link<LinkAuthKey>`.
+struct LinkState: Decodable, Sendable {
+    struct Code: Decodable, Sendable {
+        let code: String
+        let link: String
+    }
+
+    struct AuthKey: Decodable, Sendable {
+        let authKey: String
+    }
+
+    let code: Loadable<Code>?
+    let data: Loadable<AuthKey>?
 }

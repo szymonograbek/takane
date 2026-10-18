@@ -143,3 +143,21 @@ protocol CatalogService: Sendable {
     /// `StreamService`, so this can finish a running `streams(for:)` lookup.
     func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails
 }
+
+extension TitleDetails {
+    /// Season numbers in viewing order: regular seasons ascending, then specials (season 0).
+    var seasons: [Int] {
+        let numbers = Set(videos.compactMap(\.season))
+        return numbers.filter { $0 > 0 }.sorted() + (numbers.contains(0) ? [0] : [])
+    }
+
+    func episodes(in season: Int) -> [Video] {
+        videos.filter { $0.season == season }.sorted { ($0.episode ?? 0) < ($1.episode ?? 0) }
+    }
+
+    /// What Play starts: the movie, or the first episode of the first regular season.
+    var firstPlayable: PlayableID? {
+        if preview.type == .movie { return .movie(preview.media) }
+        return seasons.first.flatMap { episodes(in: $0).first?.playable }
+    }
+}

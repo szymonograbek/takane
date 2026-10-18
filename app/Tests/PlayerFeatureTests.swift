@@ -13,7 +13,7 @@ struct PlayerFeatureTests {
     @Test func openingAPlayableCandidateBeginsPlayback() {
         var state = PlayerFeature.State.idle
         let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(effects == [.begin(Fixture.candidate(), Fixture.source)])
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .zero)])
         #expect(state.statusLine == "0:00:00 / 0:00:00 · opening")
     }
 
@@ -91,5 +91,66 @@ struct PlayerFeatureTests {
         _ = PlayerFeature.reduce(&state, .engine(.videoSize(VideoSize(width: 1920, height: 1080))))
         _ = PlayerFeature.reduce(&state, .engine(.hardwareDecoder("videotoolbox")))
         #expect(state.statusLine == "1:02:05 / 0:01:40 · playing · 1920×1080 · hwdec videotoolbox")
+    }
+}
+
+struct PlayerControlsTests {
+    private let english = MediaTrack(
+        id: MediaTrack.ID(kind: .subtitle, number: 1), title: nil, language: "eng", codec: "subrip",
+        channelCount: nil, isForced: false, isExternal: false, isSelected: false
+    )
+    private let intro = SkipSegment(kind: .intro, range: .seconds(60)..<(.seconds(90)), fit: .matched, confidence: 1)
+
+    private func playing(at position: Duration = .zero) -> PlayerFeature.State {
+        var session = PlayerFeature.Session(candidate: Fixture.candidate())
+        session.phase = .playing
+        session.position = position
+        session.tracks = [english]
+        session.segments = .loaded([intro])
+        return .active(session)
+    }
+
+    @Test func onlyKnownUnselectedTracksAreSelected() {
+        var state = playing()
+        #expect(PlayerFeature.reduce(&state, .select(english.id)) == [.select(english.id)])
+        #expect(PlayerFeature.reduce(&state, .select(MediaTrack.ID(kind: .subtitle, number: 9))).isEmpty)
+        _ = PlayerFeature.reduce(&state, .engine(.tracks([english.selected])))
+        #expect(PlayerFeature.reduce(&state, .select(english.id)).isEmpty)
+    }
+
+    @Test func speedChangesOnlyWhenDifferent() {
+        var state = playing()
+        #expect(PlayerFeature.reduce(&state, .setSpeed(.normal)).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .setSpeed(.oneAndAHalf)) == [.setSpeed(.oneAndAHalf)])
+        _ = PlayerFeature.reduce(&state, .engine(.speed(.oneAndAHalf)))
+        #expect(state.session?.speed == .oneAndAHalf)
+    }
+
+    @Test func segmentsAreLookedUpOnceTheDurationIsKnown() {
+        var state = PlayerFeature.State.idle
+        _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
+        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_000)))) == [.findSegments(Fixture.movie, duration: .seconds(3_000))])
+        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_001)))).isEmpty)
+    }
+
+    @Test func skippingJumpsToTheEndOfTheSegmentPlayingNow() {
+        var state = playing(at: .seconds(70))
+        #expect(state.activeSegment == intro)
+        #expect(PlayerFeature.reduce(&state, .skip(intro)) == [.seekTo(.seconds(90))])
+        state = playing(at: .seconds(95))
+        #expect(state.activeSegment == nil)
+    }
+
+    @Test func playbackStartsFromTheRequestedPosition() {
+        var state = PlayerFeature.State.idle
+        let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate(), from: .seconds(600)))
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .seconds(600))])
+    }
+}
+
+private extension MediaTrack {
+    var selected: MediaTrack {
+        MediaTrack(id: id, title: title, language: language, codec: codec, channelCount: channelCount,
+                   isForced: isForced, isExternal: isExternal, isSelected: true)
     }
 }

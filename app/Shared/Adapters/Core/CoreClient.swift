@@ -16,24 +16,32 @@ enum CoreError: Error, CustomStringConvertible {
     }
 }
 
+/// One of core's own events (`UserAuthenticated`, `AddonInstalled`, `Error`, …).
+struct CoreEvent: Sendable {
+    let name: String
+    let args: JSONValue
+}
+
 /// The app's only handle on stremio-core. Thread-safe.
 ///
 /// The bridge can be started once per process, so the app creates exactly one client.
 final class CoreClient: Sendable {
     /// The model fields each `NewState` event names; read them with `state`.
-    /// Core's own events (`AddonInstalled`, `Error`, …) are only logged.
     let changes: AsyncStream<[CoreField]>
+    let events: AsyncStream<CoreEvent>
     private let host: CoreHost
 
-    private init(host: CoreHost, changes: AsyncStream<[CoreField]>) {
+    private init(host: CoreHost, changes: AsyncStream<[CoreField]>, events: AsyncStream<CoreEvent>) {
         self.host = host
         self.changes = changes
+        self.events = events
     }
 
     /// Starts core and loads persisted state from `storageDirectory`. Blocks; call off the main thread.
     static func start(storageDirectory: URL) throws(CoreError) -> CoreClient {
         let (changes, continuation) = AsyncStream.makeStream(of: [CoreField].self, bufferingPolicy: .unbounded)
-        let host = CoreHost(changes: continuation)
+        let (events, eventContinuation) = AsyncStream.makeStream(of: CoreEvent.self, bufferingPolicy: .unbounded)
+        let host = CoreHost(changes: continuation, events: eventContinuation)
         Log.core.info("starting bridge, storage at \(storageDirectory.path)")
         let started = ContinuousClock.now
         try callBridge { error in
@@ -42,7 +50,7 @@ final class CoreClient: Sendable {
             }
         }
         Log.core.info("bridge started in \(ContinuousClock.now - started)")
-        return CoreClient(host: host, changes: changes)
+        return CoreClient(host: host, changes: changes, events: events)
     }
 
     func dispatch(_ action: CoreAction, to field: CoreField? = nil) throws(CoreError) {
@@ -52,7 +60,11 @@ final class CoreClient: Sendable {
         } catch {
             throw .encoding(error)
         }
-        Log.core.debug("dispatch → \(String(decoding: request, as: UTF8.self))")
+        if action.isSensitive {
+            Log.core.debug("dispatch → \(field?.rawValue ?? "null") <credentials redacted>")
+        } else {
+            Log.core.debug("dispatch → \(String(decoding: request, as: UTF8.self))")
+        }
         try Self.callBridge { error in
             request.withSBBytes { sb_dispatch($0, error) }
         }
@@ -85,10 +97,12 @@ final class CoreClient: Sendable {
 /// Implements the `SBHost` callbacks Rust calls: logging, HTTP and runtime events.
 private final class CoreHost: Sendable {
     private let changes: AsyncStream<[CoreField]>.Continuation
+    private let events: AsyncStream<CoreEvent>.Continuation
     private let session: URLSession
 
-    init(changes: AsyncStream<[CoreField]>.Continuation) {
+    init(changes: AsyncStream<[CoreField]>.Continuation, events: AsyncStream<CoreEvent>.Continuation) {
         self.changes = changes
+        self.events = events
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -199,14 +213,17 @@ private final class CoreHost: Sendable {
                 Log.core.debug("event NewState \(fields.map(\.rawValue))")
                 changes.yield(fields)
             } else if let core = raw.core {
-                let payload = core.args ?? .null
+                // Auth events echo the request, password and token included.
+                let payload = (core.args ?? .null).redacting(keys: ["password", "token", "authKey"])
                 let level: Log.Level = core.event == "Error" ? .error : .info
                 Log.core.write(level) { "event \(core.event) \(payload.compactDescription)" }
+                events.yield(CoreEvent(name: core.event, args: payload))
             } else {
-                Log.core.warning("unknown runtime event: \(String(decoding: json, as: UTF8.self))")
+                Log.core.warning("unknown runtime event \(raw.name)")
             }
         } catch {
-            Log.core.error("runtime event failed to decode: \(error) — \(String(decoding: json, as: UTF8.self))")
+            // The raw JSON can hold credentials, so only its size is logged.
+            Log.core.error("runtime event failed to decode (\(json.count) bytes): \(error)")
         }
     }
 }
@@ -263,5 +280,21 @@ extension JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
         return encoder
+    }
+}
+
+private extension JSONValue {
+    /// This value with the values under `keys` replaced, at any depth.
+    func redacting(keys: Set<String>) -> JSONValue {
+        switch self {
+        case .object(let fields):
+            .object(fields.reduce(into: [:]) { result, field in
+                result[field.key] = keys.contains(field.key) ? .string("<redacted>") : field.value.redacting(keys: keys)
+            })
+        case .array(let values):
+            .array(values.map { $0.redacting(keys: keys) })
+        case .null, .bool, .number, .string:
+            self
+        }
     }
 }

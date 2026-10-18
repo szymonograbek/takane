@@ -22,13 +22,18 @@ final class MPVEngine: PlaybackEngine {
         case width = "width"
         case height = "height"
         case hardwareDecoder = "hwdec-current"
+        case trackList = "track-list"
+        case audioTrack = "aid"
+        case subtitleTrack = "sid"
+        case speed = "speed"
 
         var format: mpv_format {
             switch self {
-            case .timePosition, .duration: MPV_FORMAT_DOUBLE
+            case .timePosition, .duration, .speed: MPV_FORMAT_DOUBLE
             case .pause, .pausedForCache: MPV_FORMAT_FLAG
             case .width, .height: MPV_FORMAT_INT64
-            case .hardwareDecoder: MPV_FORMAT_STRING
+            case .hardwareDecoder, .audioTrack, .subtitleTrack: MPV_FORMAT_STRING
+            case .trackList: MPV_FORMAT_NODE
             }
         }
     }
@@ -88,9 +93,17 @@ final class MPVEngine: PlaybackEngine {
         Log.player.info("mpv destroyed")
     }
 
-    func load(_ source: PlaybackSource) {
+    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) {
         let url = source.url
         let headers = source.headers
+        // Options set before `loadfile` apply to the file it opens. Track and speed choices made
+        // during the previous file would otherwise carry over and override the languages.
+        setOption("start", start > .zero ? String(start / .seconds(1)) : "none")
+        setOption("aid", "auto")
+        setOption("sid", "auto")
+        setSpeed(.normal)
+        setOption("alang", languages.audio?.code ?? "")
+        setOption("slang", languages.subtitles?.code ?? "")
         // `append` adds one list item verbatim; setting the whole property would split values on commas.
         command("change-list", "http-header-fields", "clr", "")
         for (name, value) in headers.sorted(by: { $0.key < $1.key }) {
@@ -109,8 +122,30 @@ final class MPVEngine: PlaybackEngine {
         command("seek", String(offset / .seconds(1)), "relative")
     }
 
+    func seek(to position: Duration) {
+        command("seek", String(position / .seconds(1)), "absolute")
+    }
+
+    func select(_ track: MediaTrack.ID) {
+        setOption(track.kind == .audio ? "aid" : "sid", String(track.number))
+    }
+
+    func turnOffSubtitles() {
+        setOption("sid", "no")
+    }
+
+    func setSpeed(_ speed: PlaybackSpeed) {
+        var rate = speed.rawValue
+        check(mpv_set_property(handle, "speed", MPV_FORMAT_DOUBLE, &rate), "set speed=\(rate)")
+    }
+
     func stop() {
         command("stop")
+    }
+
+    private func setOption(_ name: String, _ value: String) {
+        Log.player.debug("set \(name)=\(value)")
+        check(mpv_set_property_string(handle, name, value), "set \(name)=\(value)")
     }
 
     /// Render target size (the view in pixels), dropped frames, audio output and format.
@@ -274,23 +309,8 @@ private final class MPVEventPump: @unchecked Sendable { // swiftlint:disable:thi
             if let error { return .failed(reason: "\(reason): \(error)") }
             return endFile.reason == MPV_END_FILE_REASON_EOF ? .ended : .stopped
         case MPV_EVENT_PROPERTY_CHANGE:
-            guard let change = event.data?.assumingMemoryBound(to: mpv_event_property.self).pointee,
-                  let property = MPVEngine.Property(rawValue: String(cString: change.name)),
-                  change.format != MPV_FORMAT_NONE,
-                  let data = change.data
-            else { return nil }
-            let translated: PlaybackEvent = switch property {
-            case .timePosition: .position(.seconds(data.load(as: Double.self)))
-            case .duration: .duration(.seconds(data.load(as: Double.self)))
-            case .pause: .paused(data.load(as: Int32.self) != 0)
-            case .pausedForCache: .buffering(data.load(as: Int32.self) != 0)
-            case .width, .height: videoSizeEvent()
-            case .hardwareDecoder: .hardwareDecoder(String(cString: data.load(as: UnsafePointer<CChar>.self)))
-            }
-            if case .position = translated {} else {
-                Log.player.debug("property \(property.rawValue) → \(translated)")
-            }
-            return translated
+            guard let change = event.data?.assumingMemoryBound(to: mpv_event_property.self).pointee else { return nil }
+            return propertyEvent(change)
         case MPV_EVENT_SHUTDOWN:
             Log.player.info("mpv shutdown")
             return nil
@@ -298,6 +318,42 @@ private final class MPVEventPump: @unchecked Sendable { // swiftlint:disable:thi
             Log.player.trace("event \(String(cString: mpv_event_name(event.event_id)))")
             return nil
         }
+    }
+
+    private func propertyEvent(_ change: mpv_event_property) -> PlaybackEvent? {
+        guard let property = MPVEngine.Property(rawValue: String(cString: change.name)),
+              change.format != MPV_FORMAT_NONE,
+              let data = change.data
+        else { return nil }
+        let translated: PlaybackEvent? = switch property {
+        case .timePosition: .position(.seconds(data.load(as: Double.self)))
+        case .duration: .duration(.seconds(data.load(as: Double.self)))
+        case .pause: .paused(data.load(as: Int32.self) != 0)
+        case .pausedForCache: .buffering(data.load(as: Int32.self) != 0)
+        case .width, .height: videoSizeEvent()
+        case .hardwareDecoder: .hardwareDecoder(String(cString: data.load(as: UnsafePointer<CChar>.self)))
+        case .trackList: .tracks(MPVTrackList.tracks(in: data.load(as: mpv_node.self)))
+        // A selection changes the list's `selected` flags.
+        case .audioTrack, .subtitleTrack: .tracks(readTracks())
+        case .speed:
+            if let speed = PlaybackSpeed(rawValue: data.load(as: Double.self)) { .speed(speed) } else { nil }
+        }
+        switch translated {
+        case .tracks(let tracks)?:
+            Log.player.debug("property \(property.rawValue) → \(tracks.count) tracks, selected \(tracks.filter(\.isSelected).map(\.id.number))")
+        case .position?, nil:
+            break
+        case let translated?:
+            Log.player.debug("property \(property.rawValue) → \(translated)")
+        }
+        return translated
+    }
+
+    private func readTracks() -> [MediaTrack] {
+        var node = mpv_node()
+        guard mpv_get_property(handle, "track-list", MPV_FORMAT_NODE, &node) >= 0 else { return [] }
+        defer { mpv_free_node_contents(&node) }
+        return MPVTrackList.tracks(in: node)
     }
 
     private func videoSizeEvent() -> PlaybackEvent {

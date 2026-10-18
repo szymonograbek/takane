@@ -42,6 +42,27 @@ struct CoreAddonService: AddonService {
         }
     }
 
+    func uninstall(_ manifest: ManifestURL) async throws(AddonError) {
+        let profile: Profile
+        do {
+            profile = try runtime.state(.ctx, as: CtxState.self).profile
+        } catch {
+            throw .rejected(reason: "\(error)")
+        }
+        guard let addon = profile.addons.first(where: { $0.transportUrl == manifest.url }) else { return }
+        Log.core.info("uninstalling \(addon.manifest.name)")
+        do {
+            try await runtime.request(
+                .ctx(.uninstallAddon(descriptor: addon.descriptor)), to: nil, observing: .ctx,
+                as: CtxState.self, timeout: .seconds(10)
+            ) { ctx -> Probe<Void, AddonError> in
+                ctx.profile.addons.contains { $0.transportUrl == manifest.url } ? .pending : .done(())
+            }
+        } catch {
+            throw Self.addonError(error, stage: "add-on removal")
+        }
+    }
+
     private func installedAddon(_ manifest: ManifestURL) throws(AddonError) -> InstalledAddon? {
         do {
             let ctx = try runtime.state(.ctx, as: CtxState.self)
@@ -66,6 +87,8 @@ private extension Addon {
             Log.core.warning("addon \(manifest.id) has an unsupported transport URL")
             return nil
         }
-        return InstalledAddon(manifestURL: manifestURL, name: manifest.name, version: manifest.version)
+        return InstalledAddon(
+            manifestURL: manifestURL, name: manifest.name, version: manifest.version, isRemovable: !(flags?.isProtected ?? false)
+        )
     }
 }

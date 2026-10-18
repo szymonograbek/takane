@@ -18,6 +18,14 @@ protocol Feature {
     /// Performs one effect. Long-lived effects (subscriptions) run until cancelled.
     @MainActor
     static func run(_ effect: Effect, _ dependencies: Dependencies, _ send: @escaping @MainActor (Event) -> Void) async
+
+    /// Effects with the same key replace each other: starting one cancels the one still running.
+    /// Nil, the default, runs alongside every other effect.
+    static func key(_ effect: Effect) -> AnyHashable?
+}
+
+extension Feature {
+    static func key(_ effect: Effect) -> AnyHashable? { nil }
 }
 
 /// Runs a `Feature` for SwiftUI: holds its state, reduces events and runs effects.
@@ -31,6 +39,7 @@ final class FeatureStore<F: Feature> {
 
     @ObservationIgnored private let dependencies: F.Dependencies
     @ObservationIgnored private var effects: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var keyedEffects: [AnyHashable: UUID] = [:]
     @ObservationIgnored private var waiters: [UUID: (F.State) -> Bool] = [:]
 
     /// - Parameter start: effects to run immediately, such as subscriptions the feature always needs.
@@ -81,6 +90,10 @@ final class FeatureStore<F: Feature> {
 
     private func run(_ effect: F.Effect) {
         let id = UUID()
+        if let key = F.key(effect) {
+            if let running = keyedEffects[key] { effects[running]?.cancel() }
+            keyedEffects[key] = id
+        }
         let dependencies = dependencies
         effects[id] = Task { [weak self] in
             await F.run(effect, dependencies) { event in self?.send(event) }

@@ -1,4 +1,5 @@
 import QuartzCore
+import os
 import Testing
 
 @MainActor
@@ -12,9 +13,15 @@ private final class FakeEngine: PlaybackEngine {
         (events, emit) = AsyncStream.makeStream(of: PlaybackEvent.self)
     }
 
-    func load(_ source: PlaybackSource) { commands.append("load \(source.url.lastPathComponent)") }
+    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) {
+        commands.append("load \(source.url.lastPathComponent) from \(start) \(languages.subtitles?.code ?? "-")")
+    }
     func setPaused(_ paused: Bool) { commands.append("paused \(paused)") }
     func seek(by offset: Duration) { commands.append("seek \(offset)") }
+    func seek(to position: Duration) { commands.append("seek to \(position)") }
+    func select(_ track: MediaTrack.ID) { commands.append("select \(track.number)") }
+    func turnOffSubtitles() { commands.append("subtitles off") }
+    func setSpeed(_ speed: PlaybackSpeed) { commands.append("speed \(speed.rawValue)") }
     func stop() { commands.append("stop") }
     func diagnostics() -> [String: String] { [:] }
     func snapshot() async -> CGImage? { nil }
@@ -39,10 +46,12 @@ struct FeatureStoreTests {
         let tracker = FakeTracker()
         let store = FeatureStore<PlayerFeature>(
             .idle,
-            dependencies: PlayerFeature.Dependencies(engine: engine, tracker: tracker),
+            dependencies: PlayerFeature.Dependencies(
+                engine: engine, tracker: tracker, skipSegments: NoSegments(), preferences: FixedPreferences()
+            ),
             start: [.listen]
         )
-        store.send(.open(Fixture.candidate()))
+        store.send(.open(Fixture.candidate(), from: .seconds(30)))
         engine.emit.yield(.duration(.seconds(60)))
         engine.emit.yield(.loaded)
         engine.emit.yield(.position(.seconds(2)))
@@ -50,10 +59,23 @@ struct FeatureStoreTests {
             state.session.map { $0.position == .seconds(2) ? .done($0) : .pending } ?? .pending
         }
         #expect(session.phase == .playing)
-        #expect(engine.commands == ["load movie.mkv", "paused false"])
+        #expect(engine.commands == ["load movie.mkv from 30.0 seconds pol", "paused false"])
         var reports = tracker.reports.stream.makeAsyncIterator()
         #expect(await reports.next() == "begin movie.mkv")
         #expect(await reports.next() == "progress 2.0 seconds")
+    }
+
+    @Test func aNewerSearchCancelsTheOneStillWaiting() async throws {
+        let catalog = RecordingCatalog()
+        let store = FeatureStore<SearchFeature>(
+            .empty, dependencies: SearchFeature.Dependencies(catalog: catalog, settle: .milliseconds(50))
+        )
+        store.send(.queryChanged(SearchText("tw")))
+        store.send(.queryChanged(SearchText("twin")))
+        _ = try await store.until(timeout: .seconds(2), onTimeout: TimedOut()) { state in
+            if case .searching(_, results: .rows?) = state { Probe<Void, TimedOut>.done(()) } else { .pending }
+        }
+        #expect(catalog.searched.withLock { $0 } == ["twin"])
     }
 
     @Test func untilTimesOut() async {
@@ -67,5 +89,33 @@ struct FeatureStoreTests {
 private struct NoStreams: StreamService {
     func streams(for item: PlayableID) -> AsyncStream<StreamResults> {
         AsyncStream { $0.finish() }
+    }
+}
+
+private struct NoSegments: SkipSegmentService {
+    func segments(for item: PlayableID, duration: Duration) async throws(SkipSegmentError) -> SkipSegments {
+        SkipSegments(item: item, segments: [], introLengthEstimate: nil)
+    }
+}
+
+private struct FixedPreferences: PreferencesService {
+    func playback() -> AsyncStream<PlaybackPreferences> {
+        let languages = TrackLanguages(audio: nil, subtitles: Language("pol"))
+        return AsyncStream { $0.yield(PlaybackPreferences(languages: languages)) }
+    }
+
+    func update(_ preferences: PlaybackPreferences) throws(PreferencesError) {}
+}
+
+private final class RecordingCatalog: CatalogService {
+    let searched = OSAllocatedUnfairLock<[String]>(initialState: [])
+
+    func board() -> AsyncStream<Board> { AsyncStream { $0.finish() } }
+    func loadMore(_ row: CatalogID) {}
+    func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails { throw .notFound }
+
+    func search(_ text: SearchText) -> AsyncStream<SearchResults> {
+        searched.withLock { $0.append(text.rawValue) }
+        return AsyncStream { $0.yield(.rows(text, [])) }
     }
 }

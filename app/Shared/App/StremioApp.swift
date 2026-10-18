@@ -38,10 +38,12 @@ enum StartupError: Error, CustomStringConvertible {
 
 /// The provider behind each port. Swapping a provider is a change here and nowhere else.
 struct Services: Sendable {
+    let account: any AccountService
     let addons: any AddonService
     let catalog: any CatalogService
     let streams: any StreamService
     let library: any LibraryService
+    let preferences: any PreferencesService
     let tracker: any PlaybackTracker
     let engine: any PlaybackEngine
     let skipSegments: any SkipSegmentService
@@ -61,10 +63,12 @@ struct Services: Sendable {
             throw .player(error)
         }
         return Services(
+            account: CoreAccountService(runtime: core),
             addons: CoreAddonService(runtime: core),
             catalog: CoreCatalogService(runtime: core),
             streams: CoreStreamService(runtime: core),
             library: CoreLibraryService(runtime: core),
+            preferences: CorePreferencesService(runtime: core),
             tracker: CorePlaybackTracker(runtime: core),
             engine: engine,
             skipSegments: SkipDBSkipSegmentService()
@@ -80,13 +84,18 @@ final class AppContext {
     let player: FeatureStore<PlayerFeature>
     let addons: FeatureStore<AddonsFeature>
     let streams: FeatureStore<StreamsFeature>
-    let overview: FeatureStore<OverviewFeature>
+    let home: FeatureStore<HomeFeature>
+    let account: FeatureStore<AccountFeature>
+    let preferences: FeatureStore<PreferencesFeature>
 
     init(services: Services) {
         self.services = services
         player = FeatureStore(
             .idle,
-            dependencies: PlayerFeature.Dependencies(engine: services.engine, tracker: services.tracker),
+            dependencies: PlayerFeature.Dependencies(
+                engine: services.engine, tracker: services.tracker,
+                skipSegments: services.skipSegments, preferences: services.preferences
+            ),
             start: [.listen]
         )
         addons = FeatureStore(
@@ -95,10 +104,20 @@ final class AppContext {
             start: [.observeInstalled]
         )
         streams = FeatureStore(.idle, dependencies: StreamsFeature.Dependencies(streams: services.streams))
-        overview = FeatureStore(
-            OverviewFeature.State(),
-            dependencies: OverviewFeature.Dependencies(library: services.library),
-            start: [.observeAccount, .observeContinueWatching]
+        home = FeatureStore(
+            HomeFeature.State(),
+            dependencies: HomeFeature.Dependencies(library: services.library, catalog: services.catalog),
+            start: [.observeContinueWatching, .observeBoard]
+        )
+        account = FeatureStore(
+            AccountFeature.State(),
+            dependencies: AccountFeature.Dependencies(account: services.account),
+            start: [.observeAccount]
+        )
+        preferences = FeatureStore(
+            PreferencesFeature.State(),
+            dependencies: PreferencesFeature.Dependencies(preferences: services.preferences),
+            start: [.observePlayback]
         )
     }
 }
