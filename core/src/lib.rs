@@ -192,6 +192,11 @@ mod tests {
         let requests = [
             r#"{"field":"addon_details","action":{"action":"Load","args":{"model":"AddonDetails","args":{"transportUrl":"https://example.com/manifest.json"}}}}"#,
             r#"{"field":"meta_details","action":{"action":"Load","args":{"model":"MetaDetails","args":{"metaPath":{"resource":"meta","type":"movie","id":"tt0111161","extra":[]},"streamPath":{"resource":"stream","type":"movie","id":"tt0111161","extra":[]},"guessStream":false}}}}"#,
+            r#"{"field":"meta_details","action":{"action":"Load","args":{"model":"MetaDetails","args":{"metaPath":{"resource":"meta","type":"series","id":"tt0944947","extra":[]},"guessStream":false}}}}"#,
+            r#"{"field":"board","action":{"action":"Load","args":{"model":"CatalogsWithExtra","args":{"type":null,"extra":[]}}}}"#,
+            r#"{"field":"search","action":{"action":"Load","args":{"model":"CatalogsWithExtra","args":{"type":null,"extra":[["search","shawshank"]]}}}}"#,
+            r#"{"field":"board","action":{"action":"CatalogsWithExtra","args":{"action":"LoadRange","args":{"start":0,"end":12}}}}"#,
+            r#"{"field":"board","action":{"action":"CatalogsWithExtra","args":{"action":"LoadNextPage","args":3}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"Login","email":"a@b.c","password":"x","facebook":false}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"TimeChanged","args":{"time":1000,"duration":60000,"device":"macos"}}}}"#,
             r#"{"field":"player","action":{"action":"Unload"}}"#,

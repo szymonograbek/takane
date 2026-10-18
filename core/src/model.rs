@@ -7,6 +7,7 @@ use stremio_core::constants::{
     STREAMING_SERVER_URLS_STORAGE_KEY, STREAMS_STORAGE_KEY,
 };
 use stremio_core::models::addon_details::AddonDetails;
+use stremio_core::models::catalogs_with_extra::CatalogsWithExtra;
 use stremio_core::models::continue_watching_preview::ContinueWatchingPreview;
 use stremio_core::models::ctx::Ctx;
 use stremio_core::models::meta_details::MetaDetails;
@@ -30,6 +31,10 @@ pub struct AppModel {
     pub ctx: Ctx,
     pub continue_watching_preview: ContinueWatchingPreview,
     pub addon_details: AddonDetails,
+    /// Home rows: every installed catalog without a required extra.
+    pub board: CatalogsWithExtra,
+    /// Catalogs that support the `search` extra, loaded with the query.
+    pub search: CatalogsWithExtra,
     pub meta_details: MetaDetails,
     pub player: Player,
 }
@@ -88,6 +93,8 @@ impl AppModel {
             ctx,
             continue_watching_preview,
             addon_details: Default::default(),
+            board: Default::default(),
+            search: Default::default(),
             meta_details: Default::default(),
             player: Default::default(),
         };
@@ -99,6 +106,8 @@ impl AppModel {
             AppModelField::Ctx => serde_json::to_vec(&self.ctx),
             AppModelField::ContinueWatchingPreview => serde_json::to_vec(&self.continue_watching_preview),
             AppModelField::AddonDetails => serde_json::to_vec(&self.addon_details),
+            AppModelField::Board => serde_json::to_vec(&self.board),
+            AppModelField::Search => serde_json::to_vec(&self.search),
             AppModelField::MetaDetails => serde_json::to_vec(&self.meta_details),
             AppModelField::Player => serde_json::to_vec(&self.player),
         }
