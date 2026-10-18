@@ -1,31 +1,30 @@
 # Find streams
 
-The user enters an IMDb id and asks for movie or series streams; core queries every installed add-on and the list shows each add-on's streams, with debrid URL streams playable and torrent or external ones disabled.
+Home shows a hero, Continue Watching and one row per add-on catalog. Search finds titles across add-ons. A title opens Details (Play, Resume, seasons and episodes), and Play opens the stream list: each add-on's playable streams under the add-on's name.
 
 ## Sub-features
 
-- `streams-movie` looks up a movie id (`tt0111161`).
-- `streams-series` looks up an episode id (`tt0944947:1:1`).
-- `streams-status` reports "<n> streams from <m> add-ons" or the error.
-- `streams-playable` makes only URL streams focusable buttons; others show "<kind>, not playable" as plain text.
+- `home-rows` lists catalog rows titled with their type ("Popular Movies").
+- `search` shows results grouped by type as the user types.
+- `details` shows logo or title, year, runtime, genres, rating, description, Play and episodes.
+- `streams` lists playable streams per add-on; torrent-only results are hidden.
+- `no-streams` explains when nothing is playable.
 
 ## How to get to it (user POV)
 
-- In the right column, edit the IMDb id field if needed, then choose "Movie" or "Series".
+- Home → a poster → Play; or Search → type → a poster → Play.
 
 ## Driving it with tv.sh
 
 Preconditions:
 
-- AIOStreams installed (run [Install an add-on](./install-addon.md) first in the same run).
+- [Onboarding](./onboarding.md) continued without an account; the debrid add-on is installed ([Install an add-on](./install-addon.md)).
 
-- **Movie lookup.** Run `$T focus streams.findMovie right` then `$T select`. Poll `$T text streams.status` until it contains `streams from`. Expect `1080 streams from 2 add-ons` (AIOStreams 1078, WatchHub 2) for `tt0111161`.
-- **Rows.** Run `$T evidence find-streams`. In `find-streams.ax.jsonl`, nodes with `"identifier":"streams.row"` exist (type Button), and WatchHub rows have `"identifier":"streams.unplayableRow"` with labels ending `External, not playable`.
-- **Series lookup.** From the movie results, run `$T type streams.itemID up "tt0944947:1:1"` (up from a row reaches the id field), confirm `$T text streams.itemID` reads `tt0944947:1:1`, then `$T focus streams.findSeries right`, `$T select`, and poll `$T text streams.status`. Observed `909 streams from 2 add-ons`.
+- **Search.** `$T focus magnifyingglass right`, `$T remote down`. Find the search field's ref in a raw snapshot (`type == SearchField`) and run `agent-device fill <ref> shawshank --session stremio-tv-verify` (it may report a read-back mismatch; the text still lands). `$T wait-text "The Shawshank Redemption" 20`.
+- **Details.** `$T focus poster.tt0111161 down 3`, `$T select`, wait 6 s. `$T focused` prints `details.play`.
+- **Streams.** `$T select`, wait up to 15 s. Focus moves to the first `streams.row`; the screenshot shows `AIOStreams | ElfHosted` rows.
+- **No streams.** Without the debrid add-on, the same steps show "No Playable Streams".
 
 ## Gotchas
 
-- Stream counts come from live debrid caches and change over time; assert `streams from` plus a non-zero count, not the exact number.
-- The first playable row usually sits half below the list's bottom edge, which breaks agent-device's normal snapshot. The helper uses raw snapshots.
-- The lookup takes 2-10 s; "Loading…" shows meanwhile.
-- Unplayable rows used to be disabled buttons, which swallowed "up" presses so focus could never leave the list. If focus gets stuck on the first row again, that regression is back.
+- Add-on catalogs can insert placeholder items (AIOStreams error posters); prefer Search over Home positions in scripts.

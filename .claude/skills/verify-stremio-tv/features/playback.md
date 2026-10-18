@@ -1,35 +1,36 @@
 # Playback
 
-Choosing a playable stream opens a full-screen mpv player that plays the debrid stream, shows position, state, resolution and decoder, pauses on select, seeks with left and right, and stops on Menu.
+Choosing a stream opens a full-screen player that shows only the video. Select shows the controls: title, progress, elapsed and remaining time, back/forward 10 s, play/pause, and menus for subtitles, audio and speed. The controls hide after 5 s of playing. Menu closes a menu, then the controls, then the player.
 
 ## Sub-features
 
-- `play-open` opens the full-screen player from a stream row.
-- `play-progress` advances the position while playing.
-- `play-pause` toggles pause with select (or play/pause on a real remote).
-- `play-seek` jumps 10 s with left and right.
-- `play-stop` stops and returns to the list with Menu.
+- `play-open` starts the stream; with a saved position it starts there.
+- `play-controls` shows the controls with focus on play/pause.
+- `play-speed` changes mpv's speed from the Speed menu.
+- `play-subtitles` lists embedded tracks and selects one.
+- `play-seek` skips 10 s with left and right while the controls are hidden.
+- `play-stop` returns to the stream list.
 
 ## How to get to it (user POV)
 
-- After [Find streams](./find-streams.md), move focus down onto a playable row and press select.
+- [Find streams](./find-streams.md), then select a stream.
 
 ## Driving it with tv.sh
 
 Preconditions:
 
-- Streams listed for `tt0111161` with focus on `streams.findMovie`.
+- A stream list is on screen with focus on a `streams.row`.
 
-- **Open.** Run `$T focus streams.row down 4` then `$T select`. Within 30 s `$T text player.status` reads `… · playing · 1920×1080 · hwdec no`.
-- **Progress.** Poll `$T text player.status` until it starts `0:00:10`. Run `$T evidence playback-playing`; the screenshot shows the film frame with the status line.
-- **Pause.** Run `$T select`, wait 1 s, `$T text player.status`. Phase reads `paused` and the position stops changing across two reads 2 s apart.
-- **Resume.** Run `$T select`. Phase reads `playing` again.
-- **Seek.** Note the position, run `$T remote right`, read again. Position is about 10 s later.
-- **Stop.** Run `$T remote menu`. `$T text player.status` fails (player dismissed) and the stream list is back. Run `$T evidence playback-stopped`.
+- **Open.** `$T select`. Within 30 s `$T text player.status` reads `… · playing · 1920×1080 · hwdec no`.
+- **Controls.** After 5 s the controls are gone (screenshot shows video only). `$T select`; `$T focused` prints `player.playPause`.
+- **Speed.** `$T focus Speed right 6`, `$T select`, press down 4 times, `$T select`. The log shows `property speed → speed(…oneAndAHalf)`.
+- **Subtitles.** `$T focus Subtitles left 3`, `$T select`, `$T remote down`, `$T select`. The log shows `set sid=1` and the track list reports it selected.
+- **Stop.** `$T remote menu` until the stream list is back (closes the controls, then the player).
 
 ## Gotchas
 
-- agent-device's tvOS remote has no play/pause button; select is mapped to pause/resume for that reason.
-- The simulator decodes in software (`hwdec no`). Do not treat that as a regression; hardware decoding needs a real Apple TV.
-- The first row may be a 50+ GB REMUX; startup can take 5-15 s while mpv buffers.
+- agent-device's tvOS remote has no play/pause button; use the controls' play/pause.
+- The simulator decodes in software (`hwdec no`). Hardware decoding needs a real Apple TV.
+- Large REMUX streams take 5-15 s to start.
 - Never call mpv frame capture in the simulator: it crashes the Metal simulator driver. Use `$T evidence` screenshots.
+- Skip Intro needs an episode with SkipDB data and is not covered here.

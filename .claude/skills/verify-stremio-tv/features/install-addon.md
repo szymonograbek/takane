@@ -1,6 +1,6 @@
 # Install an add-on
 
-The user types an add-on manifest URL; core fetches the manifest, installs the add-on, and the add-on appears in the list with a confirmation message. The install persists in the core profile.
+In Settings › Add-ons the user picks Install Add-on…, types a manifest URL, and core fetches and installs it. The screen returns to the list, which shows the new add-on and its version. Removable add-ons offer Remove after a confirmation. The install persists in the core profile.
 
 ## Sub-features
 
@@ -8,10 +8,11 @@ The user types an add-on manifest URL; core fetches the manifest, installs the a
 - `install-list` shows the new add-on with its version in the add-on list.
 - `install-persist` writes the add-on into the profile on disk.
 - `install-error` shows core's error text for a bad URL.
+- `remove` asks "Remove <name>?" and uninstalls; official add-ons are not removable.
 
 ## How to get to it (user POV)
 
-- Focus the "Manifest URL" field under the add-on list (focused at launch), press select, type, choose done.
+- Settings › Add-ons › Install Add-on…, type the URL, choose done.
 
 ## Driving it with tv.sh
 
@@ -20,11 +21,12 @@ Preconditions:
 - Fresh run from `$T launch`; AIOStreams is not installed.
 - `STREMIO_SMOKE_ADDON_URL` available.
 
-- **Type URL.** Run `$T type-env addons.manifestURL left STREMIO_SMOKE_ADDON_URL`. Prints `focused addons.manifestURL` and `typed <n> chars`.
-- **Confirmation.** Run `$T wait-text "Installed AIOStreams | ElfHosted" 30`. Found.
-- **Listed.** Run `$T wait-text "AIOStreams | ElfHosted 2.36.0" 5`. Found.
+- **Open.** `$T focus welcome.continue right`, `$T select`, `$T focus gearshape right`, press down twice, `$T select`, `$T select` (Install Add-on…).
+- **Type URL.** Run `$T type-env addons.manifestURL down STREMIO_SMOKE_ADDON_URL`. Confirming the keyboard submits the install.
+- **Listed.** Within 15 s the screen is back on the list and `$T focused` prints `AIOStreams | ElfHosted, 2.36.0`. After `$T remote menu`, `$T text settings.addons` reads `Add-ons, 7 installed`.
+- **Remove.** On the AIOStreams row, `$T select` opens "Remove AIOStreams | ElfHosted?" with Cancel focused.
 - **Persisted.** Run `source build/verify/current.env; grep -o '"name":"AIOStreams[^"]*"' "$storage/profile.json"`. Prints `"name":"AIOStreams | ElfHosted"`.
-- **Error path.** Run `$T type addons.manifestURL left "https://example.invalid/manifest.json"`, wait 3 s, then `$T text addons.status`. Observed `manifest failed: {"code":1,"message":"Failed to fetch: A server with the specified hostname could not be found."}`.
+- **Error path.** In Install Add-on…, type `https://example.invalid/manifest.json`, wait 3 s, then `$T text addons.status`. It starts `The add-on's manifest could not be loaded:`.
 - **Proof.** Run `$T evidence install-addon`.
 
 ## Gotchas

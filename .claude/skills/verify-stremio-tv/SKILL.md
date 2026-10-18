@@ -1,11 +1,11 @@
 ---
 name: verify-stremio-tv
-description: Drive the Stremio TV app (this repo) to prove a change works. tvOS app in the "Stremio Apple TV" simulator through agent-device with remote presses, plus a scripted end-to-end smoke journey on macOS and tvOS. Use after changing app/, core/ or scripts/, before claiming playback, add-on install, stream lookup or continue-watching behavior works.
+description: Drive Takane (this repo's Stremio app) to prove a change works. tvOS app in the "Stremio Apple TV" simulator through agent-device with remote presses, plus a scripted end-to-end smoke journey on macOS and tvOS. Use after changing app/, core/ or scripts/, before claiming playback, add-on install, stream lookup or continue-watching behavior works.
 ---
 
-# Verify Stremio TV
+# Verify Takane
 
-The app is a SwiftUI client over stremio-core (Rust, `core/`) with mpv playback. It ships as a macOS app and a tvOS app built from `app/Shared` plus one platform folder each. Every screen today is a diagnostic placeholder; the feature map in `features/` lists what a user can do.
+The app is a SwiftUI client over stremio-core (Rust, `core/`) with mpv playback. It ships as a macOS app and a tvOS app built from `app/Shared` (screens in `app/Shared/UI`) plus one platform folder each for the video surface. The feature map in `features/` lists what a user can do.
 
 Two harnesses:
 
@@ -51,20 +51,23 @@ $T remote <menu|left|right|up|down|home>
 $T evidence <name>
 ```
 
-Stable handles (SwiftUI `accessibilityIdentifier`, in `app/tvOS/RootView.swift`):
+Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar items have no identifier; `focus` matches them by their SF Symbol name (`house`, `gearshape`, `magnifyingglass`).
 
 | Id | Element |
 |---|---|
-| `core.ready` | "Ready" core status |
-| `addons.manifestURL` | add-on manifest URL field (focused at launch) |
-| `addons.status` | install result text |
-| `streams.itemID` | IMDb id field (default `tt0111161`) |
-| `streams.findMovie`, `streams.findSeries` | lookup buttons |
-| `streams.status` | "<n> streams from <m> add-ons" or the error |
-| `streams.row` | each playable stream row (a button) |
-| `streams.unplayableRow` | torrent/external/other rows: plain text, never focusable |
-| `player.status` | full-screen player line: `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · hwdec <name>` |
-| `continueWatching.item` | each continue-watching line: `<name> · <offset>s / <duration>s` |
+| `welcome.signIn`, `welcome.continue` | Welcome buttons. `launch` clears the onboarding flag, so every run starts here |
+| `signIn.code` | the link code on Sign In with Stremio |
+| `signIn.password`, `signIn.email`, `signIn.passwordField`, `signIn.submit`, `signIn.error` | email sign-in |
+| `home.screen` | Home's scroll view |
+| `hero.play`, `hero.details` | hero buttons (Play only for movies) |
+| `continueWatching.item` | each Continue Watching card; label `<name>, <time left>` |
+| `poster.<imdb id>` | each poster in Home rows and search results |
+| `details.resume`, `details.play`, `episode.<id>` | Details actions |
+| `streams.row` | each playable stream (unplayable ones are not listed) |
+| `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · hwdec <name>` |
+| `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls; Menu buttons report focus by label (`Subtitles`, `Audio`, `Speed`) |
+| `settings.account`, `settings.addons`, `settings.playback`, `settings.about` | Settings rows |
+| `addons.install`, `addons.manifestURL`, `addons.status`, `addons.row` | Settings › Add-ons |
 
 Feature recipes with exact steps: `features/README.md`.
 

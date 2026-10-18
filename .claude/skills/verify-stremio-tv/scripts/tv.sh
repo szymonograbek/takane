@@ -2,7 +2,7 @@
 # Drives the tvOS app in the "Stremio Apple TV" simulator through agent-device, with a
 # throwaway core profile per run. Evidence goes to build/verify/<run-id>/ and survives cleanup.
 #
-#   tv.sh launch                     build, install, open with a fresh profile, wait for core ready
+#   tv.sh launch                     build, install, open with a fresh profile at Welcome, wait until ready
 #   tv.sh doctor                     read-only health check of the current run
 #   tv.sh focus <id> <dir> [max]     press <dir> (up|down|left|right) until element <id> has focus
 #   tv.sh select                     press the remote's select button
@@ -34,6 +34,7 @@ ad() { agent-device "$@" --session "$session"; }
 #   query text <id>          label of the first element with accessibility identifier <id>
 #   query has <text>         exit 0 if any element's label equals <text>
 #   query ref <id>           @ref of element <id> in this snapshot, for commands such as fill
+#   query ready              exit 0 once core started and a screen shows (Welcome or the tabs)
 query() {
     ad snapshot -i --raw 2>/dev/null | python3 -I -c '
 import json, sys
@@ -52,6 +53,8 @@ elif mode == "ref":
     sys.exit(0 if hit else 1)
 elif mode == "has":
     sys.exit(0 if any(n.get("label") == arg for n in nodes) else 1)
+elif mode == "ready":
+    sys.exit(0 if any(n.get("identifier") in ("welcome.continue", "home.screen") for n in nodes) else 1)
 ' "$@"
 }
 
@@ -66,12 +69,15 @@ launch)
     storage="$data/tmp/verify-$run_id"
     run_dir="$root/build/verify/$run_id"
     mkdir -p "$run_dir"
+    # Each run starts at Welcome, as on a first launch.
+    xcrun simctl terminate "$udid" "$bundle_id" >/dev/null 2>&1 || true
+    plutil -remove onboardingFinished "$data/Library/Preferences/$bundle_id.plist" >/dev/null 2>&1 || true
     printf 'udid=%q\nrun_id=%q\nstorage=%q\nrun_dir=%q\nlog=%q\n' \
         "$udid" "$run_id" "$storage" "$run_dir" "$data/Library/Caches/Logs/app.log" > "$state"
     ad open "$bundle_id" --platform ios --target tv --udid "$udid" --relaunch \
         --launch-args -STREMIO_STORAGE_DIRECTORY --launch-args "$storage" >/dev/null
     for _ in $(seq 1 100); do
-        query text core.ready >/dev/null && break
+        query ready && break
         sleep 0.3
     done
     "$0" doctor
@@ -80,7 +86,7 @@ doctor)
     load_state
     ok=true
     xcrun simctl list devices booted | grep -q "$udid" && echo "simulator booted: $udid" || { echo "simulator NOT booted"; ok=false; }
-    query text core.ready >/dev/null && echo "app foreground, core ready" || { echo "core.ready NOT visible"; ok=false; }
+    query ready && echo "app foreground, core ready" || { echo "neither Welcome nor Home is visible"; ok=false; }
     # Storage paths are partly masked in the log, so match on the run id.
     grep -q "starting bridge, storage at .*verify-$run_id" "$log" && echo "profile: fresh (verify-$run_id)" || { echo "app is NOT using this run's profile"; ok=false; }
     echo "evidence dir: $run_dir"
