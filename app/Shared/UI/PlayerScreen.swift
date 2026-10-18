@@ -3,15 +3,16 @@ import SwiftUI
 /// Full-screen playback. Only the video shows until the viewer asks for the controls.
 ///
 /// Remote: select shows the controls, play/pause pauses, left and right skip 10 s while the
-/// controls are hidden, Menu hides the controls and then leaves. On the focused progress bar,
-/// left and right jump (further with each quick tap) or, held, rewind and fast forward until
-/// select, play/pause or Menu. macOS: space, arrows and Esc.
+/// controls are hidden, Menu backs out of an open panel, hides the controls and then leaves. On the
+/// focused progress bar, left and right jump (further with each quick tap) or, held, rewind and
+/// fast forward until select, play/pause or Menu. macOS: space, arrows and Esc.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
     @State private var controlsVisible = true
     /// Bumped on every interaction; the controls hide 5 s after the last one.
     @State private var interactions = 0
     @FocusState private var focus: PlayerFocus?
+    @State private var panel: PlayerPanel?
 
     var body: some View {
         let player = app.player
@@ -32,7 +33,9 @@ struct PlayerScreen: View {
             }
             if let session = state.session {
                 if controlsVisible {
-                    PlayerControls(session: session, state: state, focus: $focus, interacted: poke)
+                    PlayerControls(
+                        session: session, state: state, focus: $focus, panel: $panel, interacted: poke
+                    )
                         .transition(.opacity)
                 } else if let segment = state.activeSegment {
                     SkipButton(segment: segment) { player.send(.skip(segment)) }
@@ -60,8 +63,8 @@ struct PlayerScreen: View {
         }
         .task(id: Autohide(interactions: interactions, isPlaying: isPlaying)) {
             guard (try? await Task.sleep(for: .seconds(5))) != nil else { return }
-            // Focus leaves the controls while one of their menus is open; the menu keeps them up.
-            guard isPlaying, focus != nil else { return }
+            // An open panel keeps the controls up.
+            guard isPlaying, panel == nil else { return }
             controlsVisible = false
         }
         #if os(tvOS)
@@ -80,6 +83,8 @@ struct PlayerScreen: View {
         .onExitCommand {
             if state.session?.scan != nil {
                 player.send(.togglePause)
+            } else if panel != nil {
+                closePanel()
             } else if controlsVisible, state.session != nil {
                 controlsVisible = false
             } else {
@@ -91,6 +96,18 @@ struct PlayerScreen: View {
     /// Playing at normal speed, so the controls may hide. A scan keeps them up.
     private var isPlaying: Bool {
         app.player.state.session.map { $0.phase == .playing && $0.scan == nil } ?? false
+    }
+
+    /// Goes back to the page that opened this one, or closes the panel onto its button.
+    private func closePanel() {
+        guard let open = panel else { return }
+        if let parent = open.parent {
+            focus = .link(open)
+            panel = parent
+        } else {
+            focus = open.button
+            panel = nil
+        }
     }
 
     private func poke() {
@@ -128,6 +145,10 @@ enum PlayerFocus: Hashable {
     case progress
     case back, playPause, forward
     case subtitles, audio, speed
+    /// A choice on the open panel page, by position.
+    case option(Int)
+    /// A row on the open panel page that opens `PlayerPanel`.
+    case link(PlayerPanel)
     case skip
 }
 

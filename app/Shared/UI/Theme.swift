@@ -38,6 +38,10 @@ enum Metrics {
     static let headerSpacing: CGFloat = 20
     /// How far a focused list row grows past its resting bounds on each side.
     static let rowLift: CGFloat = 24
+    /// The player's list of tracks or speeds.
+    static let playerPanelWidth: CGFloat = 720
+    static let playerPanelMaxHeight: CGFloat = 560
+    static let playerPanelPadding: CGFloat = 30
     static let welcomeLogoSize: CGFloat = 300
     static let progressHeight: CGFloat = 5
     /// The player's progress bar while it has focus.
@@ -54,6 +58,9 @@ enum Metrics {
     static let emblemSize: CGFloat = 180
     static let headerSpacing: CGFloat = 8
     static let rowLift: CGFloat = 0
+    static let playerPanelWidth: CGFloat = 320
+    static let playerPanelMaxHeight: CGFloat = 360
+    static let playerPanelPadding: CGFloat = 12
     static let welcomeLogoSize: CGFloat = 160
     static let progressHeight: CGFloat = 5
     static let focusedProgressHeight: CGFloat = 9

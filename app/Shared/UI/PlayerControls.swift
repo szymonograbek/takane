@@ -6,6 +6,7 @@ struct PlayerControls: View {
     let session: PlayerFeature.Session
     let state: PlayerFeature.State
     var focus: FocusState<PlayerFocus?>.Binding
+    @Binding var panel: PlayerPanel?
     let interacted: () -> Void
 
     var body: some View {
@@ -14,6 +15,7 @@ struct PlayerControls: View {
             Text(session.title.isEmpty ? session.candidate.name ?? "" : session.title)
                 .font(.title3).bold()
             TimelineBar(session: session, focus: focus, interacted: interacted)
+                .disabled(panel != nil)
             HStack {
                 Text(session.displayedPosition.clock)
                 Spacer()
@@ -28,16 +30,28 @@ struct PlayerControls: View {
             HStack(spacing: 20) {
                 transportButtons
                 Spacer()
-                SubtitleMenu(session: session, interacted: interacted)
-                    .focused(focus, equals: .subtitles)
-                AudioMenu(tracks: state.tracks(.audio), interacted: interacted)
-                    .focused(focus, equals: .audio)
-                SpeedMenu(speed: session.speed, interacted: interacted)
-                    .focused(focus, equals: .speed)
+                panelButton(.subtitles)
+                    .accessibilityIdentifier("player.subtitles")
+                panelButton(.audio)
+                    .disabled(state.tracks(.audio).isEmpty)
+                    .accessibilityIdentifier("player.audio")
+                panelButton(.speed)
+                    .accessibilityIdentifier("player.speed")
             }
+            // An open panel keeps focus among its rows until a choice is made or Menu closes it.
+            .disabled(panel != nil)
             #if os(tvOS)
             .focusSection()
             #endif
+            .overlay(alignment: .topTrailing) {
+                if let panel {
+                    // Rises from the row's top edge. Laid out there, not offset, so the focus engine
+                    // sees the rows where they are drawn.
+                    OptionsPanel(sections: sections(for: panel), focus: focus, choose: choose, open: open)
+                        .padding(.bottom, 24)
+                        .frame(height: 0, alignment: .bottom)
+                }
+            }
         }
         .padding(Metrics.screenPadding)
         .background(alignment: .bottom) {
@@ -67,6 +81,88 @@ struct PlayerControls: View {
         } label: {
             Label(title, systemImage: systemImage).labelStyle(.iconOnly)
         }
+    }
+
+    private func panelButton(_ kind: PlayerPanel) -> some View {
+        control(kind.title, systemImage: kind.systemImage) { open(kind) }
+            .focused(focus, equals: kind.button)
+    }
+
+    /// Shows `page` with focus on its current choice, or on its first row that takes focus.
+    private func open(_ page: PlayerPanel) {
+        let targets = sections(for: page).flatMap(\.rows).enumerated().compactMap { index, row in
+            row.focus(at: index).map { (focus: $0, isSelected: row.isSelected) }
+        }
+        panel = page
+        focus.wrappedValue = (targets.first(where: \.isSelected) ?? targets.first)?.focus ?? page.button
+        interacted()
+    }
+
+    private func choose(_ event: PlayerFeature.Event) {
+        app.player.send(event)
+        if let panel { focus.wrappedValue = panel.button }
+        panel = nil
+        interacted()
+    }
+
+    private func sections(for page: PlayerPanel) -> [PanelSection] {
+        switch page {
+        case .subtitles:
+            let choice = session.subtitleChoice
+            let builtIn = [PanelRow.choice("Off", isSelected: choice == .off, .chooseSubtitles(.off))]
+                + session.builtInSubtitles.map { track in
+                    .choice(track.label, isSelected: choice == .builtIn(track.id), .chooseSubtitles(.builtIn(track.id)))
+                }
+            guard !session.addonSubtitles.isEmpty else { return [PanelSection(title: nil, rows: builtIn)] }
+            return [
+                PanelSection(title: "Built-in", rows: builtIn),
+                PanelSection(title: "Add-ons", rows: session.addonSubtitles.map { addonRow($0, choice: choice) }),
+            ]
+        case .addonSubtitles(let addon):
+            let files = session.addonSubtitles.first { $0.addon == addon }?.subtitles.value ?? []
+            return languageGroups(files).map { group in
+                let name = languageName(group.language)
+                return PanelSection(title: name, rows: group.files.enumerated().map { index, file in
+                    .choice(
+                        file.label ?? "\(name) \(index + 1)",
+                        isSelected: session.subtitleChoice == .addon(file.id), .chooseSubtitles(.addon(file.id))
+                    )
+                })
+            }
+        case .audio:
+            return [PanelSection(title: nil, rows: state.tracks(.audio).map { .choice($0.label, isSelected: $0.isSelected, .select($0.id)) })]
+        case .speed:
+            return [PanelSection(title: nil, rows: PlaybackSpeed.allCases.map { .choice($0.label, isSelected: $0 == session.speed, .setSpeed($0)) })]
+        }
+    }
+
+    /// An add-on's files open on their own page; until it has some, the row says why not.
+    private func addonRow(_ source: SubtitleSource, choice: PlayerFeature.SubtitleChoice) -> PanelRow {
+        switch source.subtitles {
+        case .loading: return .note(source.addonName, detail: "Loading…")
+        case .failed: return .note(source.addonName, detail: "Unavailable")
+        case .loaded(let files) where files.isEmpty: return .note(source.addonName, detail: "None Found")
+        case .loaded:
+            let isChosen = if case .addon(let id) = choice { id.addon == source.addon } else { false }
+            return .link(source.addonName, isSelected: isChosen, opens: .addonSubtitles(source.addon))
+        }
+    }
+
+    /// Files grouped by language in the add-on's order, the preferred language first.
+    private func languageGroups(_ files: [AddonSubtitle]) -> [(language: String, files: [AddonSubtitle])] {
+        var groups: [(language: String, files: [AddonSubtitle])] = []
+        for file in files {
+            if let index = groups.firstIndex(where: { $0.language == file.language }) {
+                groups[index].files.append(file)
+            } else {
+                groups.append((file.language, [file]))
+            }
+        }
+        let preferred = app.preferences.state.playback?.languages.subtitles
+        if let preferred, let index = groups.firstIndex(where: { Language($0.language) == preferred }) {
+            groups.insert(groups.remove(at: index), at: 0)
+        }
+        return groups
     }
 }
 
@@ -185,147 +281,6 @@ private struct RemotePresses: UIViewRepresentable {
     }
 }
 #endif
-
-/// The stream's own tracks first, then a submenu per add-on with its files grouped by language.
-private struct SubtitleMenu: View {
-    @Environment(AppContext.self) private var app
-    let session: PlayerFeature.Session
-    let interacted: () -> Void
-
-    var body: some View {
-        let selection = Binding(get: { session.subtitleChoice }, set: choose)
-        Menu {
-            Section("Built-in") {
-                Picker("Built-in", selection: selection) {
-                    Text("Off").tag(PlayerFeature.SubtitleChoice.off)
-                    ForEach(session.builtInSubtitles) { Text($0.label).tag(PlayerFeature.SubtitleChoice.builtIn($0.id)) }
-                }
-                .pickerStyle(.inline)
-            }
-            if !session.addonSubtitles.isEmpty {
-                Section("Add-ons") {
-                    ForEach(session.addonSubtitles) { source in
-                        AddonSubtitleMenu(
-                            source: source,
-                            preferred: app.preferences.state.playback?.languages.subtitles,
-                            selection: selection
-                        )
-                    }
-                }
-            }
-        } label: {
-            Label("Subtitles", systemImage: "captions.bubble").labelStyle(.iconOnly)
-        }
-        .accessibilityIdentifier("player.subtitles")
-    }
-
-    private func choose(_ choice: PlayerFeature.SubtitleChoice) {
-        app.player.send(.chooseSubtitles(choice))
-        interacted()
-    }
-}
-
-/// One add-on's files, a section per language with the preferred language first.
-private struct AddonSubtitleMenu: View {
-    private struct LanguageGroup: Identifiable {
-        let language: String
-        var files: [AddonSubtitle]
-
-        var id: String { language }
-    }
-
-    let source: SubtitleSource
-    let preferred: Language?
-    let selection: Binding<PlayerFeature.SubtitleChoice>
-
-    var body: some View {
-        Menu(source.addonName) {
-            switch source.subtitles {
-            case .loading:
-                Text("Loading…")
-            case .failed:
-                Text("Unavailable")
-            case .loaded(let files) where files.isEmpty:
-                Text("None Found")
-            case .loaded(let files):
-                ForEach(groups(files)) { group in
-                    let name = languageName(group.language)
-                    Section(name) {
-                        Picker(name, selection: selection) {
-                            ForEach(Array(group.files.enumerated()), id: \.element.id) { index, file in
-                                Text(file.label ?? "\(name) \(index + 1)").tag(PlayerFeature.SubtitleChoice.addon(file.id))
-                            }
-                        }
-                        .pickerStyle(.inline)
-                    }
-                }
-            }
-        }
-        .accessibilityIdentifier("player.subtitles.addon")
-    }
-
-    private func groups(_ files: [AddonSubtitle]) -> [LanguageGroup] {
-        var groups: [LanguageGroup] = []
-        for file in files {
-            if let index = groups.firstIndex(where: { $0.language == file.language }) {
-                groups[index].files.append(file)
-            } else {
-                groups.append(LanguageGroup(language: file.language, files: [file]))
-            }
-        }
-        if let preferred, let index = groups.firstIndex(where: { Language($0.language) == preferred }) {
-            groups.insert(groups.remove(at: index), at: 0)
-        }
-        return groups
-    }
-}
-
-private struct AudioMenu: View {
-    @Environment(AppContext.self) private var app
-    let tracks: [MediaTrack]
-    let interacted: () -> Void
-
-    var body: some View {
-        Menu {
-            Picker("Audio", selection: Binding(get: { tracks.first(where: \.isSelected)?.id }, set: choose)) {
-                ForEach(tracks) { Text($0.label).tag(Optional($0.id)) }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            Label("Audio", systemImage: "speaker.wave.2").labelStyle(.iconOnly)
-        }
-        .disabled(tracks.count < 2)
-        .accessibilityIdentifier("player.audio")
-    }
-
-    private func choose(_ track: MediaTrack.ID?) {
-        if let track { app.player.send(.select(track)) }
-        interacted()
-    }
-}
-
-private struct SpeedMenu: View {
-    @Environment(AppContext.self) private var app
-    let speed: PlaybackSpeed
-    let interacted: () -> Void
-
-    var body: some View {
-        Menu {
-            Picker("Speed", selection: Binding(get: { speed }, set: choose)) {
-                ForEach(PlaybackSpeed.allCases, id: \.self) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            Label("Speed", systemImage: "gauge.with.dots.needle.50percent").labelStyle(.iconOnly)
-        }
-        .accessibilityIdentifier("player.speed")
-    }
-
-    private func choose(_ speed: PlaybackSpeed) {
-        app.player.send(.setSpeed(speed))
-        interacted()
-    }
-}
 
 extension MediaTrack {
     /// "English · 5.1 · eac3", "Polish (Forced)", or the track number when the stream says nothing.
