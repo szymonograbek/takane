@@ -35,6 +35,7 @@ private extension AsyncImagePhase {
 /// How far into a title the viewer is.
 struct ProgressLine: View {
     let fraction: Double
+    var height = Metrics.progressHeight
 
     var body: some View {
         GeometryReader { proxy in
@@ -43,6 +44,6 @@ struct ProgressLine: View {
                     Capsule().fill(Palette.text).frame(width: proxy.size.width * min(max(fraction, 0), 1))
                 }
         }
-        .frame(height: 5)
+        .frame(height: height)
     }
 }

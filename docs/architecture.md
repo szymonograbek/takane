@@ -71,7 +71,7 @@ enum StreamsFeature: Feature {
 
 `reduce` holds every rule: legal transitions, dropping stale answers (events carry the request they answer), progress throttling. Tests drive it with plain values. `run` performs one effect against the feature's ports and reports back as events. `FeatureStore<F>` is the `@Observable` runtime views read and `send` to; it starts each effect in a task, cancels them when it goes away and offers `until(timeout:onTimeout:probe)` for tests and the smoke test.
 
-Features today: `PlayerFeature` (idle, active session with phase opening/playing/paused/ended, tracks, add-on subtitles, speed and skip segments, failed), `AccountFeature` (account, sign-in by code or password), `HomeFeature` (continue watching and the board), `AddonsFeature` (install and remove), `StreamsFeature`, `PreferencesFeature` (track languages). `AppContext` holds those app-wide stores. `DetailsFeature` and `SearchFeature` belong to the screen that shows them. `Launch` makes "services are ready" a state: screens exist only in `.ready(AppContext)`, so nothing can send to core before it started.
+Features today: `PlayerFeature` (idle, active session with phase opening/playing/paused/ended, tracks, add-on subtitles, speed, skip segments and timeline scans, failed), `AccountFeature` (account, sign-in by code or password), `HomeFeature` (continue watching and the board), `AddonsFeature` (install and remove), `StreamsFeature`, `PreferencesFeature` (track languages). `AppContext` holds those app-wide stores. `DetailsFeature` and `SearchFeature` belong to the screen that shows them. `Launch` makes "services are ready" a state: screens exist only in `.ready(AppContext)`, so nothing can send to core before it started.
 
 ### Adapters
 
@@ -115,6 +115,8 @@ Before display, filter `meta_details` streams to supported sources:
 ## Player
 
 MPVKit renders video with `vo=gpu-next` through MoltenVK into a `CAMetalLayer` (`app/Shared/Adapters/MPV/MPVEngine.swift`), the same path MPVKit's macOS and tvOS demos use. Hardware decoding uses VideoToolbox; the tvOS simulator falls back to software decoding. Reading frames back from mpv (`snapshot`) crashes the simulator's Metal driver, so it is disabled in simulators. Core's `player` model owns playback state (progress, watched, next episode); `PlayerFeature` reports time (once per second), pause and end to it through `CorePlaybackTracker`. Core copies progress into the library (and so continue watching) on pause, unload and every 180 s, not on every time update.
+
+The progress bar takes focus. A tap of left or right jumps 10 s, and quick taps in one direction jump 10 s further each, up to 60 s. Holding one scans at 2×: `PlayerFeature` pauses the engine and moves its own playhead (`Scan`, in `PlayerTimeline.swift`) every 0.25 s with an absolute seek, until select, play/pause or slowing below 2× resumes playback. Each press in the scan's direction doubles its rate up to 32× and each press against it halves it. The UI only tells a tap from a hold (0.5 s); on tvOS a UIKit view reads the arrows' press and release, which SwiftUI does not report for the Siri Remote.
 
 Settings map to mpv options:
 
