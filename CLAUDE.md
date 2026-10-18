@@ -52,6 +52,7 @@ Write [Conventional Commits](https://www.conventionalcommits.org/): `type(scope)
 
 - `scripts/test.sh` runs the unit tests (lint included).
 - `scripts/build-app.sh [macos|tvos-sim|tvos-device]` builds the app.
+- `scripts/install-tvos.sh` builds signed, installs and launches on a paired Apple TV you pick.
 - `scripts/smoke.sh [--tvos] [type/id]` runs the end-to-end smoke journey. Run it after changing adapters, the player or the composition root.
 - The **verify-stremio-tv** skill drives the tvOS UI. Use it before claiming a UI change works.
 - `xcodegen generate` after adding or moving files; the Xcode project is generated from `project.yml`.

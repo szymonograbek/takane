@@ -18,6 +18,7 @@ scripts/build-app.sh                      # macOS: generates StremioTV.xcodeproj
 open build/DerivedData/Build/Products/Debug/StremioTV.app
 scripts/build-app.sh tvos-sim             # tvOS simulator
 scripts/build-app.sh tvos-device          # tvOS device, unsigned (compile and link check)
+scripts/install-tvos.sh                   # tvOS device: pick a paired Apple TV, build signed, install, launch
 ```
 
 Or `xcodegen generate`, open `StremioTV.xcodeproj` in Xcode and run the `StremioTV-macOS` or `StremioTV-tvOS` scheme. The `StremioBridge_*` targets rebuild the Rust bridge before every app build. Signing uses the personal team (`F43U35GPD2`) with the `Apple Development: szymon@ograbek.com` identity.
