@@ -95,6 +95,102 @@ struct PlayerFeatureTests {
     }
 }
 
+struct PlayerTimelineTests {
+    private let start = ContinuousClock.now
+
+    private func playing(at position: Duration = .seconds(50)) -> PlayerFeature.State {
+        var session = PlayerFeature.Session(candidate: Fixture.candidate())
+        session.phase = .playing
+        session.position = position
+        session.duration = .seconds(100)
+        return .active(session)
+    }
+
+    private func scanning(_ direction: PlayerFeature.Direction, at position: Duration = .seconds(50)) -> PlayerFeature.State {
+        var state = playing(at: position)
+        _ = PlayerFeature.reduce(&state, .timeline(.hold(direction)))
+        return state
+    }
+
+    private func step(_ direction: PlayerFeature.Direction, after seconds: Double, in state: inout PlayerFeature.State) -> [PlayerFeature.Effect] {
+        PlayerFeature.reduce(&state, .timeline(.step(direction, at: start + .seconds(seconds))))
+    }
+
+    @Test func tapsInQuickSuccessionJumpFurtherUpToAMinute() {
+        var state = playing()
+        let jumps = [0, 0.5, 1, 1.5, 2, 2.5, 3].map { step(.forward, after: $0, in: &state) }
+        #expect(jumps == [10, 20, 30, 40, 50, 60, 60].map { [.seek(by: .seconds($0))] })
+    }
+
+    @Test func aStreakEndsAfterASecondOrOnATurn() {
+        var state = playing()
+        #expect(step(.backward, after: 0, in: &state) == [.seek(by: .seconds(-10))])
+        #expect(step(.backward, after: 1, in: &state) == [.seek(by: .seconds(-20))])
+        #expect(step(.backward, after: 2.1, in: &state) == [.seek(by: .seconds(-10))])
+        #expect(step(.forward, after: 2.2, in: &state) == [.seek(by: .seconds(10))])
+    }
+
+    @Test func holdingPausesAndScansAtTwiceSpeed() {
+        var state = playing()
+        #expect(PlayerFeature.reduce(&state, .timeline(.hold(.forward))) == [.setPaused(true), .scanTick])
+        #expect(state.session?.scan == PlayerFeature.Scan(direction: .forward, rate: .times2, position: .seconds(50)))
+    }
+
+    @Test func eachTickMovesThePlayheadByTheRate() {
+        var state = scanning(.forward)
+        #expect(PlayerFeature.reduce(&state, .timeline(.tick)) == [.seekTo(.seconds(50.5)), .scanTick])
+        _ = PlayerFeature.reduce(&state, .timeline(.hold(.forward)))
+        #expect(PlayerFeature.reduce(&state, .timeline(.tick)) == [.seekTo(.seconds(51.5)), .scanTick])
+        #expect(state.session?.displayedPosition == .seconds(51.5))
+        #expect(state.session?.position == .seconds(50))
+    }
+
+    @Test func pressingTheScansWaySpeedsItUpToThirtyTwoTimes() {
+        var state = scanning(.backward)
+        var rates: [PlayerFeature.ScanRate?] = []
+        for _ in 0..<5 {
+            #expect(step(.backward, after: 0, in: &state).isEmpty)
+            rates.append(state.session?.scan?.rate)
+        }
+        #expect(rates == [.times4, .times8, .times16, .times32, .times32])
+    }
+
+    @Test func pressesAgainstTheScanSlowItDownThenResumePlayback() {
+        var state = scanning(.forward)
+        _ = PlayerFeature.reduce(&state, .timeline(.hold(.forward)))
+        #expect(PlayerFeature.reduce(&state, .timeline(.hold(.backward))).isEmpty)
+        #expect(state.session?.scan?.rate == .times2)
+        #expect(step(.backward, after: 0, in: &state) == [.setPaused(false)])
+        #expect(state.session?.scan == nil)
+    }
+
+    @Test func playPauseEndsTheScan() {
+        var state = scanning(.forward)
+        _ = PlayerFeature.reduce(&state, .engine(.paused(true)))
+        #expect(PlayerFeature.reduce(&state, .togglePause) == [.setPaused(false)])
+        #expect(state.session?.scan == nil)
+    }
+
+    @Test func rewindingPastTheStartSeeksThereAndResumes() {
+        var state = scanning(.backward, at: .seconds(0.75))
+        #expect(PlayerFeature.reduce(&state, .timeline(.tick)) == [.seekTo(.seconds(0.25)), .scanTick])
+        #expect(PlayerFeature.reduce(&state, .timeline(.tick)) == [.seekTo(.zero), .setPaused(false)])
+        #expect(state.session?.scan == nil)
+    }
+
+    @Test func aSeekDuringAScanEndsIt() {
+        var state = scanning(.forward)
+        #expect(PlayerFeature.reduce(&state, .seek(by: .seconds(10))) == [.setPaused(false), .seek(by: .seconds(10))])
+        #expect(state.session?.scan == nil)
+    }
+
+    @Test func ticksOutsideAScanAreIgnored() {
+        var state = playing()
+        #expect(PlayerFeature.reduce(&state, .timeline(.tick)).isEmpty)
+        #expect(state == playing())
+    }
+}
+
 struct PlayerControlsTests {
     private let english = MediaTrack(
         id: MediaTrack.ID(kind: .subtitle, number: 1), title: nil, language: "eng", codec: "subrip",

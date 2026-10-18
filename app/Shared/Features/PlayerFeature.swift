@@ -40,6 +40,8 @@ enum PlayerFeature: Feature {
         var speed = PlaybackSpeed.normal
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
+        var scan: Scan?
+        var streak: StepStreak?
     }
 
     enum State: Equatable, Sendable {
@@ -53,6 +55,7 @@ enum PlayerFeature: Feature {
         case open(StreamCandidate, from: Duration = .zero, title: String = "")
         case togglePause
         case seek(by: Duration)
+        case timeline(TimelineEvent)
         case select(MediaTrack.ID)
         case chooseSubtitles(SubtitleChoice)
         case setSpeed(PlaybackSpeed)
@@ -77,6 +80,8 @@ enum PlayerFeature: Feature {
         case setPaused(Bool)
         case seek(by: Duration)
         case seekTo(Duration)
+        /// Sends `.timeline(.tick)` after `scanTickInterval`.
+        case scanTick
         case select(MediaTrack.ID)
         case turnOffSubtitles
         case addSubtitles(AddonSubtitle)
@@ -84,6 +89,10 @@ enum PlayerFeature: Feature {
         case findSegments(PlayableID, duration: Duration)
         case stop
         case report(Report)
+    }
+
+    static func key(_ effect: Effect) -> AnyHashable? {
+        effect == .scanTick ? "scanTick" : nil
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -100,14 +109,18 @@ enum PlayerFeature: Feature {
             }
 
         case (.active(let session), .togglePause):
+            guard session.scan == nil else { return update(&state, session) { $0.endScan() } }
             switch session.phase {
             case .playing: return [.setPaused(true)]
             case .paused: return [.setPaused(false)]
             case .opening, .ended: return []
             }
 
-        case (.active, .seek(let offset)):
-            return [.seek(by: offset)]
+        case (.active(let session), .seek(let offset)):
+            return update(&state, session) { $0.endScan() + [.seek(by: offset)] }
+
+        case (.active(let session), .timeline(let event)):
+            return update(&state, session) { $0.apply(event) }
 
         case (.active(let session), .select(let track)):
             return session.tracks.contains { $0.id == track && !$0.isSelected } ? [.select(track)] : []
@@ -118,8 +131,8 @@ enum PlayerFeature: Feature {
         case (.active(let session), .setSpeed(let speed)):
             return speed == session.speed ? [] : [.setSpeed(speed)]
 
-        case (.active(let session), .skip(let segment)):
-            return session.segments?.value?.contains(segment) == true ? [.seekTo(segment.range.upperBound)] : []
+        case (.active(let session), .skip(let segment)) where session.segments?.value?.contains(segment) == true:
+            return update(&state, session) { $0.endScan() + [.seekTo(segment.range.upperBound)] }
 
         case (.active(var session), .segmentsFound(let item, let result)) where item == session.candidate.item:
             session.segments = switch result {
@@ -151,10 +164,18 @@ enum PlayerFeature: Feature {
              (.failed, .togglePause), (.failed, .seek), (.failed, .engine),
              (.idle, .select), (.idle, .chooseSubtitles), (.idle, .setSpeed), (.idle, .skip), (.idle, .segmentsFound),
              (.failed, .select), (.failed, .chooseSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
-             (.idle, .subtitlesFound), (.failed, .subtitlesFound),
-             (.active, .segmentsFound), (.active, .subtitlesFound):
+             (.idle, .subtitlesFound), (.failed, .subtitlesFound), (.idle, .timeline), (.failed, .timeline),
+             (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .skip):
             return []
         }
+    }
+
+    /// Runs `change` on the active session and keeps the result.
+    private static func update(_ state: inout State, _ session: Session, _ change: (inout Session) -> [Effect]) -> [Effect] {
+        var session = session
+        let effects = change(&session)
+        state = .active(session)
+        return effects
     }
 
     /// An add-on file plays from the track it was added as; one not added yet is added.
@@ -179,6 +200,7 @@ enum PlayerFeature: Feature {
             session.phase = .playing
         case .ended:
             session.phase = .ended
+            session.scan = nil
             return [.report(.ended)]
         case .stopped, .failed:
             break
@@ -241,6 +263,9 @@ enum PlayerFeature: Feature {
             engine.seek(by: offset)
         case .seekTo(let position):
             engine.seek(to: position)
+        case .scanTick:
+            guard (try? await Task.sleep(for: scanTickInterval)) != nil else { return }
+            send(.timeline(.tick))
         case .select(let track):
             engine.select(track)
         case .turnOffSubtitles:
