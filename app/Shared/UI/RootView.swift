@@ -56,13 +56,13 @@ private struct MainTabs: View {
                     HomeScreen().withRoutes()
                 }
             }
-            Tab("Settings", systemImage: "gearshape") {
-                SettingsScreen()
-            }
             Tab(role: .search) {
                 NavigationStack {
                     SearchScreen().withRoutes()
                 }
+            }
+            Tab("Settings", systemImage: "gearshape") {
+                SettingsScreen()
             }
         }
         #if os(macOS)

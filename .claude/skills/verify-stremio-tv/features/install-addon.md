@@ -1,6 +1,6 @@
 # Install an add-on
 
-In Settings › Add-ons the user picks Install Add-on…, types a manifest URL, and core fetches and installs it. The screen returns to the list, which shows the new add-on and its version. Removable add-ons offer Remove after a confirmation. The install persists in the core profile.
+In Settings › Add-ons the user picks Install Add-on…, types a manifest URL, and core fetches and installs it. The screen returns to the list, which shows the new add-on and its version. Long-pressing a removable add-on offers Remove, after a confirmation. The install persists in the core profile.
 
 ## Sub-features
 
@@ -23,8 +23,8 @@ Preconditions:
 
 - **Open.** `$T focus welcome.continue right`, `$T select`, `$T focus gearshape right`, press down twice, `$T select`, `$T select` (Install Add-on…).
 - **Type URL.** Run `$T type-env addons.manifestURL down STREMIO_SMOKE_ADDON_URL`. Confirming the keyboard submits the install.
-- **Listed.** Within 15 s the screen is back on the list and `$T focused` prints `AIOStreams | ElfHosted, 2.36.0`. After `$T remote menu`, `$T text settings.addons` reads `Add-ons, 7 installed`.
-- **Remove.** On the AIOStreams row, `$T select` opens "Remove AIOStreams | ElfHosted?" with Cancel focused.
+- **Listed.** Within 15 s the screen is back on the list with focus on Install Add-on…; press down 7 times and `$T focused` prints `AIOStreams | ElfHosted, 2.36.0`. After `$T remote menu`, `$T text settings.addons` reads `Add-ons, 7 installed`.
+- **Remove.** Selecting a row does nothing. Long-press the focused AIOStreams row (`agent-device longpress <x> <y> 1500 --session stremio-tv-verify` at the row's center, in points) for a context menu with Remove, which opens "Remove AIOStreams | ElfHosted?" with Cancel focused.
 - **Persisted.** Run `source build/verify/current.env; grep -o '"name":"AIOStreams[^"]*"' "$storage/profile.json"`. Prints `"name":"AIOStreams | ElfHosted"`.
 - **Error path.** In Install Add-on…, type `https://example.invalid/manifest.json`, wait 3 s, then `$T text addons.status`. It starts `The add-on's manifest could not be loaded:`.
 - **Proof.** Run `$T evidence install-addon`.

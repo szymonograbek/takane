@@ -136,13 +136,7 @@ private struct CatalogShelf: View {
     var body: some View {
         switch row.items {
         case .loading:
-            Shelf(title: row.title) {
-                ForEach(0..<6, id: \.self) { _ in
-                    Palette.surface
-                        .frame(width: Metrics.posterWidth, height: Metrics.posterWidth * 1.5)
-                        .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
-                }
-            }
+            Shelf(title: row.title) { PosterPlaceholders() }
         case .failed:
             // A failing add-on hides its own row rather than breaking the screen.
             EmptyView()

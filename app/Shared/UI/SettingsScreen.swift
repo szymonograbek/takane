@@ -44,11 +44,30 @@ struct SettingsPage<Emblem: View, Rows: View>: View {
                 rows()
             }
             .contentMargins(.top, Metrics.sectionSpacing, for: .scrollContent)
+            // Room for a focused row's lift, which the mask below would otherwise cut.
+            .safeAreaPadding(.horizontal, Metrics.rowLift)
+            // Rows scroll out of sight below the navigation title rather than under it, and off the bottom edge.
+            .mask { Rectangle().ignoresSafeArea(edges: .bottom) }
             .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, Metrics.screenPadding)
         .navigationTitle(title)
         .background(Palette.canvas.ignoresSafeArea())
+    }
+}
+
+/// A row that shows a value. On tvOS it still takes focus, so it highlights like the other rows,
+/// the list scrolls to it, Menu has something to leave from, and a long press opens its context menu.
+struct ValueRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        #if os(tvOS)
+        Button {} label: { LabeledContent(title, value: value) }
+        #else
+        LabeledContent(title, value: value)
+        #endif
     }
 }
 
@@ -83,7 +102,7 @@ private struct AccountSettings: View {
                     )
                 }
             case .signedIn(let email):
-                LabeledContent("Email", value: email)
+                ValueRow(title: "Email", value: email)
                 Button("Sign Out", role: .destructive) { confirmingSignOut = true }
                     .accessibilityIdentifier("account.signOut")
             }
@@ -101,7 +120,7 @@ private struct AboutSettings: View {
         SettingsPage(title: "About") {
             AppLogo(size: Metrics.emblemSize)
         } rows: {
-            LabeledContent("Version", value: Bundle.main.version)
+            ValueRow(title: "Version", value: Bundle.main.version)
             Section {
                 EmptyView()
             } footer: {

@@ -16,11 +16,13 @@ struct AddonSettings: View {
             }
             Section {
                 ForEach(state.installed) { addon in
-                    if addon.isRemovable {
-                        Button { removing = addon } label: { AddonRow(addon: addon) }
-                    } else {
-                        AddonRow(addon: addon)
-                    }
+                    ValueRow(title: addon.name, value: addon.version)
+                        .accessibilityIdentifier("addons.row")
+                        .contextMenu {
+                            if addon.isRemovable {
+                                Button("Remove", systemImage: "trash", role: .destructive) { removing = addon }
+                            }
+                        }
                 }
             } header: {
                 Text("Installed")
@@ -36,15 +38,6 @@ struct AddonSettings: View {
         ) { addon in
             Button("Remove", role: .destructive) { app.addons.send(.uninstall(addon.manifestURL)) }
         }
-    }
-}
-
-private struct AddonRow: View {
-    let addon: InstalledAddon
-
-    var body: some View {
-        LabeledContent(addon.name, value: addon.version)
-            .accessibilityIdentifier("addons.row")
     }
 }
 

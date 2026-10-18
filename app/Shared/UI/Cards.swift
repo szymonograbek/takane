@@ -39,6 +39,17 @@ struct PosterCard: View {
     }
 }
 
+/// Blank posters holding a shelf's place while its catalog loads.
+struct PosterPlaceholders: View {
+    var body: some View {
+        ForEach(0..<6, id: \.self) { _ in
+            Palette.surface
+                .frame(width: Metrics.posterWidth, height: Metrics.posterWidth * PosterShape.poster.heightRatio)
+                .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+        }
+    }
+}
+
 /// A started title: wide artwork, how far in, and what is left. Selecting it picks a stream to resume.
 struct ContinueCard: View {
     let item: ContinueWatchingItem
