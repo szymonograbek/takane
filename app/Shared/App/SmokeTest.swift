@@ -14,19 +14,35 @@ import UniformTypeIdentifiers
 @MainActor
 struct SmokeTest {
     struct Configuration {
-        let addonURL: URL
-        let type: String
-        let id: String
+        let manifest: ManifestURL
+        let item: PlayableID
         let exitWhenDone: Bool
 
         init?(options: [String: String]) {
-            guard let addon = options["STREMIO_SMOKE_ADDON_URL"], let addonURL = URL(string: addon) else { return nil }
-            let item = (options["STREMIO_SMOKE_ITEM"] ?? "movie/tt0111161").split(separator: "/", maxSplits: 1)
-            guard item.count == 2 else { return nil }
-            self.addonURL = addonURL
-            self.type = String(item[0])
-            self.id = String(item[1])
+            guard let addon = options["STREMIO_SMOKE_ADDON_URL"], let manifest = ManifestURL(addon) else { return nil }
+            let parts = (options["STREMIO_SMOKE_ITEM"] ?? "movie/tt0111161").split(separator: "/", maxSplits: 1)
+            guard parts.count == 2, let item = PlayableID(String(parts[1])), item.coreType == parts[0] else { return nil }
+            self.manifest = manifest
+            self.item = item
             self.exitWhenDone = options["STREMIO_SMOKE_EXIT"] == "1"
+        }
+    }
+
+    private enum Failure: Error, CustomStringConvertible {
+        case addon(AddonError)
+        case noPlayableStream(addon: String, groups: [String: Int])
+        case player(PlaybackError)
+        case noAudioOutput([String: String])
+        case timedOut(String)
+
+        var description: String {
+            switch self {
+            case .addon(let error): "addon: \(error)"
+            case .noPlayableStream(let addon, let groups): "no playable stream from \(addon); groups: \(groups)"
+            case .player(let error): "player failed: \(error)"
+            case .noAudioOutput(let output): "no audio output: \(output)"
+            case .timedOut(let what): "timed out waiting for \(what)"
+            }
         }
     }
 
@@ -48,58 +64,14 @@ struct SmokeTest {
     }
 
     let configuration: Configuration
-    let core: CoreStore
-    let playback: PlaybackSession
+    let app: AppContext
 
     func run() async {
         let started = ContinuousClock.now
         var result = Result()
-        Log.smoke.info("SMOKE start: addon=\(configuration.addonURL.host() ?? "?") item=\(configuration.type)/\(configuration.id)")
+        Log.smoke.info("SMOKE start: addon=\(configuration.manifest.url.host() ?? "?") item=\(configuration.item.coreType)/\(configuration.item)")
         do {
-            try await core.waitUntil("core ready", timeout: .seconds(30)) { core.status == .ready ? true : nil }
-
-            let addon = try await core.installAddon(from: configuration.addonURL)
-            result.addon = "\(addon.manifest.name) \(addon.manifest.version)"
-            Log.smoke.info("SMOKE step 1/4 addon installed: \(result.addon ?? "")")
-
-            let groups = try await core.loadStreams(type: configuration.type, id: configuration.id)
-            result.streamGroups = Dictionary(groups.map { ($0.addonName, $0.streams.count) }, uniquingKeysWith: +)
-            guard let group = groups.first(where: { $0.request.base == addon.transportUrl }),
-                  let stream = group.streams.first(where: { $0.playableURL != nil })
-            else { throw WorkflowError(description: "no playable stream from \(addon.manifest.name); groups: \(result.streamGroups)") }
-            result.playedStream = [stream.name, stream.filename ?? stream.description].compactMap { $0 }.joined(separator: " | ")
-            result.playedURLHost = stream.playableURL?.host()
-            Log.smoke.info("SMOKE step 2/4 streams resolved: \(result.streamGroups); playing \(result.playedStream ?? "")")
-
-            playback.play(stream, streamRequest: group.request, metaRequest: core.metaRequest)
-            let player = playback.player
-            try await core.waitUntil("10s of playback", timeout: .seconds(90)) { () throws -> Bool? in
-                if case .failed(let message) = player.phase { throw WorkflowError(description: "player failed: \(message)") }
-                return player.phase == .playing && player.position >= 10 && player.videoSize != nil ? true : nil
-            }
-            result.videoSize = player.videoSize.map { "\($0.width)x\($0.height)" }
-            result.hardwareDecoder = player.hardwareDecoder
-            result.playbackPositionSeconds = player.position
-            result.durationSeconds = player.duration
-            Log.smoke.info("SMOKE step 3/4 playing: \(player.position)s of \(player.duration)s, \(result.videoSize ?? "?"), hwdec=\(player.hardwareDecoder ?? "none")")
-            result.output = player.playbackDiagnostics()
-            Log.smoke.info("SMOKE output: \(result.output.sorted { $0.key < $1.key })")
-            guard result.output["current-ao"] != nil, result.output["audio-codec-name"] != nil else {
-                throw WorkflowError(description: "no audio output: \(result.output)")
-            }
-            result.frameSaved = await player.snapshot().map { Self.writePNG($0, to: Self.outputDirectory.appending(path: "smoke-frame.png")) } ?? false
-
-            // Pausing makes core push the player's library item into the library, which feeds continue watching.
-            player.togglePause()
-            let metaID = configuration.id.split(separator: ":").first.map(String.init) ?? configuration.id
-            let offset = try await core.waitUntil("continue watching progress", timeout: .seconds(10)) { () -> UInt64? in
-                guard let item = core.continueWatching?.items.first(where: { $0.id == metaID }),
-                      item.state.timeOffset >= 5_000
-                else { return nil }
-                return item.state.timeOffset
-            }
-            result.continueWatchingTimeOffsetMs = offset
-            Log.smoke.info("SMOKE step 4/4 continue watching has the item after pause: timeOffset=\(offset)ms")
+            try await steps(&result)
             result.passed = true
         } catch {
             result.failure = "\(error)"
@@ -114,9 +86,73 @@ struct SmokeTest {
         if configuration.exitWhenDone {
             // Let the screenshot and log writes land before quitting.
             try? await Task.sleep(for: .seconds(2))
-            playback.stop()
+            app.player.send(.stop)
             exit(result.passed ? 0 : 1)
         }
+    }
+
+    private func steps(_ result: inout Result) async throws(Failure) {
+        let manifest = configuration.manifest
+        app.addons.send(.install(manifest))
+        let addon = try await app.addons.until(timeout: .seconds(45), onTimeout: Failure.timedOut("addon install")) { state in
+            switch state.install {
+            case .installed(let addon) where addon.manifestURL == manifest: .done(addon)
+            case .failed(let failed, let error) where failed == manifest: .failed(Failure.addon(error))
+            case .idle, .installing, .installed, .failed: .pending
+            }
+        }
+        result.addon = "\(addon.name) \(addon.version)"
+        Log.smoke.info("SMOKE step 1/4 addon installed: \(result.addon ?? "")")
+
+        let item = configuration.item
+        app.streams.send(.lookUp(item))
+        let streams = try await app.streams.until(timeout: .seconds(60), onTimeout: Failure.timedOut("streams for \(item)")) { state in
+            guard case .lookingUp(item, let results?) = state, results.isComplete else { return Probe<StreamResults, Failure>.pending }
+            return .done(results)
+        }
+        let loaded = streams.sources.compactMap { source in source.candidates.value.map { (source, $0) } }
+        result.streamGroups = Dictionary(loaded.map { ($0.0.addonName, $0.1.count) }, uniquingKeysWith: +)
+        guard let candidate = loaded.first(where: { $0.0.addon == manifest })?.1.first(where: { $0.source != nil }),
+              let source = candidate.source
+        else { throw .noPlayableStream(addon: addon.name, groups: result.streamGroups) }
+        result.playedStream = [candidate.name, candidate.filename ?? candidate.description].compactMap { $0 }.joined(separator: " | ")
+        result.playedURLHost = source.url.host()
+        Log.smoke.info("SMOKE step 2/4 streams resolved: \(result.streamGroups); playing \(result.playedStream ?? "")")
+
+        app.player.send(.open(candidate))
+        let session = try await app.player.until(timeout: .seconds(90), onTimeout: Failure.timedOut("10s of playback")) { state in
+            switch state {
+            case .active(let session) where session.phase == .playing && session.position >= .seconds(10) && session.videoSize != nil:
+                .done(session)
+            case .failed(_, let error): .failed(Failure.player(error))
+            case .idle, .active: .pending
+            }
+        }
+        result.videoSize = session.videoSize.map { "\($0.width)x\($0.height)" }
+        result.hardwareDecoder = session.hardwareDecoder
+        result.playbackPositionSeconds = session.position.seconds
+        result.durationSeconds = session.duration.seconds
+        Log.smoke.info(
+            "SMOKE step 3/4 playing: \(session.position) of \(session.duration), \(result.videoSize ?? "?"), hwdec=\(session.hardwareDecoder ?? "none")"
+        )
+        let engine = app.services.engine
+        result.output = engine.diagnostics()
+        Log.smoke.info("SMOKE output: \(result.output.sorted { $0.key < $1.key })")
+        guard result.output["current-ao"] != nil, result.output["audio-codec-name"] != nil else {
+            throw .noAudioOutput(result.output)
+        }
+        result.frameSaved = await engine.snapshot().map { Self.writePNG($0, to: Self.outputDirectory.appending(path: "smoke-frame.png")) } ?? false
+
+        // Pausing makes core push the player's library item into the library, which feeds continue watching.
+        app.player.send(.togglePause)
+        let progress = try await app.overview.until(timeout: .seconds(10), onTimeout: Failure.timedOut("continue watching progress")) { state in
+            guard let watched = state.continueWatching.first(where: { $0.media == item.media }), watched.offset >= .seconds(5) else {
+                return Probe<ContinueWatchingItem, Failure>.pending
+            }
+            return .done(watched)
+        }
+        result.continueWatchingTimeOffsetMs = UInt64(progress.offset / .milliseconds(1))
+        Log.smoke.info("SMOKE step 4/4 continue watching has the item after pause: timeOffset=\(result.continueWatchingTimeOffsetMs ?? 0)ms")
     }
 
     static var outputDirectory: URL { Log.fileURL.deletingLastPathComponent() }

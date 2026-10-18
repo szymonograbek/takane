@@ -43,6 +43,7 @@ struct Log: Sendable {
     static let network = Log(category: "network")
     static let player = Log(category: "player")
     static let ui = Log(category: "ui")
+    static let features = Log(category: "features")
     static let smoke = Log(category: "smoke")
 
     /// Messages forwarded from Rust keep their Rust module path as the category.
@@ -64,6 +65,8 @@ struct Log: Sendable {
     func warning(_ message: @autoclosure () -> String) { write(.warning, message) }
     func error(_ message: @autoclosure () -> String) { write(.error, message) }
 
+    // Regex is immutable once built but not declared Sendable.
+    // swiftlint:disable:next nonisolated_unsafe
     nonisolated(unsafe) private static let secretPattern = /[A-Za-z0-9_\-]{32,}/
 
     /// Keeps the first 4 characters of each token so lines stay correlatable.

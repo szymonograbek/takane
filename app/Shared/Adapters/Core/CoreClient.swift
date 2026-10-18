@@ -4,8 +4,8 @@ import StremioBridge
 enum CoreError: Error, CustomStringConvertible {
     /// The bridge rejected a call; the message comes from Rust.
     case bridge(String)
-    case encoding(Error)
-    case decoding(field: CoreField, Error)
+    case encoding(any Error)
+    case decoding(field: CoreField, any Error)
 
     var description: String {
         switch self {
@@ -16,30 +16,24 @@ enum CoreError: Error, CustomStringConvertible {
     }
 }
 
-/// Runtime events pushed by core.
-enum CoreEvent: Sendable {
-    /// These model fields changed; read them with `CoreClient.state`.
-    case newState([CoreField])
-    /// A core `Event` (e.g. `AddonInstalled`, `Error`), by name with its raw payload.
-    case core(name: String, payload: JSONValue)
-}
-
 /// The app's only handle on stremio-core. Thread-safe.
 ///
 /// The bridge can be started once per process, so the app creates exactly one client.
 final class CoreClient: Sendable {
-    let events: AsyncStream<CoreEvent>
+    /// The model fields each `NewState` event names; read them with `state`.
+    /// Core's own events (`AddonInstalled`, `Error`, …) are only logged.
+    let changes: AsyncStream<[CoreField]>
     private let host: CoreHost
 
-    private init(host: CoreHost, events: AsyncStream<CoreEvent>) {
+    private init(host: CoreHost, changes: AsyncStream<[CoreField]>) {
         self.host = host
-        self.events = events
+        self.changes = changes
     }
 
     /// Starts core and loads persisted state from `storageDirectory`. Blocks; call off the main thread.
     static func start(storageDirectory: URL) throws(CoreError) -> CoreClient {
-        let (events, continuation) = AsyncStream.makeStream(of: CoreEvent.self, bufferingPolicy: .unbounded)
-        let host = CoreHost(events: continuation)
+        let (changes, continuation) = AsyncStream.makeStream(of: [CoreField].self, bufferingPolicy: .unbounded)
+        let host = CoreHost(changes: continuation)
         Log.core.info("starting bridge, storage at \(storageDirectory.path)")
         let started = ContinuousClock.now
         try callBridge { error in
@@ -48,7 +42,7 @@ final class CoreClient: Sendable {
             }
         }
         Log.core.info("bridge started in \(ContinuousClock.now - started)")
-        return CoreClient(host: host, events: events)
+        return CoreClient(host: host, changes: changes)
     }
 
     func dispatch(_ action: CoreAction, to field: CoreField? = nil) throws(CoreError) {
@@ -90,11 +84,11 @@ final class CoreClient: Sendable {
 
 /// Implements the `SBHost` callbacks Rust calls: logging, HTTP and runtime events.
 private final class CoreHost: Sendable {
-    private let events: AsyncStream<CoreEvent>.Continuation
+    private let changes: AsyncStream<[CoreField]>.Continuation
     private let session: URLSession
 
-    init(events: AsyncStream<CoreEvent>.Continuation) {
-        self.events = events
+    init(changes: AsyncStream<[CoreField]>.Continuation) {
+        self.changes = changes
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -190,7 +184,7 @@ private final class CoreHost: Sendable {
 
         private enum CodingKeys: String, CodingKey { case name, args }
 
-        init(from decoder: Decoder) throws {
+        init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             name = try container.decode(String.self, forKey: .name)
             fields = name == "NewState" ? try container.decode([CoreField].self, forKey: .args) : nil
@@ -203,12 +197,11 @@ private final class CoreHost: Sendable {
             let raw = try JSONDecoder().decode(RawEvent.self, from: json)
             if let fields = raw.fields {
                 Log.core.debug("event NewState \(fields.map(\.rawValue))")
-                events.yield(.newState(fields))
+                changes.yield(fields)
             } else if let core = raw.core {
                 let payload = core.args ?? .null
                 let level: Log.Level = core.event == "Error" ? .error : .info
                 Log.core.write(level) { "event \(core.event) \(payload.compactDescription)" }
-                events.yield(.core(name: core.event, payload: payload))
             } else {
                 Log.core.warning("unknown runtime event: \(String(decoding: json, as: UTF8.self))")
             }

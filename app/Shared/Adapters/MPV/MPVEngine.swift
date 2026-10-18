@@ -2,26 +2,16 @@ import Foundation
 import Libmpv
 import QuartzCore
 
-/// What mpv reports back. Delivered on the main queue in the order mpv produced it.
-enum MPVEvent: Sendable {
-    case fileLoaded
-    case endFile(reason: String, error: String?)
-    case timePosition(Double)
-    case duration(Double)
-    case paused(Bool)
-    case buffering(Bool)
-    case videoSize(width: Int, height: Int)
-    case hardwareDecoder(String)
-}
-
 /// One libmpv instance rendering into a `CAMetalLayer` through MoltenVK (`vo=gpu-next`).
 ///
-/// libmpv's client API is thread-safe, so the handle is used from the caller's thread for
-/// commands and from `MPVEventPump`'s queue for the event loop.
-final class MPVEngine: @unchecked Sendable {
-    let layer = MPVMetalLayer()
+/// Commands run on the main actor, the event loop on `MPVEventPump`'s queue and snapshots off
+/// the main actor. libmpv's client API is thread-safe, so they share the handle.
+final class MPVEngine: PlaybackEngine {
+    let surface: CAMetalLayer = MPVMetalLayer()
+    let events: AsyncStream<PlaybackEvent>
 
-    private let handle: OpaquePointer
+    // swiftlint:disable:next nonisolated_unsafe
+    nonisolated(unsafe) private let handle: OpaquePointer
     private let pump: MPVEventPump
 
     fileprivate enum Property: String, CaseIterable {
@@ -45,11 +35,14 @@ final class MPVEngine: @unchecked Sendable {
 
     enum StartError: Error { case createFailed, initializeFailed(String) }
 
-    init(onEvent: @escaping @MainActor (MPVEvent) -> Void) throws {
-        guard let handle = mpv_create() else { throw StartError.createFailed }
+    init() throws(StartError) {
+        guard let handle = mpv_create() else { throw .createFailed }
+        let (events, continuation) = AsyncStream.makeStream(of: PlaybackEvent.self, bufferingPolicy: .unbounded)
         self.handle = handle
-        self.pump = MPVEventPump(handle: handle, onEvent: onEvent)
+        self.events = events
+        self.pump = MPVEventPump(handle: handle, events: continuation)
 
+        let layer = surface
         layer.backgroundColor = CGColor(gray: 0, alpha: 1)
         layer.framebufferOnly = true
 
@@ -78,16 +71,13 @@ final class MPVEngine: @unchecked Sendable {
         let status = mpv_initialize(handle)
         guard status >= 0 else {
             // deinit destroys the handle.
-            throw StartError.initializeFailed(String(cString: mpv_error_string(status)))
+            throw .initializeFailed(String(cString: mpv_error_string(status)))
         }
         for property in Property.allCases {
             mpv_observe_property(handle, 0, property.rawValue, property.format)
         }
         // Unretained: deinit clears the callback (which waits out a running one) before `pump` is released.
-        mpv_set_wakeup_callback(handle, { context in
-            guard let context else { return }
-            Unmanaged<MPVEventPump>.fromOpaque(context).takeUnretainedValue().drain()
-        }, Unmanaged.passUnretained(pump).toOpaque())
+        mpv_set_wakeup_callback(handle, mpvWakeup, Unmanaged.passUnretained(pump).toOpaque())
         Log.player.info("mpv initialized (\(String(cString: mpv_client_name(handle))), api \(mpv_client_api_version()))")
     }
 
@@ -98,8 +88,9 @@ final class MPVEngine: @unchecked Sendable {
         Log.player.info("mpv destroyed")
     }
 
-    /// Starts playing `url`. `headers` are sent with every HTTP request mpv makes for it.
-    func load(_ url: URL, headers: [String: String]) {
+    func load(_ source: PlaybackSource) {
+        let url = source.url
+        let headers = source.headers
         // `append` adds one list item verbatim; setting the whole property would split values on commas.
         command("change-list", "http-header-fields", "clr", "")
         for (name, value) in headers.sorted(by: { $0.key < $1.key }) {
@@ -114,25 +105,38 @@ final class MPVEngine: @unchecked Sendable {
         check(mpv_set_property(handle, "pause", MPV_FORMAT_FLAG, &flag), "set pause=\(paused)")
     }
 
-    func seek(by seconds: Double) {
-        command("seek", String(seconds), "relative")
+    func seek(by offset: Duration) {
+        command("seek", String(offset / .seconds(1)), "relative")
     }
 
     func stop() {
         command("stop")
     }
 
-    /// Reads any mpv property as text (e.g. `osd-width`, `frame-drop-count`), for diagnostics.
-    func property(_ name: String) -> String? {
+    /// Render target size (the view in pixels), dropped frames, audio output and format.
+    func diagnostics() -> [String: String] {
+        let names = [
+            "osd-width", "osd-height", "frame-drop-count", "decoder-frame-drop-count", "vo-delayed-frame-count",
+            "estimated-vf-fps", "video-codec", "current-ao", "audio-codec-name", "audio-out-params/channel-count",
+            "audio-out-params/samplerate", "mute", "volume",
+        ]
+        return names.reduce(into: [:]) { diagnostics, name in
+            diagnostics[name] = property(name)
+        }
+    }
+
+    /// Reads any mpv property as text.
+    private func property(_ name: String) -> String? {
         guard let value = mpv_get_property_string(handle, name) else { return nil }
         defer { mpv_free(value) }
         return String(cString: value)
     }
 
-    /// The current video frame at its native size, without subtitles or UI.
+    /// The current video frame at its native size, without subtitles or UI. Runs off the main
+    /// actor, because mpv may need the main thread to render the frame it returns.
     /// Nil in simulators: MoltenVK's texture readback crashes the simulator's Metal driver
     /// (`MTLSimDevice newBufferWithLength` → `_xpc_api_misuse`).
-    func snapshot() -> CGImage? {
+    nonisolated func snapshot() async -> CGImage? {
         #if targetEnvironment(simulator)
         Log.player.warning("snapshot is unavailable in the simulator")
         return nil
@@ -183,7 +187,7 @@ final class MPVEngine: @unchecked Sendable {
     }
 
     /// Calls `body` with a NULL-terminated C argv for an mpv command.
-    private func withCArguments<Result>(
+    nonisolated private func withCArguments<Result>(
         _ arguments: [String],
         _ body: (UnsafeMutablePointer<UnsafePointer<CChar>?>) -> Result
     ) -> Result {
@@ -197,31 +201,37 @@ final class MPVEngine: @unchecked Sendable {
         }
     }
 
-    private func check(_ status: Int32, _ what: @autoclosure () -> String) {
+    nonisolated private func check(_ status: Int32, _ what: @autoclosure () -> String) {
         if status < 0 {
             Log.player.error("\(what()) failed: \(String(cString: mpv_error_string(status)))")
         }
     }
 }
 
-/// Runs mpv's event loop on its own queue and forwards events to the main actor.
-/// Holds no reference to `MPVEngine`, so the engine is never released from this queue.
-private final class MPVEventPump: @unchecked Sendable {
+/// mpv calls this from its own threads, so it must not inherit the engine's main-actor isolation.
+private func mpvWakeup(_ context: UnsafeMutableRawPointer?) {
+    guard let context else { return }
+    Unmanaged<MPVEventPump>.fromOpaque(context).takeUnretainedValue().drain()
+}
+
+/// Runs mpv's event loop on its own queue and yields translated events in mpv's order.
+/// Holds no reference to `MPVEngine`, so the engine is never released from this queue. It reads
+/// the thread-safe mpv handle only on that serial queue.
+private final class MPVEventPump: @unchecked Sendable { // swiftlint:disable:this unchecked_sendable
     private let handle: OpaquePointer
     private let queue = DispatchQueue(label: "mpv.events", qos: .userInitiated)
-    private let onEvent: @MainActor (MPVEvent) -> Void
+    private let events: AsyncStream<PlaybackEvent>.Continuation
 
-    init(handle: OpaquePointer, onEvent: @escaping @MainActor (MPVEvent) -> Void) {
+    init(handle: OpaquePointer, events: AsyncStream<PlaybackEvent>.Continuation) {
         self.handle = handle
-        self.onEvent = onEvent
+        self.events = events
     }
 
     func drain() {
         queue.async { [self] in
             while let event = mpv_wait_event(handle, 0)?.pointee, event.event_id != MPV_EVENT_NONE {
                 if let translated = translate(event) {
-                    let onEvent = onEvent
-                    DispatchQueue.main.async { MainActor.assumeIsolated { onEvent(translated) } }
+                    events.yield(translated)
                 }
             }
         }
@@ -229,9 +239,10 @@ private final class MPVEventPump: @unchecked Sendable {
 
     func waitUntilIdle() {
         queue.sync {}
+        events.finish()
     }
 
-    private func translate(_ event: mpv_event) -> MPVEvent? {
+    private func translate(_ event: mpv_event) -> PlaybackEvent? {
         switch event.event_id {
         case MPV_EVENT_LOG_MESSAGE:
             guard let message = event.data?.assumingMemoryBound(to: mpv_event_log_message.self).pointee else { return nil }
@@ -247,7 +258,7 @@ private final class MPVEventPump: @unchecked Sendable {
             return nil
         case MPV_EVENT_FILE_LOADED:
             Log.player.info("file loaded")
-            return .fileLoaded
+            return .loaded
         case MPV_EVENT_END_FILE:
             guard let endFile = event.data?.assumingMemoryBound(to: mpv_event_end_file.self).pointee else { return nil }
             let reason = switch endFile.reason {
@@ -260,22 +271,23 @@ private final class MPVEventPump: @unchecked Sendable {
             }
             let error = endFile.error < 0 ? String(cString: mpv_error_string(endFile.error)) : nil
             Log.player.write(error == nil ? .info : .error) { "end file: \(reason) \(error ?? "")" }
-            return .endFile(reason: reason, error: error)
+            if let error { return .failed(reason: "\(reason): \(error)") }
+            return endFile.reason == MPV_END_FILE_REASON_EOF ? .ended : .stopped
         case MPV_EVENT_PROPERTY_CHANGE:
             guard let change = event.data?.assumingMemoryBound(to: mpv_event_property.self).pointee,
                   let property = MPVEngine.Property(rawValue: String(cString: change.name)),
                   change.format != MPV_FORMAT_NONE,
                   let data = change.data
             else { return nil }
-            let translated: MPVEvent = switch property {
-            case .timePosition: .timePosition(data.load(as: Double.self))
-            case .duration: .duration(data.load(as: Double.self))
+            let translated: PlaybackEvent = switch property {
+            case .timePosition: .position(.seconds(data.load(as: Double.self)))
+            case .duration: .duration(.seconds(data.load(as: Double.self)))
             case .pause: .paused(data.load(as: Int32.self) != 0)
             case .pausedForCache: .buffering(data.load(as: Int32.self) != 0)
             case .width, .height: videoSizeEvent()
             case .hardwareDecoder: .hardwareDecoder(String(cString: data.load(as: UnsafePointer<CChar>.self)))
             }
-            if case .timePosition = translated {} else {
+            if case .position = translated {} else {
                 Log.player.debug("property \(property.rawValue) → \(translated)")
             }
             return translated
@@ -288,12 +300,12 @@ private final class MPVEventPump: @unchecked Sendable {
         }
     }
 
-    private func videoSizeEvent() -> MPVEvent {
+    private func videoSizeEvent() -> PlaybackEvent {
         var width: Int64 = 0
         var height: Int64 = 0
         mpv_get_property(handle, "width", MPV_FORMAT_INT64, &width)
         mpv_get_property(handle, "height", MPV_FORMAT_INT64, &height)
-        return .videoSize(width: Int(width), height: Int(height))
+        return .videoSize(width > 0 && height > 0 ? VideoSize(width: Int(width), height: Int(height)) : nil)
     }
 }
 

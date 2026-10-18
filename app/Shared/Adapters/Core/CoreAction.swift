@@ -1,7 +1,7 @@
 import Foundation
 
 /// The core models the bridge exposes. Raw values match `AppModelField` in core/src/model.rs.
-enum CoreField: String, Codable, Sendable, CaseIterable {
+enum CoreField: String, Codable, Sendable {
     case ctx
     case continueWatchingPreview = "continue_watching_preview"
     case addonDetails = "addon_details"
@@ -21,7 +21,8 @@ enum CoreAction: Sendable {
     enum Load: Sendable {
         case addonDetails(transportURL: URL)
         case metaDetails(metaPath: ResourcePath, streamPath: ResourcePath?)
-        case player(PlayerSelection)
+        /// Core's player selection, as `CoreStreamService` built it into a candidate's tracking token.
+        case player(selection: JSONValue)
     }
 
     enum Ctx: Sendable {
@@ -55,12 +56,21 @@ struct ResourceRequest: Codable, Hashable, Sendable {
     var path: ResourcePath
 }
 
-/// What core's player model needs to track progress for a stream.
-struct PlayerSelection: Encodable, Sendable {
-    var stream: JSONValue
-    var streamRequest: ResourceRequest?
-    var metaRequest: ResourceRequest?
-    var subtitlesPath: ResourcePath?
+extension ResourcePath {
+    var json: JSONValue {
+        .object([
+            "resource": .string(resource),
+            "type": .string(type),
+            "id": .string(id),
+            "extra": .array(extra.map { .array($0.map(JSONValue.string)) }),
+        ])
+    }
+}
+
+extension ResourceRequest {
+    var json: JSONValue {
+        .object(["base": .string(base.absoluteString), "path": path.json])
+    }
 }
 
 /// The JSON document `sb_dispatch` accepts.
@@ -68,7 +78,7 @@ struct DispatchRequest: Encodable {
     let action: CoreAction
     let field: CoreField?
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(action, forKey: .action)
         // core expects an explicit null when no field is targeted.
@@ -87,7 +97,7 @@ private struct Tagged<Args: Encodable>: Encodable {
     let tagKey: String
     let argsKey: String
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: DynamicKey.self)
         try container.encode(name, forKey: DynamicKey(tagKey))
         if let args {
@@ -119,7 +129,7 @@ private func model<Args: Encodable>(_ name: String, _ args: Args) -> Tagged<Args
 }
 
 extension CoreAction: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case .load(let load): try action("Load", load).encode(to: encoder)
         case .ctx(let ctx): try action("Ctx", ctx).encode(to: encoder)
@@ -137,7 +147,7 @@ extension CoreAction.Load: Encodable {
         let guessStream: Bool
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case .addonDetails(let url):
             try model("AddonDetails", AddonDetailsArgs(transportUrl: url)).encode(to: encoder)
@@ -151,7 +161,7 @@ extension CoreAction.Load: Encodable {
 }
 
 extension CoreAction.Ctx: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case .installAddon(let descriptor): try action("InstallAddon", descriptor).encode(to: encoder)
         }
@@ -162,7 +172,7 @@ extension CoreAction.Player: Encodable {
     private struct TimeChangedArgs: Encodable { let time: UInt64; let duration: UInt64; let device: String }
     private struct PausedChangedArgs: Encodable { let paused: Bool }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case .timeChanged(let time, let duration, let device):
             try action("TimeChanged", TimeChangedArgs(time: time, duration: duration, device: device)).encode(to: encoder)

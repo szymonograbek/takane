@@ -10,10 +10,16 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: F43U35GPD2
     ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
 packages:
   MPVKit:
     url: https://github.com/mpvkit/MPVKit
     exactVersion: 1.1.0-n9.0.2
+  SwiftLintPlugins:
+    url: https://github.com/SimplyDanny/SwiftLintPlugins
+    exactVersion: 0.65.1
 targetTemplates:
   App:
     type: application
@@ -23,6 +29,9 @@ targetTemplates:
       - package: MPVKit
       - framework: build/StremioBridge.xcframework
         embed: false
+    buildToolPlugins:
+      - plugin: SwiftLintBuildToolPlugin
+        package: SwiftLintPlugins
     info:
       properties:
         CFBundleDisplayName: Stremio TV
@@ -81,3 +90,25 @@ targets:
         TARGETED_DEVICE_FAMILY: "3"
         # The Rust bridge ships an arm64 simulator slice only (Apple silicon hosts).
         EXCLUDED_ARCHS[sdk=appletvsimulator*]: x86_64
+  # Unit tests for the pure layers. It compiles Domain and Features without the bridge or mpv,
+  # so code there that reaches for an adapter fails to build.
+  StremioTVTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: app/Shared/Domain
+      - path: app/Shared/Features
+      - path: app/Shared/Logging
+      - path: app/Shared/App/LaunchOptions.swift
+      - path: app/Tests
+    buildToolPlugins:
+      - plugin: SwiftLintBuildToolPlugin
+        package: SwiftLintPlugins
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.stremio-tv.tests
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+    scheme:
+      testTargets: [StremioTVTests]

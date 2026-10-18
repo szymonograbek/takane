@@ -10,7 +10,7 @@ enum JSONValue: Codable, Hashable, Sendable {
     case array([JSONValue])
     case object([String: JSONValue])
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             self = .null
@@ -27,7 +27,7 @@ enum JSONValue: Codable, Hashable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
         case .null: try container.encodeNil()

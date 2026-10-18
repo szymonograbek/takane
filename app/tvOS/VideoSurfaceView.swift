@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-/// Hosts mpv's Metal layer in SwiftUI and keeps its drawable sized to the view.
-struct MPVVideoView: UIViewRepresentable {
-    let layer: MPVMetalLayer
+/// Hosts the playback engine's Metal layer in SwiftUI and keeps its drawable sized to the view.
+struct VideoSurfaceView: UIViewRepresentable {
+    let layer: CAMetalLayer
 
     func makeUIView(context: Context) -> LayerHostView {
         LayerHostView(metalLayer: layer)
@@ -12,9 +12,9 @@ struct MPVVideoView: UIViewRepresentable {
     func updateUIView(_ view: LayerHostView, context: Context) {}
 
     final class LayerHostView: UIView {
-        private let metalLayer: MPVMetalLayer
+        private let metalLayer: CAMetalLayer
 
-        init(metalLayer: MPVMetalLayer) {
+        init(metalLayer: CAMetalLayer) {
             self.metalLayer = metalLayer
             super.init(frame: .zero)
             backgroundColor = .black
