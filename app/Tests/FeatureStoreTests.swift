@@ -1,11 +1,10 @@
+import CoreGraphics
 import Foundation
-import QuartzCore
 import os
 import Testing
 
 @MainActor
 private final class FakeEngine: PlaybackEngine {
-    let surface = CAMetalLayer()
     let events: AsyncStream<PlaybackEvent>
     let emit: AsyncStream<PlaybackEvent>.Continuation
     private(set) var commands: [String] = []
@@ -63,7 +62,7 @@ struct FeatureStoreTests {
         }
         #expect(session.phase == .playing)
         #expect(session.addonSubtitles == [OneSubtitleSource.source])
-        #expect(engine.commands == ["load movie.mkv from 30.0 seconds pol", "paused false"])
+        #expect(engine.commands == ["load movie.mkv from 30.0 seconds pol"])
         var reports = tracker.reports.stream.makeAsyncIterator()
         #expect(await reports.next() == "begin movie.mkv")
         #expect(await reports.next() == "progress 2.0 seconds")

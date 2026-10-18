@@ -19,7 +19,10 @@ struct PlayerScreen: View {
         let state = player.state
         ZStack {
             Color.black
-            VideoSurfaceView(layer: app.services.engine.surface)
+            app.services.videoSurface()
+            if let session = state.session {
+                SubtitleOverlay(cues: session.subtitles, videoSize: session.videoSize)
+            }
             switch state {
             case .failed(_, let error):
                 PlaybackFailure(error: error) { player.send(.stop) }

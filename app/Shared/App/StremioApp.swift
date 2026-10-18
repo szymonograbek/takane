@@ -26,12 +26,12 @@ struct StremioApp: App {
 
 enum StartupError: Error, CustomStringConvertible {
     case core(CoreError)
-    case player(MPVEngine.StartError)
+    case player(PlaybackError)
 
     var description: String {
         switch self {
         case .core(let error): "core failed to start: \(error)"
-        case .player(let error): "mpv failed to start: \(error)"
+        case .player(let error): "player failed to start: \(error)"
         }
     }
 }
@@ -46,6 +46,8 @@ struct Services: Sendable {
     let preferences: any PreferencesService
     let tracker: any PlaybackTracker
     let engine: any PlaybackEngine
+    /// The view `engine` renders video into.
+    let videoSurface: @MainActor @Sendable () -> AnyView
     let skipSegments: any SkipSegmentService
     let subtitles: any SubtitleService
 
@@ -57,9 +59,9 @@ struct Services: Sendable {
         } catch {
             throw .core(error)
         }
-        let engine: MPVEngine
+        let engine: AetherPlaybackEngine
         do {
-            engine = try MPVEngine()
+            engine = try AetherPlaybackEngine()
         } catch {
             throw .player(error)
         }
@@ -72,6 +74,7 @@ struct Services: Sendable {
             preferences: CorePreferencesService(runtime: core),
             tracker: CorePlaybackTracker(runtime: core),
             engine: engine,
+            videoSurface: { AnyView(engine.surface()) },
             skipSegments: SkipDBSkipSegmentService(),
             subtitles: CoreSubtitleService(runtime: core)
         )

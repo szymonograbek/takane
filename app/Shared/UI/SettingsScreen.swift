@@ -124,7 +124,7 @@ private struct AboutSettings: View {
             Section {
                 EmptyView()
             } footer: {
-                Text("Takane plays streams from your Stremio add-ons. Built on stremio-core and mpv.")
+                Text("Takane plays streams from your Stremio add-ons. Built on stremio-core and AetherEngine.")
             }
         }
     }

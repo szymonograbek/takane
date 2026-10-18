@@ -3,7 +3,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 /// End-to-end check of the running app: browse, search and describe titles from the default
-/// add-ons, install an addon through core, resolve streams, play one in mpv, and confirm core
+/// add-ons, install an addon through core, resolve streams, play one, and confirm core
 /// recorded progress.
 ///
 /// Enabled by `LaunchOptions` (see scripts/smoke.sh):
@@ -93,7 +93,7 @@ struct SmokeTest {
         var subtitleLabels: [String] = []
         var playedSubtitle: String?
         var videoSize: String?
-        var hardwareDecoder: String?
+        var decoder: String?
         var playbackPositionSeconds: Double?
         var durationSeconds: Double?
         var continueWatchingTimeOffsetMs: UInt64?
@@ -182,17 +182,17 @@ struct SmokeTest {
             }
         }
         result.videoSize = session.videoSize.map { "\($0.width)x\($0.height)" }
-        result.hardwareDecoder = session.hardwareDecoder
+        result.decoder = session.decoder
         result.playbackPositionSeconds = session.position.seconds
         result.durationSeconds = session.duration.seconds
         Log.smoke.info(
-            "SMOKE step 3/4 playing: \(session.position) of \(session.duration), \(result.videoSize ?? "?"), hwdec=\(session.hardwareDecoder ?? "none")"
+            "SMOKE step 3/4 playing: \(session.position) of \(session.duration), \(result.videoSize ?? "?"), decoder=\(session.decoder ?? "none")"
         )
         if let subtitles = configuration.subtitlesManifest { try await subtitleSteps(subtitles, &result) }
         let engine = app.services.engine
         result.output = engine.diagnostics()
         Log.smoke.info("SMOKE output: \(result.output.sorted { $0.key < $1.key })")
-        guard result.output["current-ao"] != nil, result.output["audio-codec-name"] != nil else {
+        guard let delivery = result.output["audioDelivery"], ["streamCopy", "bridged", "decoded", "playerManaged"].contains(delivery) else {
             throw .noAudioOutput(result.output)
         }
         result.frameSaved = await engine.snapshot().map { Self.writePNG($0, to: Self.outputDirectory.appending(path: "smoke-frame.png")) } ?? false
