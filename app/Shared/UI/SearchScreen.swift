@@ -13,6 +13,8 @@ struct SearchScreen: View {
             }
         }
         .scrollClipDisabled()
+        // The search container proposes no width, so the scroll view would hug its content.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.canvas.ignoresSafeArea())
         .searchable(text: $query, prompt: "Movies and series")
         .onChange(of: query) { _, text in store?.send(.queryChanged(SearchText(text))) }
@@ -41,14 +43,19 @@ private struct SearchResultsView: View {
                 description: Text("Install a catalog add-on such as Cinemeta in Settings › Add-ons.")
             )
         case .searching(let text, results: .rows(_, let rows)?):
-            let found = rows.filter { !($0.items.value ?? []).isEmpty }
-            if found.isEmpty && rows.allSatisfy(\.items.isSettled) {
+            // Loading rows hold their place, so rows that answer late don't push the others around.
+            let shown = rows.filter { !$0.items.isSettled || !($0.items.value ?? []).isEmpty }
+            if shown.isEmpty {
                 ContentUnavailableView.search(text: text.rawValue)
             } else {
                 LazyVStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
-                    ForEach(found) { row in
+                    ForEach(shown) { row in
                         Shelf(title: row.id.type.pluralName) {
-                            ForEach(row.items.value ?? []) { PosterCard(preview: $0) }
+                            if let items = row.items.value {
+                                ForEach(items) { PosterCard(preview: $0) }
+                            } else {
+                                PosterPlaceholders()
+                            }
                         }
                     }
                 }

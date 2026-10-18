@@ -8,7 +8,7 @@ struct StreamsScreen: View {
 
     var body: some View {
         let state = app.streams.state
-        let sources = state.playableSources(for: request.video)
+        let sections = state.sections(for: request.video)
         HStack(alignment: .top, spacing: 60) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(request.title).font(.title2).bold().lineLimit(2)
@@ -23,7 +23,7 @@ struct StreamsScreen: View {
             }
             .frame(width: 520, alignment: .leading)
             Group {
-                if sources.isEmpty {
+                if sections.isEmpty {
                     if state.isLookingUp(request.video) {
                         ProgressView("Asking your add-ons…").frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
@@ -31,11 +31,14 @@ struct StreamsScreen: View {
                             Label("No Playable Streams", systemImage: "play.slash")
                         } description: {
                             Text("Your add-ons have nothing Takane can play for this. Torrent streams need a debrid add-on.")
+                        } actions: {
+                            // Also gives the screen something to focus, so Menu goes back from it.
+                            Button("Try Again") { app.streams.send(.lookUp(request.video)) }
                         }
                     }
                 } else {
                     StreamList(
-                        sources: sources, title: request.playerTitle,
+                        sections: sections, title: request.playerTitle,
                         resumeFrom: app.home.state.resumePosition(for: request.video) ?? .zero
                     )
                 }
@@ -54,7 +57,7 @@ struct StreamsScreen: View {
 
 private struct StreamList: View {
     @Environment(AppContext.self) private var app
-    let sources: [StreamsFeature.State.LoadedSource]
+    let sections: [StreamSection]
     let title: String
     let resumeFrom: Duration
     /// Streams often arrive after the screen opens; focus then moves to the first one.
@@ -62,25 +65,54 @@ private struct StreamList: View {
 
     var body: some View {
         List {
-            ForEach(sources) { source in
+            ForEach(sections) { section in
                 Section {
-                    ForEach(source.candidates) { candidate in
-                        Button {
-                            app.player.send(.open(candidate, from: resumeFrom, title: title))
-                        } label: {
-                            StreamRow(candidate: candidate)
+                    switch section.streams {
+                    case .loading:
+                        ProgressView()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    case .loaded(let candidates):
+                        ForEach(candidates) { candidate in
+                            Button {
+                                app.player.send(.open(candidate, from: resumeFrom, title: title))
+                            } label: {
+                                StreamRow(candidate: candidate)
+                            }
+                            .focused($focused, equals: candidate.id)
+                            .accessibilityIdentifier("streams.row")
                         }
-                        .focused($focused, equals: candidate.id)
-                        .accessibilityIdentifier("streams.row")
                     }
                 } header: {
-                    Text(source.addonName).padding(.bottom, Metrics.headerSpacing)
+                    Text(section.addonName).padding(.bottom, Metrics.headerSpacing)
                 }
             }
         }
         .accessibilityIdentifier("streams.list")
-        .onAppear { focused = sources.first?.candidates.first?.id }
+        .onChange(of: firstCandidate, initial: true) { _, first in
+            if focused == nil { focused = first }
+        }
     }
+
+    private var firstCandidate: StreamCandidate.ID? {
+        sections.lazy.compactMap { section in
+            if case .loaded(let candidates) = section.streams { candidates.first?.id } else { nil }
+        }.first
+    }
+}
+
+/// One add-on in the stream list: still answering, or the streams Takane can play from it.
+struct StreamSection: Identifiable {
+    enum Streams {
+        case loading
+        /// Never empty.
+        case loaded([StreamCandidate])
+    }
+
+    let addon: ManifestURL
+    let addonName: String
+    let streams: Streams
+
+    var id: ManifestURL { addon }
 }
 
 private struct StreamRow: View {
@@ -106,12 +138,20 @@ extension StreamsRequest {
 }
 
 extension StreamsFeature.State {
-    /// Sources with at least one stream this app can play, holding only those streams.
-    func playableSources(for item: PlayableID) -> [LoadedSource] {
-        guard case .lookingUp(item, _) = self else { return [] }
-        return loadedSources.compactMap { source in
-            let playable = source.candidates.filter { $0.source != nil }
-            return playable.isEmpty ? nil : LoadedSource(addon: source.addon, addonName: source.addonName, candidates: playable)
+    /// Sources still answering, and sources with at least one stream this app can play, holding only
+    /// those streams, in add-on order. Sources that failed or have nothing playable are left out.
+    func sections(for item: PlayableID) -> [StreamSection] {
+        guard case .lookingUp(item, let results?) = self else { return [] }
+        return results.sources.compactMap { source in
+            switch source.candidates {
+            case .loading:
+                return StreamSection(addon: source.addon, addonName: source.addonName, streams: .loading)
+            case .loaded(let candidates):
+                let playable = candidates.filter { $0.source != nil }
+                return playable.isEmpty ? nil : StreamSection(addon: source.addon, addonName: source.addonName, streams: .loaded(playable))
+            case .failed:
+                return nil
+            }
         }
     }
 
