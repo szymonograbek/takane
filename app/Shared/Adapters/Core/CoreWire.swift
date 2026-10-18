@@ -11,7 +11,7 @@ enum Loadable<Content: Decodable & Sendable>: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey { case type, content }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         switch try container.decode(String.self, forKey: .type) {
         case "Loading": self = .loading
@@ -22,6 +22,10 @@ enum Loadable<Content: Decodable & Sendable>: Decodable, Sendable {
 
     var readyContent: Content? {
         if case .ready(let content) = self { content } else { nil }
+    }
+
+    var isSettled: Bool {
+        if case .loading = self { false } else { true }
     }
 }
 
@@ -63,7 +67,7 @@ struct Addon: Decodable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey { case manifest, transportUrl }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         manifest = try container.decode(Manifest.self, forKey: .manifest)
         transportUrl = try container.decode(URL.self, forKey: .transportUrl)
@@ -85,19 +89,23 @@ struct AddonDetailsState: Decodable, Sendable {
         }
     }
 
-    let localAddon: Addon?
     let remoteAddon: RemoteAddon?
 }
 
 // MARK: - meta_details
 
 struct MetaDetailsState: Decodable, Sendable {
+    struct Selected: Decodable, Sendable {
+        let streamPath: ResourcePath?
+    }
+
     struct MetaItem: Decodable, Sendable {
         let id: String
         let type: String
         let name: String
     }
 
+    let selected: Selected?
     let metaItems: [ResourceLoadable<MetaItem>]
     let streams: [ResourceLoadable<[Stream]>]
 }
@@ -131,7 +139,7 @@ struct Stream: Decodable, Sendable {
         let filename: String?
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         // Decoded as text so one malformed URL marks one stream unsupported instead of failing the list.
         if let text = try container.decodeIfPresent(String.self, forKey: .url) {
@@ -152,18 +160,6 @@ struct Stream: Decodable, Sendable {
         requestHeaders = hints?.proxyHeaders?.request ?? [:]
         raw = try JSONValue(from: decoder)
     }
-
-    var playableURL: URL? {
-        if case .url(let url) = source { url } else { nil }
-    }
-}
-
-// MARK: - player
-
-struct PlayerState: Decodable, Sendable {
-    /// core updates this on every `TimeChanged` but only emits `NewState` for it occasionally;
-    /// the library (and so continue watching) receives it on pause, unload and every 180s.
-    let libraryItem: LibraryItem?
 }
 
 // MARK: - continue_watching_preview

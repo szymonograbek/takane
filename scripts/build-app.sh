@@ -25,7 +25,8 @@ xcodegen generate --quiet
 
 log="build/xcodebuild-$platform.log"
 if ! xcodebuild -project StremioTV.xcodeproj -scheme "$scheme" -configuration Debug \
-    -derivedDataPath build/DerivedData -destination "$destination" ${signing[@]+"${signing[@]}"} build \
+    -derivedDataPath build/DerivedData -destination "$destination" -skipPackagePluginValidation \
+    ${signing[@]+"${signing[@]}"} build \
     > "$log" 2>&1; then
     grep -E "error:" "$log" | sort -u >&2 || true
     echo "build failed, see $log" >&2

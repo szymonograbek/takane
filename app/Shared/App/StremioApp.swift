@@ -2,14 +2,21 @@ import SwiftUI
 
 @main
 struct StremioApp: App {
-    @State private var services = AppServices()
+    @State private var launch = Launch()
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(services.core)
-                .environment(services.playback)
-                .task { await services.launch() }
+            Group {
+                switch launch.state {
+                case .notStarted, .starting:
+                    ProgressView("Starting…")
+                case .ready(let app):
+                    RootView().environment(app)
+                case .failed(let error):
+                    Label(error.description, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                }
+            }
+            .task { await launch.start() }
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 860)
@@ -17,22 +24,111 @@ struct StremioApp: App {
     }
 }
 
-/// The app's long-lived objects. One instance per process.
-@MainActor
-final class AppServices {
-    let core = CoreStore()
-    let playback: PlaybackSession
+enum StartupError: Error, CustomStringConvertible {
+    case core(CoreError)
+    case player(MPVEngine.StartError)
 
-    init() {
-        playback = PlaybackSession(core: core, player: PlayerController())
-        let info = Bundle.main.infoDictionary
-        Log.app.info("launch \(info?["CFBundleShortVersionString"] ?? "?") (\(info?["CFBundleVersion"] ?? "?")), log file \(Log.fileURL.path)")
+    var description: String {
+        switch self {
+        case .core(let error): "core failed to start: \(error)"
+        case .player(let error): "mpv failed to start: \(error)"
+        }
+    }
+}
+
+/// The provider behind each port. Swapping a provider is a change here and nowhere else.
+struct Services: Sendable {
+    let addons: any AddonService
+    let streams: any StreamService
+    let library: any LibraryService
+    let tracker: any PlaybackTracker
+    let engine: any PlaybackEngine
+
+    @MainActor
+    static func live(storageDirectory: URL) async throws(StartupError) -> Services {
+        let core: CoreRuntime
+        do {
+            core = try await CoreRuntime.start(storageDirectory: storageDirectory)
+        } catch {
+            throw .core(error)
+        }
+        let engine: MPVEngine
+        do {
+            engine = try MPVEngine()
+        } catch {
+            throw .player(error)
+        }
+        return Services(
+            addons: CoreAddonService(runtime: core),
+            streams: CoreStreamService(runtime: core),
+            library: CoreLibraryService(runtime: core),
+            tracker: CorePlaybackTracker(runtime: core),
+            engine: engine
+        )
+    }
+}
+
+/// What screens use once the app has started: the services and the app-wide feature stores.
+@MainActor
+@Observable
+final class AppContext {
+    let services: Services
+    let player: FeatureStore<PlayerFeature>
+    let addons: FeatureStore<AddonsFeature>
+    let streams: FeatureStore<StreamsFeature>
+    let overview: FeatureStore<OverviewFeature>
+
+    init(services: Services) {
+        self.services = services
+        player = FeatureStore(
+            .idle,
+            dependencies: PlayerFeature.Dependencies(engine: services.engine, tracker: services.tracker),
+            start: [.listen]
+        )
+        addons = FeatureStore(
+            AddonsFeature.State(),
+            dependencies: AddonsFeature.Dependencies(addons: services.addons),
+            start: [.observeInstalled]
+        )
+        streams = FeatureStore(.idle, dependencies: StreamsFeature.Dependencies(streams: services.streams))
+        overview = FeatureStore(
+            OverviewFeature.State(),
+            dependencies: OverviewFeature.Dependencies(library: services.library),
+            start: [.observeAccount, .observeContinueWatching]
+        )
+    }
+}
+
+/// Starts the services once per process. Screens exist only after it succeeds.
+@MainActor
+@Observable
+final class Launch {
+    enum State {
+        case notStarted
+        case starting
+        case ready(AppContext)
+        case failed(StartupError)
     }
 
-    func launch() async {
-        await core.start(storageDirectory: Self.storageDirectory)
+    private(set) var state = State.notStarted
+
+    func start() async {
+        guard case .notStarted = state else { return }
+        state = .starting
+        let info = Bundle.main.infoDictionary
+        Log.app.info("launch \(info?["CFBundleShortVersionString"] ?? "?") (\(info?["CFBundleVersion"] ?? "?")), log file \(Log.fileURL.path)")
+        let app: AppContext
+        do {
+            app = AppContext(services: try await Services.live(storageDirectory: Self.storageDirectory))
+        } catch {
+            Log.app.error("\(error)")
+            state = .failed(error)
+            return
+        }
+        state = .ready(app)
+        Log.core.info("core ready")
         if let smoke = SmokeTest.Configuration(options: LaunchOptions.current) {
-            await SmokeTest(configuration: smoke, core: core, playback: playback).run()
+            await SmokeTest(configuration: smoke, app: app).run()
         }
     }
 

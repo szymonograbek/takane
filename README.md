@@ -43,4 +43,6 @@ scripts/smoke.sh --tvos
 
 UI verification on tvOS (agent-device driving the simulator with remote presses, evidence under `build/verify/`): see `.claude/skills/verify-stremio-tv/SKILL.md` and its feature map.
 
+Unit tests for the domain and feature state machines: `scripts/test.sh`. SwiftLint runs on every build as an Xcode build tool plugin; its warnings fail the build (`.swiftlint.yml`). Architecture and conventions for contributors and agents: [CLAUDE.md](CLAUDE.md) and [docs/architecture.md](docs/architecture.md).
+
 Rust tests: `cd core && rustup run nightly-2026-10-18 cargo test` (the toolchain in `rust-toolchain.toml`; a Homebrew `cargo` on PATH would ignore it).

@@ -10,7 +10,7 @@ The app is a SwiftUI client over stremio-core (Rust, `core/`) with mpv playback.
 Two harnesses:
 
 - **tvOS UI drive.** `.claude/skills/verify-stremio-tv/scripts/tv.sh` (below). Drives the real tvOS UI with remote presses through `agent-device`. This is the user path; prefer it.
-- **Smoke journey.** `scripts/smoke.sh [--tvos] [type/id]`. Launches the app in a mode that runs install → streams → play 10 s → pause → continue watching by itself and writes `smoke-result.json`. It calls the same `CoreStore` workflows the UI buttons call, but no UI. Use it for macOS (no UI driver is set up there) and as a fast regression check on both platforms. It is not proof that a UI control works.
+- **Smoke journey.** `scripts/smoke.sh [--tvos] [type/id]`. Launches the app in a mode that runs install → streams → play 10 s → pause → continue watching by itself and writes `smoke-result.json`. It sends the same feature events the UI buttons send, but drives no UI. Use it for macOS (no UI driver is set up there) and as a fast regression check on both platforms. It is not proof that a UI control works.
 
 Both need the debrid add-on URL: `STREMIO_SMOKE_ADDON_URL` in the environment or in the git-ignored `.env.smoke` at the repo root (`STREMIO_SMOKE_ADDON_URL=https://…/manifest.json`). It holds credentials. Never print it, commit it, or paste it into evidence.
 

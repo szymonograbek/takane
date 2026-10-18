@@ -1,0 +1,66 @@
+# Runs on every app and test build (SwiftLint build tool plugin, project.yml). Warnings fail the build.
+strict: true
+included:
+  - app
+
+disabled_rules:
+  # The codebase keeps trailing commas in multi-line literals.
+  - trailing_comma
+  # String(decoding:as:) repairs invalid UTF-8, which is what log and diagnostic text wants.
+  - optional_data_string_conversion
+
+opt_in_rules:
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - discouraged_optional_boolean
+  - fatal_error_message
+  - unowned_variable_capture
+  - private_swiftui_state
+  - contains_over_first_not_nil
+  - contains_over_filter_count
+  - empty_count
+  - first_where
+  - last_where
+  - sorted_first_last
+  - redundant_nil_coalescing
+  - toggle_bool
+  - identical_operands
+  - yoda_condition
+  - modifier_order
+  - overridden_super_call
+
+custom_rules:
+  unchecked_sendable:
+    name: Unchecked Sendable
+    regex: '@unchecked\s+Sendable'
+    message: "Prove thread safety to the compiler instead. If it truly cannot, disable this rule on the line and say why."
+    severity: error
+  nonisolated_unsafe:
+    name: Unsafe nonisolated
+    regex: 'nonisolated\(unsafe\)'
+    message: "Model the shared state as Sendable instead. If it truly cannot be, disable this rule on the line and say why."
+    severity: error
+  assume_isolated:
+    name: Assumed isolation
+    regex: 'assumeIsolated'
+    message: "Hop to the actor instead of asserting you are on it."
+    severity: error
+
+line_length:
+  warning: 160
+  ignores_comments: true
+  ignores_urls: true
+identifier_name:
+  excluded: [id, by, of, to, ui, x, y]
+type_name:
+  excluded: [ID]
+nesting:
+  type_level: 2
+cyclomatic_complexity:
+  ignores_case_statements: true
+file_length:
+  warning: 400
+function_body_length:
+  warning: 60
+type_body_length:
+  warning: 250
