@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import QuartzCore
 
 struct VideoSize: Hashable, Sendable {
@@ -27,8 +28,8 @@ struct MediaTrack: Identifiable, Hashable, Sendable {
     /// Audio only.
     let channelCount: Int?
     let isForced: Bool
-    /// Added from outside the stream, such as an add-on subtitle file.
-    let isExternal: Bool
+    /// The file the track was added from, such as an add-on subtitle. Nil for the stream's own tracks.
+    let externalFile: URL?
     let isSelected: Bool
 }
 
@@ -90,6 +91,8 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func seek(to position: Duration)
     func select(_ track: MediaTrack.ID)
     func turnOffSubtitles()
+    /// Adds a subtitle file as a track and selects it. A file that fails to load is logged.
+    func addSubtitles(_ file: URL, title: String, language: String)
     func setSpeed(_ speed: PlaybackSpeed)
     func stop()
     /// Output health by engine property name, for logs and the smoke test.

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 struct PlayerFeatureTests {
@@ -97,7 +98,13 @@ struct PlayerFeatureTests {
 struct PlayerControlsTests {
     private let english = MediaTrack(
         id: MediaTrack.ID(kind: .subtitle, number: 1), title: nil, language: "eng", codec: "subrip",
-        channelCount: nil, isForced: false, isExternal: false, isSelected: false
+        channelCount: nil, isForced: false, externalFile: nil, isSelected: false
+    )
+    private let synced = AddonSubtitle(
+        id: AddonSubtitle.ID(addon: Fixture.manifest, key: "synced-1"),
+        url: URL(string: "https://subs.example/synced-1.srt").require(),
+        language: "pol",
+        label: "Synced"
     )
     private let intro = SkipSegment(kind: .intro, range: .seconds(60)..<(.seconds(90)), fit: .matched, confidence: 1)
 
@@ -116,6 +123,37 @@ struct PlayerControlsTests {
         #expect(PlayerFeature.reduce(&state, .select(MediaTrack.ID(kind: .subtitle, number: 9))).isEmpty)
         _ = PlayerFeature.reduce(&state, .engine(.tracks([english.selected])))
         #expect(PlayerFeature.reduce(&state, .select(english.id)).isEmpty)
+    }
+
+    @Test func anAddonSubtitleIsAddedOnceThenSelectedAsItsTrack() {
+        var state = playing()
+        let choice = PlayerFeature.SubtitleChoice.addon(synced.id)
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)).isEmpty)
+
+        let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
+        _ = PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source]))
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.addSubtitles(synced)])
+
+        let added = MediaTrack(
+            id: MediaTrack.ID(kind: .subtitle, number: 2), title: "Synced", language: "pol", codec: "subrip",
+            channelCount: nil, isForced: false, externalFile: synced.url, isSelected: true
+        )
+        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, added])))
+        #expect(state.session?.subtitleChoice == choice)
+        #expect(state.session?.builtInSubtitles == [english])
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)).isEmpty)
+
+        _ = PlayerFeature.reduce(&state, .engine(.tracks([english.selected, added.unselected])))
+        #expect(state.session?.subtitleChoice == .builtIn(english.id))
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.select(added.id)])
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.off)) == [.turnOffSubtitles])
+    }
+
+    @Test func subtitlesForAnotherCandidateAreDropped() {
+        var state = playing()
+        let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
+        _ = PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(index: 1), [source]))
+        #expect(state.session?.addonSubtitles == [])
     }
 
     @Test func speedChangesOnlyWhenDifferent() {
@@ -149,8 +187,13 @@ struct PlayerControlsTests {
 }
 
 private extension MediaTrack {
+    var unselected: MediaTrack {
+        MediaTrack(id: id, title: title, language: language, codec: codec, channelCount: channelCount,
+                   isForced: isForced, externalFile: externalFile, isSelected: false)
+    }
+
     var selected: MediaTrack {
         MediaTrack(id: id, title: title, language: language, codec: codec, channelCount: channelCount,
-                   isForced: isForced, isExternal: isExternal, isSelected: true)
+                   isForced: isForced, externalFile: externalFile, isSelected: true)
     }
 }

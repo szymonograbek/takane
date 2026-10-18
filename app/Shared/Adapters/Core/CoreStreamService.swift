@@ -34,7 +34,7 @@ struct CoreStreamService: StreamService {
                     if isSelected { break } else { continue }
                 }
                 isSelected = true
-                let current = Self.results(for: item, from: details, addonNames: Self.addonNames(runtime))
+                let current = Self.results(for: item, from: details, addonNames: runtime.addonNames())
                 continuation.yield(current)
                 if current.isComplete {
                     Log.core.info("\(current.sources.count) addon responses for \(item) in \(ContinuousClock.now - started)")
@@ -45,16 +45,6 @@ struct CoreStreamService: StreamService {
         }
         continuation.onTermination = { _ in task.cancel() }
         return results
-    }
-
-    private static func addonNames(_ runtime: CoreRuntime) -> [URL: String] {
-        do {
-            let ctx = try runtime.state(.ctx, as: CtxState.self)
-            return Dictionary(ctx.profile.addons.map { ($0.transportUrl, $0.manifest.name) }) { first, _ in first }
-        } catch {
-            Log.core.error("reading addon names failed: \(error)")
-            return [:]
-        }
     }
 
     private static func results(for item: PlayableID, from details: MetaDetailsState, addonNames: [URL: String]) -> StreamResults {
@@ -93,7 +83,12 @@ struct CoreStreamService: StreamService {
         case .url(let url): .playable(PlaybackSource(url: url, headers: stream.requestHeaders))
         case .unsupported(let kind): .unsupported(kind: kind)
         }
-        var selection: [String: JSONValue] = ["stream": stream.raw, "streamRequest": streamRequest.json]
+        // The subtitles path makes core's player model ask subtitle add-ons for this item.
+        var selection: [String: JSONValue] = [
+            "stream": stream.raw,
+            "streamRequest": streamRequest.json,
+            "subtitlesPath": ResourcePath.subtitles(type: item.coreType, id: item.rawValue).json,
+        ]
         selection["metaRequest"] = metaRequest?.json
         return StreamCandidate(
             id: id,

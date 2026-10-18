@@ -47,6 +47,7 @@ struct Services: Sendable {
     let tracker: any PlaybackTracker
     let engine: any PlaybackEngine
     let skipSegments: any SkipSegmentService
+    let subtitles: any SubtitleService
 
     @MainActor
     static func live(storageDirectory: URL) async throws(StartupError) -> Services {
@@ -71,7 +72,8 @@ struct Services: Sendable {
             preferences: CorePreferencesService(runtime: core),
             tracker: CorePlaybackTracker(runtime: core),
             engine: engine,
-            skipSegments: SkipDBSkipSegmentService()
+            skipSegments: SkipDBSkipSegmentService(),
+            subtitles: CoreSubtitleService(runtime: core)
         )
     }
 }
@@ -94,7 +96,8 @@ final class AppContext {
             .idle,
             dependencies: PlayerFeature.Dependencies(
                 engine: services.engine, tracker: services.tracker,
-                skipSegments: services.skipSegments, preferences: services.preferences
+                skipSegments: services.skipSegments, preferences: services.preferences,
+                subtitles: services.subtitles
             ),
             start: [.listen]
         )

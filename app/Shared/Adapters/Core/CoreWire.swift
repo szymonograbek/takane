@@ -262,6 +262,28 @@ struct Stream: Decodable, Sendable {
     }
 }
 
+// MARK: - player
+
+struct PlayerState: Decodable, Sendable {
+    /// What `CoreAction.Load.player` loaded, as core echoes it back.
+    struct Selected: Decodable, Sendable {
+        let stream: Stream
+        let subtitlesPath: ResourcePath?
+    }
+
+    let selected: Selected?
+    let subtitles: [ResourceLoadable<[Subtitles]>]
+}
+
+/// core's `Subtitles`, one file an add-on offers.
+struct Subtitles: Decodable, Sendable {
+    let id: String
+    let lang: String
+    /// Decoded as text so one malformed URL drops that file instead of the add-on's list.
+    let url: String
+    let label: String?
+}
+
 // MARK: - continue_watching_preview
 
 struct ContinueWatchingState: Decodable, Sendable {

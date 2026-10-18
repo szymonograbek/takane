@@ -134,6 +134,13 @@ final class MPVEngine: PlaybackEngine {
         setOption("sid", "no")
     }
 
+    /// Asynchronous, because mpv downloads the file before the command returns.
+    func addSubtitles(_ file: URL, title: String, language: String) {
+        let arguments = ["sub-add", file.absoluteString, "select", title, language]
+        Log.player.info("sub-add \(file.absoluteString) \(language)")
+        check(withCArguments(arguments) { mpv_command_async(handle, 0, $0) }, "command sub-add")
+    }
+
     func setSpeed(_ speed: PlaybackSpeed) {
         var rate = speed.rawValue
         check(mpv_set_property(handle, "speed", MPV_FORMAT_DOUBLE, &rate), "set speed=\(rate)")
@@ -311,6 +318,12 @@ private final class MPVEventPump: @unchecked Sendable { // swiftlint:disable:thi
         case MPV_EVENT_PROPERTY_CHANGE:
             guard let change = event.data?.assumingMemoryBound(to: mpv_event_property.self).pointee else { return nil }
             return propertyEvent(change)
+        case MPV_EVENT_COMMAND_REPLY:
+            // Only `sub-add` runs asynchronously.
+            if event.error < 0 {
+                Log.player.error("sub-add failed: \(String(cString: mpv_error_string(event.error)))")
+            }
+            return nil
         case MPV_EVENT_SHUTDOWN:
             Log.player.info("mpv shutdown")
             return nil

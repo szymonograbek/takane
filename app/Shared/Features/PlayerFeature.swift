@@ -7,6 +7,14 @@ enum PlayerFeature: Feature {
         let tracker: any PlaybackTracker
         let skipSegments: any SkipSegmentService
         let preferences: any PreferencesService
+        let subtitles: any SubtitleService
+    }
+
+    /// What shows as subtitles: nothing, one of the stream's own tracks, or a file from an add-on.
+    enum SubtitleChoice: Hashable, Sendable {
+        case off
+        case builtIn(MediaTrack.ID)
+        case addon(AddonSubtitle.ID)
     }
 
     enum Phase: String, Sendable {
@@ -27,6 +35,8 @@ enum PlayerFeature: Feature {
         /// The whole second last reported to the tracker.
         var reportedSecond: Int64?
         var tracks: [MediaTrack] = []
+        /// What each add-on offers for this stream, apart from the stream's own tracks.
+        var addonSubtitles: [SubtitleSource] = []
         var speed = PlaybackSpeed.normal
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
@@ -44,12 +54,13 @@ enum PlayerFeature: Feature {
         case togglePause
         case seek(by: Duration)
         case select(MediaTrack.ID)
-        case turnOffSubtitles
+        case chooseSubtitles(SubtitleChoice)
         case setSpeed(PlaybackSpeed)
         case skip(SkipSegment)
         case stop
         case engine(PlaybackEvent)
         case segmentsFound(PlayableID, Result<[SkipSegment], SkipSegmentError>)
+        case subtitlesFound(StreamCandidate, [SubtitleSource])
     }
 
     enum Report: Equatable, Sendable {
@@ -61,12 +72,14 @@ enum PlayerFeature: Feature {
     enum Effect: Equatable, Sendable {
         /// Feeds engine events back as `.engine`. Start it once, when the store is created.
         case listen
+        /// Starts playback, then follows the add-ons' subtitles for it until another candidate replaces it.
         case begin(StreamCandidate, PlaybackSource, from: Duration)
         case setPaused(Bool)
         case seek(by: Duration)
         case seekTo(Duration)
         case select(MediaTrack.ID)
         case turnOffSubtitles
+        case addSubtitles(AddonSubtitle)
         case setSpeed(PlaybackSpeed)
         case findSegments(PlayableID, duration: Duration)
         case stop
@@ -99,8 +112,8 @@ enum PlayerFeature: Feature {
         case (.active(let session), .select(let track)):
             return session.tracks.contains { $0.id == track && !$0.isSelected } ? [.select(track)] : []
 
-        case (.active, .turnOffSubtitles):
-            return [.turnOffSubtitles]
+        case (.active(let session), .chooseSubtitles(let choice)):
+            return choose(choice, in: session)
 
         case (.active(let session), .setSpeed(let speed)):
             return speed == session.speed ? [] : [.setSpeed(speed)]
@@ -113,6 +126,11 @@ enum PlayerFeature: Feature {
             case .success(let segments): .loaded(segments)
             case .failure(let error): .failed(error)
             }
+            state = .active(session)
+            return []
+
+        case (.active(var session), .subtitlesFound(let candidate, let sources)) where candidate == session.candidate:
+            session.addonSubtitles = sources
             state = .active(session)
             return []
 
@@ -131,10 +149,25 @@ enum PlayerFeature: Feature {
 
         case (.idle, .togglePause), (.idle, .seek), (.idle, .stop), (.idle, .engine),
              (.failed, .togglePause), (.failed, .seek), (.failed, .engine),
-             (.idle, .select), (.idle, .turnOffSubtitles), (.idle, .setSpeed), (.idle, .skip), (.idle, .segmentsFound),
-             (.failed, .select), (.failed, .turnOffSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
-             (.active, .segmentsFound):
+             (.idle, .select), (.idle, .chooseSubtitles), (.idle, .setSpeed), (.idle, .skip), (.idle, .segmentsFound),
+             (.failed, .select), (.failed, .chooseSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
+             (.idle, .subtitlesFound), (.failed, .subtitlesFound),
+             (.active, .segmentsFound), (.active, .subtitlesFound):
             return []
+        }
+    }
+
+    /// An add-on file plays from the track it was added as; one not added yet is added.
+    private static func choose(_ choice: SubtitleChoice, in session: Session) -> [Effect] {
+        switch choice {
+        case .off:
+            return session.subtitleChoice == .off ? [] : [.turnOffSubtitles]
+        case .builtIn(let track):
+            return session.tracks.contains { $0.id == track && $0.externalFile == nil && !$0.isSelected } ? [.select(track)] : []
+        case .addon(let id):
+            guard let subtitle = session.addonSubtitle(id) else { return [] }
+            guard let track = session.tracks.first(where: { $0.externalFile == subtitle.url }) else { return [.addSubtitles(subtitle)] }
+            return track.isSelected ? [] : [.select(track.id)]
         }
     }
 
@@ -199,6 +232,9 @@ enum PlayerFeature: Feature {
             tracker.begin(candidate)
             engine.load(source, from: start, languages: languages)
             engine.setPaused(false)
+            for await sources in dependencies.subtitles.subtitles(for: candidate, playing: source) {
+                send(.subtitlesFound(candidate, sources))
+            }
         case .setPaused(let paused):
             engine.setPaused(paused)
         case .seek(let offset):
@@ -209,6 +245,8 @@ enum PlayerFeature: Feature {
             engine.select(track)
         case .turnOffSubtitles:
             engine.turnOffSubtitles()
+        case .addSubtitles(let subtitle):
+            engine.addSubtitles(subtitle.url, title: subtitle.label ?? subtitle.language, language: subtitle.language)
         case .setSpeed(let speed):
             engine.setSpeed(speed)
         case .findSegments(let item, let duration):
@@ -228,6 +266,24 @@ enum PlayerFeature: Feature {
         case .report(.ended):
             tracker.ended()
         }
+    }
+}
+
+extension PlayerFeature.Session {
+    /// The stream's own subtitle tracks, without files added from add-ons.
+    var builtInSubtitles: [MediaTrack] {
+        tracks.filter { $0.id.kind == .subtitle && $0.externalFile == nil }
+    }
+
+    var subtitleChoice: PlayerFeature.SubtitleChoice {
+        guard let track = tracks.first(where: { $0.id.kind == .subtitle && $0.isSelected }) else { return .off }
+        guard let file = track.externalFile else { return .builtIn(track.id) }
+        let subtitle = addonSubtitles.lazy.compactMap(\.subtitles.value).joined().first { $0.url == file }
+        return subtitle.map { .addon($0.id) } ?? .off
+    }
+
+    func addonSubtitle(_ id: AddonSubtitle.ID) -> AddonSubtitle? {
+        addonSubtitles.first { $0.addon == id.addon }?.subtitles.value?.first { $0.id == id }
     }
 }
 
