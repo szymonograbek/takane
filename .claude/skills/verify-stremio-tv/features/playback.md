@@ -1,12 +1,12 @@
 # Playback
 
-Choosing a stream opens a full-screen player that shows only the video. Select shows the controls: title, a focusable progress bar, elapsed and remaining time, back/forward 10 s, play/pause, and menus for subtitles, audio and speed. The controls hide after 5 s of playing. Menu closes a menu, then the controls, then the player.
+Choosing a stream opens a full-screen player that shows only the video. Select shows the controls: title, a focusable progress bar, elapsed and remaining time, back/forward 10 s, play/pause, and buttons for subtitles, audio and speed that open a panel of choices above them, focused on the current one. The controls hide after 5 s of playing, never while a panel is open. On the subtitles panel each add-on is a row that opens a page of its files. Menu goes back from an add-on page, then closes the panel, then the controls, then the player. Closing a panel puts focus straight back on its button.
 
 ## Sub-features
 
 - `play-open` starts the stream; with a saved position it starts there.
 - `play-controls` shows the controls with focus on play/pause.
-- `play-speed` changes mpv's speed from the Speed menu.
+- `play-speed` changes mpv's speed from the Speed panel.
 - `play-subtitles` lists embedded tracks and selects one.
 - `play-seek` skips 10 s with left and right while the controls are hidden.
 - `play-timeline` on the focused progress bar: taps jump 10 s, quick taps jump 10 s further each (up to 60 s), a hold scans at 2× and further presses change the rate.
@@ -24,8 +24,8 @@ Preconditions:
 
 - **Open.** `$T select`. Within 30 s `$T text player.status` reads `… · playing · 1920×1080 · hwdec no`.
 - **Controls.** After 5 s the controls are gone (screenshot shows video only). `$T select`; `$T focused` prints `player.playPause`.
-- **Speed.** `$T focus Speed right 6`, `$T select`, press down 4 times, `$T select`. The log shows `property speed → speed(…oneAndAHalf)`.
-- **Subtitles.** `$T focus Subtitles left 3`, `$T select`, `$T remote down`, `$T select`. The log shows `set sid=1` and the track list reports it selected.
+- **Speed.** `$T focus player.speed right 6`, `$T select` (focus lands on Normal, `player.option`), press down twice, `$T select`. The log shows `property speed → speed(…oneAndAHalf)`.
+- **Subtitles.** `$T focus player.subtitles left 3`, `$T select`, `$T remote down`, `$T select`. The log shows `set sid=1` and the track list reports it selected.
 - **Timeline.** Controls showing, `$T focus player.progress up 3`, then right away `$T remote right` three times: `player.status` jumps about 60 s (10 + 20 + 30). Hold with `agent-device tv-remote press right --duration-ms 800 --platform ios --target tv --session stremio-tv-verify`: the phase reads `paused`, the time keeps advancing about 2 s per second, and the snapshot has a `2×` label. `$T remote right` makes it `4×`; `$T remote left` twice reads `playing` again. Hold again and `$T select`: `playing`.
 - **Stop.** `$T remote menu` until the stream list is back (closes the controls, then the player).
 

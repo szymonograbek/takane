@@ -66,8 +66,8 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `streams.row` | each playable stream (unplayable ones are not listed) |
 | `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · hwdec <name>` |
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
-| `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls; Menu buttons report focus by label (`Subtitles`, `Audio`, `Speed`) |
-| `player.subtitles.addon` | one add-on's submenu inside the subtitles menu, labelled with the add-on's name |
+| `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls |
+| `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
 | `settings.account`, `settings.addons`, `settings.playback`, `settings.about` | Settings rows |
 | `addons.install`, `addons.manifestURL`, `addons.status`, `addons.row` | Settings › Add-ons |
 
