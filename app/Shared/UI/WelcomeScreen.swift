@@ -3,6 +3,7 @@ import SwiftUI
 /// The first launch: sign in to sync with Stremio, or start without an account.
 struct WelcomeScreen: View {
     let continueWithoutAccount: () -> Void
+    @FocusState private var isSignInFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -20,11 +21,14 @@ struct WelcomeScreen: View {
                     } label: {
                         Label("Sign In with Stremio", systemImage: "person.crop.circle")
                     }
+                    .primaryActionStyle()
+                    .focused($isSignInFocused)
                     .accessibilityIdentifier("welcome.signIn")
                     Button("Continue Without Account", action: continueWithoutAccount)
                         .accessibilityIdentifier("welcome.continue")
                 }
                 .padding(.top, 20)
+                .defaultFocus($isSignInFocused, true)
             }
             .padding(Metrics.screenPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
