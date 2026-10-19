@@ -222,6 +222,13 @@ mod tests {
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullAddonsFromAPI"}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"SyncLibraryWithAPI"}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"ClearSearchHistory"}}}"#,
+            r#"{"field":"library","action":{"action":"Load","args":{"model":"LibraryWithFilters","args":{"request":{"type":null,"sort":"lastwatched"}}}}}"#,
+            r#"{"field":"library","action":{"action":"Load","args":{"model":"LibraryWithFilters","args":{"request":{"type":"series","sort":"notwatched"}}}}}"#,
+            r#"{"field":"library","action":{"action":"LibraryWithFilters","args":{"action":"LoadNextPage"}}}"#,
+            r#"{"field":"calendar","action":{"action":"Unload"}}"#,
+            r#"{"field":"calendar","action":{"action":"Load","args":{"model":"Calendar","args":null}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"AddToLibrary","args":{"id":"tt0944947","type":"series","name":"Game of Thrones","poster":"https://images.example/poster.jpg","posterShape":"poster"}}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"RemoveFromLibrary","args":"tt0944947"}}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);
