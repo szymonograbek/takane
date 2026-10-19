@@ -197,35 +197,6 @@ struct LanguagePicker: View {
     }
 }
 
-/// A pushed list of choices with a checkmark on the current one. Choosing one goes back.
-private struct ChoiceList<Value: Hashable>: View {
-    @Environment(\.dismiss) private var dismiss
-    let title: String
-    let symbol: String
-    let choices: [(name: String, value: Value)]
-    let selection: Value
-    let choose: (Value) -> Void
-
-    var body: some View {
-        SettingsPage(title: title) {
-            SettingsSymbol(name: symbol)
-        } rows: {
-            ForEach(choices, id: \.value) { choice in
-                Button {
-                    choose(choice.value)
-                    dismiss()
-                } label: {
-                    HStack {
-                        Text(choice.name)
-                        Spacer()
-                        if choice.value == selection { Image(systemName: "checkmark") }
-                    }
-                }
-            }
-        }
-    }
-}
-
 extension Language {
     /// The languages offered in Settings, as Stremio stores them.
     static let common: [Language] = [

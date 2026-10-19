@@ -78,7 +78,7 @@ private struct LibraryContent: View {
     }
 }
 
-/// The type and sort menus above the grid.
+/// The type and sort above the grid, each a button that opens its list of choices.
 private struct LibraryFilters: View {
     let filter: LibraryFilter
     /// The types the library holds.
@@ -87,23 +87,22 @@ private struct LibraryFilters: View {
 
     var body: some View {
         HStack(spacing: 24) {
-            Menu {
-                Picker("Type", selection: Binding(get: { filter.type }, set: { select(LibraryFilter(type: $0, sort: filter.sort)) })) {
-                    Text("All Types").tag(ContentType?.none)
-                    ForEach(choices, id: \.self) { type in
-                        Text(type.pluralName).tag(Optional(type))
-                    }
-                }
+            NavigationLink {
+                ChoiceList(
+                    title: "Type", symbol: "line.3.horizontal.decrease",
+                    choices: [(name: "All Types", value: nil)] + choices.map { (name: $0.pluralName, value: Optional($0)) },
+                    selection: filter.type
+                ) { select(LibraryFilter(type: $0, sort: filter.sort)) }
             } label: {
                 Label(filter.type?.pluralName ?? "All Types", systemImage: "line.3.horizontal.decrease")
             }
             .accessibilityIdentifier("library.type")
-            Menu {
-                Picker("Sort", selection: Binding(get: { filter.sort }, set: { select(LibraryFilter(type: filter.type, sort: $0)) })) {
-                    ForEach(LibrarySort.allCases, id: \.self) { sort in
-                        Text(sort.name).tag(sort)
-                    }
-                }
+            NavigationLink {
+                ChoiceList(
+                    title: "Sort", symbol: "arrow.up.arrow.down",
+                    choices: LibrarySort.allCases.map { (name: $0.name, value: $0) },
+                    selection: filter.sort
+                ) { select(LibraryFilter(type: filter.type, sort: $0)) }
             } label: {
                 Label(filter.sort.name, systemImage: "arrow.up.arrow.down")
             }

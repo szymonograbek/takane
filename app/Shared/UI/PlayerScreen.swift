@@ -160,8 +160,10 @@ struct PlayerScreen: View {
     private func closePanel() {
         guard let open = panel else { return }
         if let parent = open.parent {
-            focus = .link(open)
             panel = parent
+            // Once the parent's rows are in place; until then the focus engine moves focus off the
+            // closed page's row to the parent's first.
+            Task { focus = .link(open) }
         } else {
             focus = open.button
             panel = nil

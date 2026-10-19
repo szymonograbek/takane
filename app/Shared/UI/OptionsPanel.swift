@@ -68,20 +68,36 @@ enum PanelRow {
     }
 }
 
-/// A page of choices above the transport bar, the current one checked. It stands in for a system
-/// `Menu`, which on tvOS leaves nothing focused for over a second after it closes.
+/// A page of choices above the transport bar, the current one checked, in a system list so its rows
+/// look and focus like the system player's. It stands in for a system `Menu`, which on tvOS leaves
+/// nothing focused for over a second after it closes.
 struct OptionsPanel: View {
     let sections: [PanelSection]
     var focus: FocusState<PlayerFocus?>.Binding
     let choose: (PlayerFeature.Event) -> Void
     let open: (PlayerPanel) -> Void
+    /// The rows' height, so a short page hugs its rows instead of filling the panel.
+    @State private var contentHeight: CGFloat?
 
     var body: some View {
-        ViewThatFits(in: .vertical) {
-            list
-            ScrollView { list }
+        List {
+            ForEach(Array(numbered.enumerated()), id: \.offset) { _, numbered in
+                Section {
+                    ForEach(Array(numbered.section.rows.enumerated()), id: \.offset) { offset, row in
+                        rowView(row, index: numbered.start + offset)
+                    }
+                } header: {
+                    if let title = numbered.section.title { Text(title) }
+                }
+            }
         }
-        .frame(width: Metrics.playerPanelWidth)
+        #if os(macOS)
+        .scrollContentBackground(.hidden)
+        #endif
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom } action: { _, height in
+            contentHeight = height
+        }
+        .frame(width: Metrics.playerPanelWidth, height: min(contentHeight ?? listMaxHeight, listMaxHeight))
         .padding(Metrics.playerPanelPadding)
         .controlBackground(in: .rect(cornerRadius: Metrics.cornerRadius * 2, style: .continuous))
         // Sized on its own rather than by the button row it overlays; short pages sit at the bottom.
@@ -91,18 +107,7 @@ struct OptionsPanel: View {
         #endif
     }
 
-    private var list: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(numbered.enumerated()), id: \.offset) { _, numbered in
-                if let title = numbered.section.title {
-                    Text(title).font(.caption).foregroundStyle(Palette.secondary).padding(.top, 8)
-                }
-                ForEach(Array(numbered.section.rows.enumerated()), id: \.offset) { offset, row in
-                    rowView(row, index: numbered.start + offset)
-                }
-            }
-        }
-    }
+    private var listMaxHeight: CGFloat { Metrics.playerPanelMaxHeight - Metrics.playerPanelPadding * 2 }
 
     /// Each section with the page-wide index of its first row, which focus names rows by.
     private var numbered: [(section: PanelSection, start: Int)] {
@@ -131,7 +136,6 @@ struct OptionsPanel: View {
             .accessibilityIdentifier("player.option")
         case .note(let label, let detail):
             LabeledContent(label, value: detail)
-                .padding(.horizontal, Metrics.playerPanelPadding)
                 .foregroundStyle(Palette.secondary)
         }
     }
