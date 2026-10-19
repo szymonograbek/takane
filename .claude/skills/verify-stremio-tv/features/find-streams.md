@@ -6,7 +6,7 @@ Home shows a hero, Continue Watching and one row per add-on catalog. Search find
 
 - `home-rows` lists catalog rows titled with their type ("Popular Movies").
 - `search` shows results grouped by type as the user types.
-- `details` shows logo or title, year, runtime, genres, rating, description, Play and episodes.
+- `details` shows logo or title, year, runtime, genres, rating, description, Play and episodes. Each episode card shows its still, its number and name, and its overview; with Hide Spoilers on, unwatched ones blur the still and drop the overview ([Playback settings](./playback-settings.md)).
 - `streams` lists playable streams per add-on; torrent-only results are hidden.
 - `no-streams` explains when nothing is playable.
 
