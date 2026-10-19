@@ -1,0 +1,9 @@
+// Code signing for local builds. Builds without an Apple account sign macOS ad hoc and leave tvOS
+// devices unsigned. To sign with your own account, create the git-ignored Signing.local.xcconfig:
+//
+//   DEVELOPMENT_TEAM = <your team id>
+//   CODE_SIGN_IDENTITY[sdk=macosx*] = Apple Development: <you@example.com> (<certificate id>)
+DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY[sdk=macosx*] = -
+
+#include? "Signing.local.xcconfig"
