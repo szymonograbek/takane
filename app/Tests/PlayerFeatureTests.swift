@@ -14,7 +14,7 @@ struct PlayerFeatureTests {
     @Test func openingAPlayableCandidateBeginsPlayback() {
         var state = PlayerFeature.State.idle
         let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .zero)])
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .zero), .watchUpNext(Fixture.candidate())])
         #expect(state.statusLine == "0:00:00 / 0:00:00 · opening")
     }
 
@@ -265,7 +265,8 @@ struct PlayerControlsTests {
 
     @Test func onlyKnownUnselectedTracksAreSelected() {
         var state = playing()
-        #expect(PlayerFeature.reduce(&state, .select(english.id)) == [.select(english.id)])
+        let remembered = TrackChoices(subtitles: .builtIn(TrackChoices.Track(number: 1, language: "eng")), speed: .normal)
+        #expect(PlayerFeature.reduce(&state, .select(english.id)) == [.select(english.id), .report(.choices(remembered))])
         #expect(PlayerFeature.reduce(&state, .select(MediaTrack.ID(kind: .subtitle, number: 9))).isEmpty)
         _ = PlayerFeature.reduce(&state, .engine(.tracks([english.selected])))
         #expect(PlayerFeature.reduce(&state, .select(english.id)).isEmpty)
@@ -278,7 +279,8 @@ struct PlayerControlsTests {
 
         let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
         _ = PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source]))
-        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.addSubtitles(synced)])
+        let remembered = TrackChoices(subtitles: .addon(synced.url, language: "pol"), speed: .normal)
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.addSubtitles(synced), .report(.choices(remembered))])
 
         let added = MediaTrack(
             id: MediaTrack.ID(kind: .subtitle, number: 2), title: "Synced", language: "pol", codec: "subrip",
@@ -291,8 +293,8 @@ struct PlayerControlsTests {
 
         _ = PlayerFeature.reduce(&state, .engine(.tracks([english.selected, added.unselected])))
         #expect(state.session?.subtitleChoice == .builtIn(english.id))
-        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.select(added.id)])
-        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.off)) == [.turnOffSubtitles])
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.select(added.id), .report(.choices(remembered))])
+        #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.off)) == [.turnOffSubtitles, .report(.choices(TrackChoices(speed: .normal)))])
     }
 
     @Test func subtitlesForAnotherCandidateAreDropped() {
@@ -302,22 +304,24 @@ struct PlayerControlsTests {
         #expect(state.session?.addonSubtitles == [])
     }
 
-    @Test func theSeekStepReadForThisCandidateApplies() {
+    @Test func thePreferencesReadForThisCandidateApply() {
         var state = playing()
-        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(), .thirty)).isEmpty)
+        let upNext = UpNextBehavior(notice: .tenSeconds, autoplay: false)
+        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(), Fixture.preferences(seekStep: .thirty, upNext: upNext))).isEmpty)
         #expect(state.session?.seekStep == .thirty)
+        #expect(state.session?.upNextBehavior == upNext)
     }
 
-    @Test func aSeekStepReadForAnotherCandidateIsDropped() {
+    @Test func preferencesReadForAnotherCandidateAreDropped() {
         var state = playing()
-        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(index: 1), .thirty)).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(index: 1), Fixture.preferences(seekStep: .thirty))).isEmpty)
         #expect(state.session?.seekStep == .ten)
     }
 
     @Test func speedChangesOnlyWhenDifferent() {
         var state = playing()
         #expect(PlayerFeature.reduce(&state, .setSpeed(.normal)).isEmpty)
-        #expect(PlayerFeature.reduce(&state, .setSpeed(.oneAndAHalf)) == [.setSpeed(.oneAndAHalf)])
+        #expect(PlayerFeature.reduce(&state, .setSpeed(.oneAndAHalf)) == [.setSpeed(.oneAndAHalf), .report(.choices(TrackChoices(speed: .oneAndAHalf)))])
         _ = PlayerFeature.reduce(&state, .engine(.speed(.oneAndAHalf)))
         #expect(state.session?.speed == .oneAndAHalf)
     }
@@ -340,11 +344,11 @@ struct PlayerControlsTests {
     @Test func playbackStartsFromTheRequestedPosition() {
         var state = PlayerFeature.State.idle
         let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate(), from: .seconds(600)))
-        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .seconds(600))])
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .seconds(600)), .watchUpNext(Fixture.candidate())])
     }
 }
 
-private extension MediaTrack {
+extension MediaTrack {
     var unselected: MediaTrack {
         MediaTrack(id: id, title: title, language: language, codec: codec, channelCount: channelCount,
                    isForced: isForced, externalFile: externalFile, isSelected: false)

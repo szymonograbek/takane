@@ -54,26 +54,32 @@ struct PosterPlaceholders: View {
 struct ContinueCard: View {
     let item: ContinueWatchingItem
     let remove: () -> Void
+    let markWatched: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
-            NavigationLink(value: Route.streams(item.streamsRequest)) {
+            NavigationLink(value: item.route) {
                 Artwork(url: item.background ?? item.poster, title: item.name)
                     .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardWidth * 9 / 16)
                     .overlay(alignment: .bottom) {
-                        ProgressLine(fraction: item.fraction).padding(14)
+                        if let fraction = item.fraction {
+                            ProgressLine(fraction: fraction).padding(14)
+                        }
                     }
                     .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             }
             .cardButtonStyle()
             .contextMenu {
+                if item.canBeMarkedWatched {
+                    Button("Mark as Watched", systemImage: "checkmark.circle", action: markWatched)
+                }
                 Button("Remove from Continue Watching", systemImage: "minus.circle", role: .destructive, action: remove)
             }
-            .accessibilityLabel("\(item.name), \(item.remainingLabel)")
+            .accessibilityLabel("\(item.name), \(item.caption)")
             .accessibilityIdentifier("continueWatching.item")
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name).font(.caption).bold().lineLimit(1)
-                Text(item.remainingLabel).font(.caption2).foregroundStyle(Palette.secondary)
+                Text(item.caption).font(.caption2).foregroundStyle(Palette.secondary)
             }
             .frame(width: Metrics.wideCardWidth, alignment: .leading)
         }
@@ -117,15 +123,22 @@ extension PosterShape {
 }
 
 extension ContinueWatchingItem {
-    var fraction: Double {
-        duration > .zero ? offset / duration : 0
+    /// How much of `video` was watched, for a title stopped partway.
+    var fraction: Double? {
+        guard case .partway(let offset, let duration) = reason else { return nil }
+        return duration > .zero ? offset / duration : 0
     }
 
-    /// "S2 · E4 · 23 min left", or "1 h 12 min left" for a movie.
-    var remainingLabel: String {
-        let left = Duration.timeLeftFormat(duration - offset)
-        guard case .episode(_, let season, let episode) = video else { return left }
-        return "S\(season) · E\(episode) · \(left)"
+    /// "S2 · E4 · 23 min left", "1 h 12 min left" for a movie, or "New episode".
+    var caption: String {
+        switch reason {
+        case .partway(let offset, let duration):
+            let left = Duration.timeLeftFormat(duration - offset)
+            guard case .episode(_, let season, let episode) = video else { return left }
+            return "S\(season) · E\(episode) · \(left)"
+        case .newEpisodes(let count):
+            return count == 1 ? "New episode" : "\(count) new episodes"
+        }
     }
 }
 

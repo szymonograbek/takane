@@ -21,6 +21,7 @@ enum CoreAction: Sendable {
     case ctx(Ctx)
     case player(Player)
     case link(Link)
+    case metaDetails(MetaDetails)
     case unload
 
     enum Load: Sendable {
@@ -50,6 +51,26 @@ enum CoreAction: Sendable {
         case updateSettings(JSONValue)
         /// Resets a library item's progress, which takes it out of continue watching.
         case rewindLibraryItem(id: String)
+        /// Marks a library item as a whole. Core ignores an id not in the library.
+        case libraryItemMarkAsWatched(id: String, isWatched: Bool)
+        /// Forgets the new episodes found for a title, which takes it out of continue watching.
+        case dismissNotificationItem(id: String)
+        /// Asks add-ons for episodes of the library's shows newer than the one watched last.
+        /// Core asks at most every 6 hours.
+        case pullNotifications
+        /// Refreshes the signed-in user and signs out if the session expired.
+        case pullUserFromAPI
+        case pullAddonsFromAPI
+        /// Pulls library items changed elsewhere and pushes the ones changed here.
+        case syncLibraryWithAPI
+    }
+
+    /// Watched marks on the title the `meta_details` model holds, through its library item.
+    enum MetaDetails: Sendable {
+        case markAsWatched(Bool)
+        /// core's full video JSON, as the model's first ready meta item lists it.
+        case markVideoAsWatched(video: JSONValue, Bool)
+        case markSeasonAsWatched(UInt32, Bool)
     }
 
     /// core's `AuthRequest`.
@@ -69,8 +90,12 @@ enum CoreAction: Sendable {
         case seek(timeMs: UInt64, durationMs: UInt64, device: String)
         case pausedChanged(paused: Bool)
         case ended
+        /// Records moving on to the player model's next video. Loading it is a separate `Load`.
+        case nextVideo
         /// What subtitle add-ons match the file by. Core prefers what the stream itself declares.
         case videoParamsChanged(hash: String?, size: UInt64?, filename: String?)
+        /// Replaces what core saves for the selected video.
+        case streamStateChanged(StreamItemState)
     }
 }
 
@@ -173,7 +198,8 @@ private struct Tagged<Args: Encodable>: Encodable {
     }
 }
 
-private struct DynamicKey: CodingKey {
+/// A JSON object key known only at run time.
+struct DynamicKey: CodingKey {
     let stringValue: String
     var intValue: Int? { nil }
     init(_ string: String) { stringValue = string }
@@ -207,6 +233,7 @@ extension CoreAction: Encodable {
         case .ctx(let ctx): try action("Ctx", ctx).encode(to: encoder)
         case .player(let player): try action("Player", player).encode(to: encoder)
         case .link(.readData): try action("Link", action("ReadData")).encode(to: encoder)
+        case .metaDetails(let metaDetails): try action("MetaDetails", metaDetails).encode(to: encoder)
         case .unload: try action("Unload").encode(to: encoder)
         }
     }
@@ -260,6 +287,54 @@ extension CoreAction.Ctx: Encodable {
         case .logout: try action("Logout").encode(to: encoder)
         case .updateSettings(let settings): try action("UpdateSettings", settings).encode(to: encoder)
         case .rewindLibraryItem(let id): try action("RewindLibraryItem", id).encode(to: encoder)
+        case .libraryItemMarkAsWatched(let id, let isWatched):
+            try action("LibraryItemMarkAsWatched", MarkAsWatchedArgs(id: id, isWatched: isWatched)).encode(to: encoder)
+        case .dismissNotificationItem(let id): try action("DismissNotificationItem", id).encode(to: encoder)
+        case .pullNotifications: try action("PullNotifications").encode(to: encoder)
+        // No token: core uses the profile's.
+        case .pullUserFromAPI: try action("PullUserFromAPI", NoArgs()).encode(to: encoder)
+        case .pullAddonsFromAPI: try action("PullAddonsFromAPI").encode(to: encoder)
+        case .syncLibraryWithAPI: try action("SyncLibraryWithAPI").encode(to: encoder)
+        }
+    }
+
+    private struct MarkAsWatchedArgs: Encodable {
+        let id: String
+        let isWatched: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case isWatched = "is_watched"
+        }
+    }
+}
+
+extension CoreAction.MetaDetails: Encodable {
+    /// A Rust tuple variant's arguments: a JSON array.
+    private struct Pair<First: Encodable, Second: Encodable>: Encodable {
+        let first: First
+        let second: Second
+
+        init(_ first: First, _ second: Second) {
+            self.first = first
+            self.second = second
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.unkeyedContainer()
+            try container.encode(first)
+            try container.encode(second)
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        switch self {
+        case .markAsWatched(let isWatched):
+            try action("MarkAsWatched", isWatched).encode(to: encoder)
+        case .markVideoAsWatched(let video, let isWatched):
+            try action("MarkVideoAsWatched", Pair(video, isWatched)).encode(to: encoder)
+        case .markSeasonAsWatched(let season, let isWatched):
+            try action("MarkSeasonAsWatched", Pair(season, isWatched)).encode(to: encoder)
         }
     }
 }
@@ -276,6 +351,7 @@ extension CoreAction.Player: Encodable {
 
         let videoParams: VideoParams
     }
+    private struct StreamStateChangedArgs: Encodable { let state: StreamItemState }
 
     func encode(to encoder: any Encoder) throws {
         switch self {
@@ -287,9 +363,13 @@ extension CoreAction.Player: Encodable {
             try action("PausedChanged", PausedChangedArgs(paused: paused)).encode(to: encoder)
         case .ended:
             try action("Ended").encode(to: encoder)
+        case .nextVideo:
+            try action("NextVideo").encode(to: encoder)
         case .videoParamsChanged(let hash, let size, let filename):
             let params = VideoParamsChangedArgs.VideoParams(hash: hash, size: size, filename: filename)
             try action("VideoParamsChanged", VideoParamsChangedArgs(videoParams: params)).encode(to: encoder)
+        case .streamStateChanged(let state):
+            try action("StreamStateChanged", StreamStateChangedArgs(state: state)).encode(to: encoder)
         }
     }
 }
@@ -312,12 +392,5 @@ extension CoreAction.Authentication: Encodable {
         case .login(let email, let password): try Login(email: email, password: password).encode(to: encoder)
         case .loginWithToken(let token): try LoginWithToken(token: token).encode(to: encoder)
         }
-    }
-}
-
-extension CoreAction {
-    /// Carries a password or token, so logs show only its name.
-    var isSensitive: Bool {
-        if case .ctx(.authenticate) = self { true } else { false }
     }
 }

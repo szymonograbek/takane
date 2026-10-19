@@ -36,7 +36,13 @@ private final class FakeTracker: PlaybackTracker {
     func seek(to position: Duration, of duration: Duration) { reports.continuation.yield("seek \(position)") }
     func paused(_ paused: Bool) { reports.continuation.yield("paused \(paused)") }
     func ended() { reports.continuation.yield("ended") }
+    func movedToNext() { reports.continuation.yield("moved to next") }
     func stop() { reports.continuation.yield("stop") }
+    func remember(_ choices: TrackChoices) { reports.continuation.yield("remember \(choices)") }
+    func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices> {
+        AsyncStream { $0.finish() }
+    }
+    func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?> { AsyncStream { $0.finish() } }
 }
 
 @MainActor
@@ -114,7 +120,7 @@ private struct NoSegments: SkipSegmentService {
 private struct FixedPreferences: PreferencesService {
     func preferences() -> AsyncStream<Preferences> {
         let languages = TrackLanguages(audio: nil, subtitles: PreferredLanguages(primary: Language("pol").require(), fallback: nil))
-        return AsyncStream { $0.yield(Preferences(languages: languages, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false)) }
+        return AsyncStream { $0.yield(Preferences(languages: languages, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false, upNext: .defaults)) }
     }
 
     func update(_ preferences: Preferences) throws(PreferencesError) {}
@@ -126,6 +132,7 @@ private final class RecordingCatalog: CatalogService {
     func board() -> AsyncStream<Board> { AsyncStream { $0.finish() } }
     func loadMore(_ row: CatalogID) {}
     func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails { throw .notFound }
+    func detailsChanges(_ media: MediaID, type: ContentType) -> AsyncStream<TitleDetails> { AsyncStream { $0.finish() } }
 
     func search(_ text: SearchText) -> AsyncStream<SearchResults> {
         searched.withLock { $0.append(text.rawValue) }

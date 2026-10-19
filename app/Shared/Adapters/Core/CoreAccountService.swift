@@ -73,6 +73,14 @@ struct CoreAccountService: AccountService {
         runtime.dispatchLogged(.ctx(.logout))
     }
 
+    /// Core syncs on its own only when signing in, and reports an error for each sync signed out.
+    func sync() {
+        guard (try? runtime.state(.ctx, as: CtxState.self).profile.auth) != nil else { return }
+        runtime.dispatchLogged(.ctx(.pullUserFromAPI))
+        runtime.dispatchLogged(.ctx(.pullAddonsFromAPI))
+        runtime.dispatchLogged(.ctx(.syncLibraryWithAPI))
+    }
+
     /// Signs in, then restores what the signed-out profile had: the add-ons it added and its settings.
     private func authenticate(_ request: CoreAction.Authentication) async throws(AccountError) {
         let before: Profile

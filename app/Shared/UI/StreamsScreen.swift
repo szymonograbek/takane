@@ -132,8 +132,7 @@ private struct StreamRow: View {
 extension StreamsRequest {
     /// "Twin Peaks · S1 E3", or the movie's name.
     var playerTitle: String {
-        guard case .episode(_, let season, let episode) = video else { return title }
-        return "\(title) · S\(season) E\(episode)"
+        video.playerTitle(title)
     }
 }
 

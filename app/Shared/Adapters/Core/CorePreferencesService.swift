@@ -6,7 +6,9 @@ struct CorePreferencesService: PreferencesService {
     func preferences() -> AsyncStream<Preferences> {
         runtime.observe(.ctx, as: CtxState.self) { ctx in
             guard case .object(let settings) = ctx.profile.settings else {
-                return Preferences(languages: .streamDefaults, subtitleStyle: .defaults, seekStep: .defaults, hidesSpoilers: false)
+                return Preferences(
+                    languages: .streamDefaults, subtitleStyle: .defaults, seekStep: .defaults, hidesSpoilers: false, upNext: .defaults
+                )
             }
             return Preferences(
                 languages: TrackLanguages(
@@ -15,7 +17,8 @@ struct CorePreferencesService: PreferencesService {
                 ),
                 subtitleStyle: CoreSubtitleSettings.style(in: settings),
                 seekStep: CoreGeneralSettings.seekStep(in: settings),
-                hidesSpoilers: CoreGeneralSettings.hidesSpoilers(in: settings)
+                hidesSpoilers: CoreGeneralSettings.hidesSpoilers(in: settings),
+                upNext: CoreGeneralSettings.upNext(in: settings)
             )
         }
     }
@@ -26,6 +29,7 @@ struct CorePreferencesService: PreferencesService {
         CoreGeneralSettings.audioLanguages.write(preferences.languages.audio, into: &settings)
         CoreGeneralSettings.write(preferences.seekStep, into: &settings)
         CoreGeneralSettings.writeHidesSpoilers(preferences.hidesSpoilers, into: &settings)
+        CoreGeneralSettings.write(preferences.upNext, into: &settings)
         CoreSubtitleSettings.write(preferences.languages.subtitles, into: &settings)
         CoreSubtitleSettings.write(preferences.subtitleStyle, into: &settings)
         do {

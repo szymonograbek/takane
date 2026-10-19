@@ -62,4 +62,20 @@ struct CoreGeneralSettingsTests {
         #expect(settings["hideSpoilers"] == .bool(false))
         #expect(settings["seekTimeDuration"] == .number(10_000))
     }
+
+    @Test func upNextReadsCoreDefaultsWhenMissing() {
+        #expect(CoreGeneralSettings.upNext(in: [:]) == UpNextBehavior(notice: .thirtyFiveSeconds, autoplay: true))
+        let settings: [String: JSONValue] = ["nextVideoNotificationDuration": .number(0), "bingeWatching": .bool(false)]
+        #expect(CoreGeneralSettings.upNext(in: settings) == UpNextBehavior(notice: .off, autoplay: false))
+    }
+
+    @Test func aNoticeFromAnotherAppReadsAsTheDefaultAndIsKept() {
+        var settings: [String: JSONValue] = ["nextVideoNotificationDuration": .number(45_000), "bingeWatching": .bool(true)]
+        #expect(CoreGeneralSettings.upNext(in: settings).notice == .thirtyFiveSeconds)
+        CoreGeneralSettings.write(UpNextBehavior(notice: .thirtyFiveSeconds, autoplay: false), into: &settings)
+        #expect(settings["nextVideoNotificationDuration"] == .number(45_000))
+        #expect(settings["bingeWatching"] == .bool(false))
+        CoreGeneralSettings.write(UpNextBehavior(notice: .tenSeconds, autoplay: false), into: &settings)
+        #expect(settings["nextVideoNotificationDuration"] == .number(10_000))
+    }
 }

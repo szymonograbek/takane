@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct StremioApp: App {
     @State private var launch = Launch()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -12,6 +13,12 @@ struct StremioApp: App {
                     ProgressView("Starting…")
                 case .ready(let app):
                     RootView().environment(app)
+                        // Core pulls changes from the account and new episodes only when signing in.
+                        .onChange(of: scenePhase, initial: true) {
+                            guard scenePhase == .active else { return }
+                            app.services.account.sync()
+                            app.services.library.checkForNewEpisodes()
+                        }
                 case .failed(let error):
                     Label(error.description, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
                 }

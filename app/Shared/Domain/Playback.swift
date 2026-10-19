@@ -152,7 +152,8 @@ enum PlaybackEvent: Equatable, Sendable {
     case stopped
     case failed(reason: String)
     case position(Duration)
-    /// A seek started toward this position, before the position moves there.
+    /// A seek started toward this position, before the position moves there. Until the seek ends,
+    /// positions are its target, never the one it left.
     case seeking(to: Duration)
     case duration(Duration)
     case paused(Bool)
@@ -197,7 +198,46 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func snapshot() async -> CGImage?
 }
 
-/// Records what the user watched, so progress, watched state and continue watching follow playback.
+/// The tracks and speed the viewer chose for a title, remembered so it plays the same way next time.
+struct TrackChoices: Hashable, Sendable {
+    /// A track by the engine's number and its language. Another file, such as the next episode, may
+    /// number its tracks differently, so the language confirms the number.
+    struct Track: Hashable, Sendable {
+        let number: Int
+        let language: String?
+    }
+
+    enum Subtitles: Hashable, Sendable {
+        case builtIn(Track)
+        /// An add-on's file, by its address.
+        case addon(URL, language: String?)
+    }
+
+    /// Nil when none was chosen.
+    var audio: Track?
+    /// Nil when subtitles are off or none was chosen.
+    var subtitles: Subtitles?
+    /// Nil when none was chosen.
+    var speed: PlaybackSpeed?
+}
+
+/// The episode after the one playing.
+struct UpNext: Equatable, Sendable {
+    let video: PlayableID
+    /// The series it belongs to, such as "Twin Peaks".
+    let show: String
+    /// The episode's own title. Empty when the add-on gives none.
+    let title: String
+    let thumbnail: URL?
+    /// The series' backdrop.
+    let backdrop: URL?
+    /// A stream for it like the one playing, from the same add-on, that plays here. Nil leaves the
+    /// choice of stream to the viewer.
+    let stream: StreamCandidate?
+}
+
+/// Records what the user watched, so progress, watched state and continue watching follow playback,
+/// and finds what to watch next.
 protocol PlaybackTracker: Sendable {
     func begin(_ candidate: StreamCandidate)
     func progress(_ position: Duration, of duration: Duration)
@@ -205,5 +245,16 @@ protocol PlaybackTracker: Sendable {
     func seek(to position: Duration, of duration: Duration)
     func paused(_ paused: Bool)
     func ended()
+    /// The viewer moved on to the next episode. Call it before beginning that episode.
+    func movedToNext()
     func stop()
+    /// Remembers what the viewer chose for the candidate being tracked.
+    func remember(_ choices: TrackChoices)
+    /// What was remembered for `candidate`, playing from `source`, or carried over from an earlier
+    /// episode, once known. Call it after `begin(candidate)`. Yields at most once, and finishes once
+    /// another candidate replaces it.
+    func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices>
+    /// The episode after `candidate`, now and after every change, nil while there is none or it is
+    /// not known yet. Finishes once another candidate replaces it.
+    func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?>
 }

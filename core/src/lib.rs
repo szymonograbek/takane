@@ -202,17 +202,57 @@ mod tests {
             r#"{"field":"player","action":{"action":"Player","args":{"action":"Seek","args":{"time":30000,"duration":60000,"device":"tvos"}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"VideoParamsChanged","args":{"videoParams":{"hash":"8e245d9679d31e12","size":12909756,"filename":"movie.mkv"}}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"VideoParamsChanged","args":{"videoParams":{"filename":"movie.mkv"}}}}}"#,
+            r#"{"field":"player","action":{"action":"Player","args":{"action":"StreamStateChanged","args":{"state":{"subtitleDelay":250,"subtitleTrack":{"id":"https://subs.example/1.srt","embedded":false,"language":"pol"},"audioTrack":{"id":"2","language":"eng"},"playbackSpeed":1.25}}}}}"#,
+            r#"{"field":"player","action":{"action":"Player","args":{"action":"StreamStateChanged","args":{"state":{}}}}}"#,
+            r#"{"field":"player","action":{"action":"Player","args":{"action":"NextVideo"}}}"#,
             r#"{"field":"player","action":{"action":"Unload"}}"#,
             r#"{"field":"link","action":{"action":"Load","args":{"model":"Link"}}}"#,
             r#"{"field":"link","action":{"action":"Link","args":{"action":"ReadData"}}}"#,
             r#"{"field":"link","action":{"action":"Unload"}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"LoginWithToken","token":"key"}}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Logout"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"LibraryItemMarkAsWatched","args":{"id":"tt0111161","is_watched":true}}}}"#,
+            r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkAsWatched","args":false}}}"#,
+            r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkVideoAsWatched","args":[{"id":"tt0944947:1:1","title":"Winter Is Coming","released":"2011-04-17T00:00:00.000Z","season":1,"episode":1},true]}}}"#,
+            r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkSeasonAsWatched","args":[1,false]}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"DismissNotificationItem","args":"tt0944947"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullNotifications"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullUserFromAPI","args":{}}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullAddonsFromAPI"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"SyncLibraryWithAPI"}}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);
             assert!(parsed.is_ok(), "{request}\n{:?}", parsed.err());
         }
+    }
+
+    /// The app reads `Player.stream_state` and sends it back with the track and speed keys changed.
+    #[test]
+    fn serialized_stream_state_matches_the_swift_shape() {
+        use stremio_core::types::streams::{AudioTrack, StreamItemState, SubtitleTrack};
+        let state = StreamItemState {
+            subtitle_track: Some(SubtitleTrack {
+                id: "3".to_owned(),
+                embedded: true,
+                language: Some("eng".to_owned()),
+            }),
+            audio_track: Some(AudioTrack {
+                id: "1".to_owned(),
+                language: None,
+            }),
+            subtitle_delay: Some(250),
+            playback_speed: Some(1.25),
+            ..Default::default()
+        };
+        let expected = serde_json::json!({
+            "subtitleTrack": {"id": "3", "embedded": true, "language": "eng"},
+            "audioTrack": {"id": "1"},
+            "subtitleDelay": 250,
+            "playbackSpeed": 1.25,
+        });
+        assert_eq!(serde_json::to_value(&state).unwrap(), expected);
+        assert_eq!(serde_json::from_value::<StreamItemState>(expected).unwrap(), state);
     }
 
     /// The app updates settings by sending back the settings it read with a few keys changed.

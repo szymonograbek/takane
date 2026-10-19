@@ -16,6 +16,7 @@ enum HomeFeature: Feature {
         /// Sent when the end of a row comes into view.
         case loadMore(CatalogID)
         case removeFromContinueWatching(MediaID)
+        case markWatched(MediaID)
     }
 
     enum Effect: Equatable, Sendable {
@@ -24,6 +25,7 @@ enum HomeFeature: Feature {
         case observeBoard
         case loadMore(CatalogID)
         case removeFromContinueWatching(MediaID)
+        case markWatched(MediaID)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -42,6 +44,9 @@ enum HomeFeature: Feature {
         case .removeFromContinueWatching(let media):
             guard state.continueWatching.contains(where: { $0.media == media }) else { return [] }
             return [.removeFromContinueWatching(media)]
+        case .markWatched(let media):
+            guard state.continueWatching.contains(where: { $0.media == media && $0.canBeMarkedWatched }) else { return [] }
+            return [.markWatched(media)]
         }
     }
 
@@ -60,8 +65,20 @@ enum HomeFeature: Feature {
             dependencies.catalog.loadMore(id)
         case .removeFromContinueWatching(let media):
             dependencies.library.removeFromContinueWatching(media)
+        case .markWatched(let media):
+            do {
+                try dependencies.library.setWatched(.title(media), true)
+            } catch {
+                Log.features.error("marking \(media) watched failed: \(error)")
+            }
         }
     }
+}
+
+extension ContinueWatchingItem {
+    /// A movie is marked as a whole. Marking a series as a whole would leave the episode in
+    /// progress unmarked, so a series is marked on its page instead.
+    var canBeMarkedWatched: Bool { type == .movie }
 }
 
 extension HomeFeature.State {
@@ -74,11 +91,15 @@ extension HomeFeature.State {
 
     /// Where to start `video`: the saved position when continue watching holds this exact video.
     func resumePosition(for video: PlayableID) -> Duration? {
-        continueWatching.first { $0.video == video }?.offset
+        guard case .partway(let offset, _)? = continueWatching.first(where: { $0.video == video })?.reason else { return nil }
+        return offset
     }
 
-    /// The continue watching entry for a title, to offer Resume on its page.
+    /// The continue watching entry for a title the user stopped partway through, to offer Resume on its page.
     func progress(of media: MediaID) -> ContinueWatchingItem? {
-        continueWatching.first { $0.media == media }
+        continueWatching.first { item in
+            guard item.media == media, case .partway = item.reason else { return false }
+            return true
+        }
     }
 }
