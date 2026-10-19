@@ -1,5 +1,5 @@
 /// Searches the add-ons as the user types, suggesting recent searches that continue the query.
-/// Before anything is typed, offers recent searches.
+/// Before anything is typed, offers recent searches and genres to browse.
 enum SearchFeature: Feature {
     struct Dependencies: Sendable {
         let catalog: any CatalogService
@@ -11,6 +11,8 @@ enum SearchFeature: Feature {
         /// Most recent first, without the steps of typing another one (see `recentSearches(_:)`).
         /// Nil until the provider answers.
         var recentSearches: [SearchText]?
+        /// One catalog's genres per content type (see `genres(_:)`). Nil until the provider answers.
+        var genres: [CatalogGenres]?
         var query = Query.empty
     }
 
@@ -25,11 +27,13 @@ enum SearchFeature: Feature {
         case resultsChanged(SearchResults)
         case recentSearchesChanged([SearchText])
         case clearRecentSearches
+        case genresChanged([CatalogGenres])
     }
 
     enum Effect: Equatable, Sendable {
-        /// Start it once, when the store is created.
+        /// Start both once, when the store is created.
         case observeRecentSearches
+        case observeGenres
         case search(SearchText)
         /// Stops the running search, when the query is cleared.
         case cancelSearch
@@ -58,6 +62,9 @@ enum SearchFeature: Feature {
             return [.clearRecentSearches]
         case (.empty, .clearRecentSearches), (.searching, .clearRecentSearches):
             return []
+        case (_, .genresChanged(let catalogs)):
+            state.genres = genres(catalogs)
+            return []
         }
     }
 
@@ -67,6 +74,10 @@ enum SearchFeature: Feature {
         case .observeRecentSearches:
             for await searches in dependencies.catalog.recentSearches() {
                 send(.recentSearchesChanged(searches))
+            }
+        case .observeGenres:
+            for await catalogs in dependencies.catalog.genres() {
+                send(.genresChanged(catalogs))
             }
         case .search(let text):
             // A newer query cancels this one, during the pause or while results stream in.
@@ -84,8 +95,15 @@ enum SearchFeature: Feature {
     static func key(_ effect: Effect) -> AnyHashable? {
         switch effect {
         case .search, .cancelSearch: "search"
-        case .observeRecentSearches, .clearRecentSearches: nil
+        case .observeRecentSearches, .observeGenres, .clearRecentSearches: nil
         }
+    }
+
+    /// The first catalog of each content type, so an add-on's catalogs that share their genres
+    /// (Cinemeta's Popular and Featured) list them once.
+    private static func genres(_ catalogs: [CatalogGenres]) -> [CatalogGenres] {
+        var types = Set<ContentType>()
+        return catalogs.filter { types.insert($0.catalog.type).inserted }
     }
 
     /// Searching as the user types records every pause, so the provider's history holds "bre" on
@@ -99,6 +117,25 @@ enum SearchFeature: Feature {
             if !isStep && !isRepeat { kept.append(search) }
         }
         return kept
+    }
+}
+
+extension SearchFeature.State {
+    /// What the screen offers before anything is typed.
+    enum Browse: Equatable {
+        /// The provider has not answered yet.
+        case waiting
+        /// No recent searches, and no add-on offers genres.
+        case nothing
+        case offers(recentSearches: [SearchText], genres: [CatalogGenres])
+    }
+
+    /// Offers what has arrived, without waiting for the rest.
+    var browse: Browse {
+        let searches = recentSearches ?? []
+        let catalogs = genres ?? []
+        if !searches.isEmpty || !catalogs.isEmpty { return .offers(recentSearches: searches, genres: catalogs) }
+        return recentSearches == nil || genres == nil ? .waiting : .nothing
     }
 }
 

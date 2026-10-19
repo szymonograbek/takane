@@ -39,6 +39,7 @@ struct RootView: View {
 enum Route: Hashable {
     case details(MetaPreview)
     case streams(StreamsRequest)
+    case genre(GenreFilter)
 }
 
 /// What the streams screen looks up, and how it labels and resumes it.
@@ -78,6 +79,7 @@ extension View {
             switch route {
             case .details(let preview): DetailsScreen(preview: preview)
             case .streams(let request): StreamsScreen(request: request)
+            case .genre(let filter): GenreScreen(filter: filter)
             }
         }
     }

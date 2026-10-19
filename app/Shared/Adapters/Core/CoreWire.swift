@@ -69,11 +69,11 @@ struct Addon: Decodable, Sendable, Identifiable {
         let id: String
         let type: String
         let name: String?
-        /// The extra properties the catalog accepts, such as `search` and `skip`.
-        let extraNames: [String]
+        let extra: [ExtraProp]
 
-        private struct ExtraProp: Decodable { let name: String }
-        private enum CodingKeys: String, CodingKey { case id, type, name, extra, extraSupported }
+        var extraNames: [String] { extra.map(\.name) }
+
+        private enum CodingKeys: String, CodingKey { case id, type, name, extra, extraSupported, extraRequired }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -81,10 +81,13 @@ struct Addon: Decodable, Sendable, Identifiable {
             type = try container.decode(String.self, forKey: .type)
             name = try container.decodeIfPresent(String.self, forKey: .name)
             // core keeps the manifest's own form: `extra` objects, or the legacy `extraSupported` names.
-            if let props = try container.decodeIfPresent([ExtraProp].self, forKey: .extra) {
-                extraNames = props.map(\.name)
+            if let extra = try container.decodeIfPresent([ExtraProp].self, forKey: .extra) {
+                self.extra = extra
             } else {
-                extraNames = try container.decodeIfPresent([String].self, forKey: .extraSupported) ?? []
+                let required = try container.decodeIfPresent([String].self, forKey: .extraRequired) ?? []
+                extra = try (container.decodeIfPresent([String].self, forKey: .extraSupported) ?? []).map { name in
+                    ExtraProp(name: name, isRequired: required.contains(name), options: [])
+                }
             }
         }
     }
@@ -125,6 +128,14 @@ struct Addon: Decodable, Sendable, Identifiable {
     }
 }
 
+/// core's `ExtraProp`: an extra property a catalog accepts, such as `search`, `skip` or `genre`.
+struct ExtraProp: Decodable, Sendable {
+    let name: String
+    let isRequired: Bool
+    /// The values the catalog offers, such as its genres.
+    let options: [String]
+}
+
 // MARK: - addon_details
 
 struct AddonDetailsState: Decodable, Sendable {
@@ -142,7 +153,7 @@ struct AddonDetailsState: Decodable, Sendable {
     let remoteAddon: RemoteAddon?
 }
 
-// MARK: - board, search
+// MARK: - board, search, discover
 
 /// core's `CatalogsWithExtra`.
 struct CatalogsState: Decodable, Sendable {
@@ -173,6 +184,17 @@ struct MetaItemPreview: Decodable, Sendable {
     /// `poster`, `landscape` or `square`.
     let posterShape: String
     let links: [Link]
+}
+
+/// core's `CatalogWithFilters`.
+struct CatalogWithFiltersState: Decodable, Sendable {
+    struct Selected: Decodable, Sendable {
+        let request: ResourceRequest
+    }
+
+    /// Nil until the model is loaded.
+    let selected: Selected?
+    let catalog: [ResourceLoadable<[MetaItemPreview]>]
 }
 
 // MARK: - meta_details

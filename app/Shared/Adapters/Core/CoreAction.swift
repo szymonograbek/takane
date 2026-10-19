@@ -7,6 +7,7 @@ enum CoreField: String, Codable, Sendable {
     case addonDetails = "addon_details"
     case board
     case search
+    case discover
     case metaDetails = "meta_details"
     case player
     case link
@@ -27,6 +28,8 @@ enum CoreAction: Sendable {
     enum Load: Sendable {
         case addonDetails(transportURL: URL)
         case catalogsWithExtra(CatalogsSelection)
+        /// One catalog, such as a catalog filtered by a genre.
+        case catalogWithFilters(ResourceRequest)
         case metaDetails(metaPath: ResourcePath, streamPath: ResourcePath?)
         /// Core's player selection, as `CoreStreamService` built it into a candidate's tracking token.
         case player(selection: JSONValue)
@@ -188,6 +191,8 @@ extension CoreAction.Load: Encodable {
             try model("AddonDetails", AddonDetailsArgs(transportUrl: url)).encode(to: encoder)
         case .catalogsWithExtra(let selection):
             try model("CatalogsWithExtra", selection).encode(to: encoder)
+        case .catalogWithFilters(let request):
+            try model("CatalogWithFilters", ["request": request]).encode(to: encoder)
         case .metaDetails(let metaPath, let streamPath):
             try model("MetaDetails", MetaDetailsArgs(metaPath: metaPath, streamPath: streamPath, guessStream: false))
                 .encode(to: encoder)

@@ -19,6 +19,10 @@ struct ResourcePath: Codable, Hashable, Sendable {
     static func subtitles(type: String, id: String) -> ResourcePath {
         ResourcePath(resource: "subtitles", type: type, id: id)
     }
+
+    static func catalog(type: String, id: String, extra: [[String]]) -> ResourcePath {
+        ResourcePath(resource: "catalog", type: type, id: id, extra: extra)
+    }
 }
 
 /// core's `catalogs_with_extra::Selected`: which catalogs a `CatalogsWithExtra` model loads.

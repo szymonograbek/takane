@@ -72,6 +72,30 @@ enum Board: Equatable, Sendable {
     case rows([CatalogRow])
 }
 
+/// A genre a catalog can be filtered by, such as "Action", exactly as its add-on lists it.
+struct Genre: Hashable, Sendable, CustomStringConvertible {
+    let rawValue: String
+
+    init?(_ rawValue: String) {
+        guard !rawValue.isEmpty else { return nil }
+        self.rawValue = rawValue
+    }
+
+    var description: String { rawValue }
+}
+
+/// The genres one catalog can be filtered by, in its add-on's order.
+struct CatalogGenres: Equatable, Sendable {
+    let catalog: CatalogID
+    let genres: [Genre]
+}
+
+/// One catalog's titles in one of its genres.
+struct GenreFilter: Hashable, Sendable {
+    let catalog: CatalogID
+    let genre: Genre
+}
+
 /// A search query, trimmed and never empty.
 struct SearchText: Hashable, Sendable, CustomStringConvertible {
     let rawValue: String
@@ -156,6 +180,14 @@ protocol CatalogService: Sendable {
 
     /// Forgets every recent search; `recentSearches()` reports it.
     func clearRecentSearches()
+
+    /// The catalogs that can be filtered by genre without requiring one, in add-on order, now and
+    /// after every add-on change.
+    func genres() -> AsyncStream<[CatalogGenres]>
+
+    /// The first page of the catalog's titles in the genre, now and after every change. Finishes when
+    /// a newer `titles(_:)` call replaces this one: providers may serve one at a time.
+    func titles(_ filter: GenreFilter) -> AsyncStream<Remote<[MetaPreview], CatalogError>>
 
     /// Waits for the first add-on that answers with metadata. Providers may share one selection with
     /// `StreamService`, so this can finish a running `streams(for:)` lookup.

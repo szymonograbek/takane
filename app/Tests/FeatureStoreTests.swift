@@ -135,6 +135,8 @@ private final class RecordingCatalog: CatalogService {
     func detailsChanges(_ media: MediaID, type: ContentType) -> AsyncStream<TitleDetails> { AsyncStream { $0.finish() } }
     func recentSearches() -> AsyncStream<[SearchText]> { AsyncStream { $0.finish() } }
     func clearRecentSearches() {}
+    func genres() -> AsyncStream<[CatalogGenres]> { AsyncStream { $0.finish() } }
+    func titles(_ filter: GenreFilter) -> AsyncStream<Remote<[MetaPreview], CatalogError>> { AsyncStream { $0.finish() } }
 
     func search(_ text: SearchText) -> AsyncStream<SearchResults> {
         searched.withLock { $0.append(text.rawValue) }

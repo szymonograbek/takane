@@ -63,6 +63,8 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `continueWatching.item` | each Continue Watching card; label `<name>, <time left>`, or `<name>, New episode` for a show with new episodes |
 | `poster.<imdb id>` | each poster in Home rows and search results |
 | `search.recent`, `search.clearRecent` | on Search before anything is typed: each recent search (label is the query; selecting it runs it) and Clear, which confirms before forgetting them all |
+| `search.genre` | on Search before anything is typed: each genre in the Movies by Genre and Series by Genre rows; label is the genre, selecting it opens its grid |
+| `genre.screen` | a genre's grid of posters (`poster.<imdb id>`), or its empty or error state with Try Again |
 | `details.resume`, `details.play`, `episode.<id>` | Details actions; focus lands on Resume, else Play, on open and when the details load |
 | `details.description`, `details.descriptionDone` | the description, cut to four lines; selecting it opens the full text, which Done or Back closes |
 | `details.back` | Go Back on a series whose add-ons list no episodes |

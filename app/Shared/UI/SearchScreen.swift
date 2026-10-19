@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Searches every add-on that can, showing each catalog's answers as a row. Before anything is
-/// typed, offers recent searches.
+/// typed, offers recent searches and genres.
 struct SearchScreen: View {
     @Environment(AppContext.self) private var app
     @State private var store: FeatureStore<SearchFeature>?
@@ -29,7 +29,7 @@ struct SearchScreen: View {
             guard store == nil else { return }
             store = FeatureStore(
                 SearchFeature.State(), dependencies: SearchFeature.Dependencies(catalog: app.services.catalog),
-                start: [.observeRecentSearches]
+                start: [.observeRecentSearches, .observeGenres]
             )
         }
     }
@@ -43,17 +43,22 @@ private struct SearchResultsView: View {
     var body: some View {
         switch store.state.query {
         case .empty:
-            switch store.state.recentSearches {
-            case nil:
+            switch store.state.browse {
+            case .waiting:
                 EmptyView()
-            case let searches? where searches.isEmpty:
+            case .nothing:
                 ContentUnavailableView(
                     "Search Your Add-ons", systemImage: "magnifyingglass",
                     description: Text("Find movies and series across every add-on that can search.")
                 )
-            case let searches?:
-                RecentSearchesShelf(searches: searches, search: search) { store.send(.clearRecentSearches) }
-                    .padding(.vertical, Metrics.sectionSpacing)
+            case .offers(let searches, let genres):
+                LazyVStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
+                    if !searches.isEmpty {
+                        RecentSearchesShelf(searches: searches, search: search) { store.send(.clearRecentSearches) }
+                    }
+                    ForEach(genres, id: \.catalog) { GenreShelf(catalog: $0) }
+                }
+                .padding(.vertical, Metrics.sectionSpacing)
             }
         case .searching(_, results: nil), .searching(_, results: .searching?):
             ProgressView().padding(80)
@@ -103,6 +108,20 @@ private struct RecentSearchesShelf: View {
         }
         .confirmationDialog("Clear recent searches?", isPresented: $isConfirmingClear) {
             Button("Clear Recent Searches", action: clear)
+        }
+    }
+}
+
+/// A catalog's genres, each opening the catalog's titles in it.
+private struct GenreShelf: View {
+    let catalog: CatalogGenres
+
+    var body: some View {
+        Shelf(title: "\(catalog.catalog.type.pluralName) by Genre") {
+            ForEach(catalog.genres, id: \.self) { genre in
+                NavigationLink(genre.rawValue, value: Route.genre(GenreFilter(catalog: catalog.catalog, genre: genre)))
+                    .accessibilityIdentifier("search.genre")
+            }
         }
     }
 }
