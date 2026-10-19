@@ -63,7 +63,6 @@ struct PosterCard: View {
 /// Titles in rows of posters between the screen's margins, scrolling down. `card` draws each title,
 /// usually as a `PosterCard`.
 struct PosterGrid<Card: View>: View {
-    @Environment(\.textLayout) private var textLayout
     /// The screen's title, above the first row and scrolling with the grid.
     var title: String?
     let titles: [MetaPreview]
@@ -75,25 +74,44 @@ struct PosterGrid<Card: View>: View {
                 ScreenTitle(title)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.flexible(), spacing: Metrics.shelfSpacing, alignment: .top),
-                    count: Lockup.poster.columns(textLayout)
-                ),
-                alignment: .leading, spacing: Metrics.sectionSpacing
-            ) {
-                ForEach(titles, content: card)
-            }
-            .padding(.top, title == nil ? Metrics.screenPadding : Metrics.sectionSpacing)
-            .padding(.bottom, Metrics.screenPadding)
-            #if os(tvOS)
-            .focusSection()
-            #endif
+            PosterRows(titles: titles, card: card)
+                .padding(.top, title == nil ? Metrics.screenPadding : Metrics.sectionSpacing)
+                .padding(.bottom, Metrics.screenPadding)
         }
+        .posterGridMargins()
+    }
+}
+
+/// A `PosterGrid`'s rows without its scroll view, for a screen that scrolls them below its own
+/// controls. Put them in a scroll view with `posterGridMargins()`.
+struct PosterRows<Card: View>: View {
+    @Environment(\.textLayout) private var textLayout
+    let titles: [MetaPreview]
+    @ViewBuilder let card: (MetaPreview) -> Card
+
+    var body: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: Metrics.shelfSpacing, alignment: .top),
+                count: Lockup.poster.columns(textLayout)
+            ),
+            alignment: .leading, spacing: Metrics.sectionSpacing
+        ) {
+            ForEach(titles, content: card)
+        }
+        #if os(tvOS)
+        .focusSection()
+        #endif
+    }
+}
+
+extension ScrollView {
+    /// Keeps a scroll view of `PosterRows` between the screen's margins, with lifted posters unclipped.
+    func posterGridMargins() -> some View {
         // As safe area rather than padding, so each poster's `lockupFrame` divides only the width between the margins.
-        .safeAreaPadding(.horizontal, Metrics.screenPadding)
-        .ignoresSafeArea(edges: .horizontal)
-        .scrollClipDisabled()
+        safeAreaPadding(.horizontal, Metrics.screenPadding)
+            .ignoresSafeArea(edges: .horizontal)
+            .scrollClipDisabled()
     }
 }
 
