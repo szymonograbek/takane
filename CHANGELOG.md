@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/szymonograbek/takane/compare/v1.1.0...v1.1.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **ui:** bring the tab bar back on library after a scrolled push ([09e647a](https://github.com/szymonograbek/takane/commit/09e647a0594ea8b479a6c2929f837d48b5bf875c))
+* **ui:** bring the tab bar back on library after a scrolled push ([7bdecd1](https://github.com/szymonograbek/takane/commit/7bdecd1eb9a4c2f0f0408e8217adb28a46a925d2))
+
 ## [1.1.0](https://github.com/szymonograbek/takane/compare/v1.0.0...v1.1.0) (2026-10-19)
 
 
