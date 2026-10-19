@@ -38,6 +38,8 @@ enum Metrics {
     static let sectionSpacing: CGFloat = 50
     static let screenPadding: CGFloat = 80
     static let heroHeight: CGFloat = 640
+    /// The widest a block of text runs before lines get too long to follow.
+    static let readingWidth: CGFloat = 1200
     static let cornerRadius: CGFloat = 12
     /// Room under a card for the lift it gets under focus.
     static let captionSpacing: CGFloat = 26
@@ -69,6 +71,7 @@ enum Metrics {
     static let sectionSpacing: CGFloat = 28
     static let screenPadding: CGFloat = 32
     static let heroHeight: CGFloat = 420
+    static let readingWidth: CGFloat = 640
     static let cornerRadius: CGFloat = 10
     static let captionSpacing: CGFloat = 8
     static let emblemSize: CGFloat = 180

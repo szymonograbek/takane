@@ -24,9 +24,15 @@ struct DetailsScreen: View {
     }
 }
 
+private enum DetailsFocus: Hashable {
+    case resume, play
+}
+
 private struct DetailsContent: View {
     @Environment(AppContext.self) private var app
+    @Environment(\.dismiss) private var dismiss
     let store: FeatureStore<DetailsFeature>
+    @FocusState private var focus: DetailsFocus?
 
     var body: some View {
         let state = store.state
@@ -36,7 +42,7 @@ private struct DetailsContent: View {
                 header(preview, details: state.details)
                 switch state {
                 case .loading:
-                    ProgressView().frame(maxWidth: .infinity)
+                    CancellableProgress("Loading…")
                 case .failed(_, let error):
                     ContentUnavailableView {
                         Label("Couldn't Load This Title", systemImage: "exclamationmark.triangle")
@@ -57,6 +63,16 @@ private struct DetailsContent: View {
                             }
                         }
                     }
+                case .loaded(let details) where details.firstPlayable == nil:
+                    ContentUnavailableView {
+                        Label("No Episodes Yet", systemImage: "tv")
+                    } description: {
+                        Text("Your add-ons list no episodes for this series.")
+                    } actions: {
+                        // Also gives the screen something to focus, so Menu goes back from it.
+                        Button("Go Back") { dismiss() }
+                            .accessibilityIdentifier("details.back")
+                    }
                 case .loaded:
                     EmptyView()
                 }
@@ -65,6 +81,16 @@ private struct DetailsContent: View {
         }
         .scrollClipDisabled()
         .ignoresSafeArea(edges: [.top, .horizontal])
+        .defaultFocus($focus, playFocus)
+        .onChange(of: state.details == nil) { _, isLoading in
+            if !isLoading, focus == nil { focus = playFocus }
+        }
+    }
+
+    /// Resume, else Play: where focus lands when the page opens and again when its details arrive.
+    private var playFocus: DetailsFocus? {
+        if app.home.state.progress(of: store.state.preview.media) != nil { return .resume }
+        return store.state.details?.firstPlayable == nil ? nil : .play
     }
 
     private func header(_ preview: MetaPreview, details: TitleDetails?) -> some View {
@@ -81,9 +107,10 @@ private struct DetailsContent: View {
                 TitleMark(name: preview.name, logo: preview.logo)
                 Text(metadata(preview, details: details)).font(.caption).foregroundStyle(Palette.secondary)
                 if let description = preview.description {
-                    Text(description).font(.callout).lineLimit(4).frame(maxWidth: 900, alignment: .leading)
+                    DescriptionButton(title: preview.name, text: description)
+                        .accessibilityIdentifier("details.description")
                 }
-                PlayButtons(preview: preview, details: details) { store.send(.setWatched(.title(preview.media), $0)) }
+                PlayButtons(preview: preview, details: details, focus: $focus) { store.send(.setWatched(.title(preview.media), $0)) }
                     .padding(.top, 8)
             }
             .padding(.horizontal, Metrics.screenPadding)
@@ -109,6 +136,7 @@ private struct PlayButtons: View {
     @Environment(AppContext.self) private var app
     let preview: MetaPreview
     let details: TitleDetails?
+    let focus: FocusState<DetailsFocus?>.Binding
     let setWatched: (Bool) -> Void
 
     var body: some View {
@@ -120,6 +148,7 @@ private struct PlayButtons: View {
                 }
                 .primaryActionStyle()
                 .contextMenu { movieMenu }
+                .focused(focus, equals: .resume)
                 .accessibilityIdentifier("details.resume")
             }
             if let first = details?.firstPlayable {
@@ -127,6 +156,7 @@ private struct PlayButtons: View {
                     Label(preview.type == .movie ? "Play" : "Play First Episode", systemImage: "play.fill")
                 }
                 .contextMenu { movieMenu }
+                .focused(focus, equals: .play)
                 .accessibilityIdentifier("details.play")
                 // With Resume on screen, starting over is the secondary action.
                 if progress == nil { play.primaryActionStyle() } else { play }
@@ -139,6 +169,50 @@ private struct PlayButtons: View {
         if let details, preview.type == .movie {
             WatchedButton(isWatched: details.isWatched, action: setWatched)
         }
+    }
+}
+
+/// The description cut to four lines. Selecting it opens the whole text, which Back closes.
+private struct DescriptionButton: View {
+    let title: String
+    let text: String
+    @State private var isExpanded = false
+
+    var body: some View {
+        Button { isExpanded = true } label: {
+            Text(text)
+                .font(.callout)
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: 900, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        #if os(tvOS)
+        .fullScreenCover(isPresented: $isExpanded) { FullDescription(title: title, text: text) }
+        #else
+        .sheet(isPresented: $isExpanded) { FullDescription(title: title, text: text) }
+        #endif
+    }
+}
+
+private struct FullDescription: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
+            Text(title).font(.title2).bold()
+            ScrollView {
+                Text(text).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button("Done") { dismiss() }
+                .accessibilityIdentifier("details.descriptionDone")
+        }
+        .frame(maxWidth: Metrics.readingWidth)
+        .padding(Metrics.screenPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.canvas.ignoresSafeArea())
     }
 }
 
