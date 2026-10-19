@@ -4,6 +4,7 @@ Custom Apple TV / macOS client for Stremio accounts, built on [stremio-core](htt
 
 - [Feasibility](feasibility.md) — what is open, what is not, and the scope decisions that follow.
 - [Architecture](architecture.md) — layers, the Rust ↔ Swift bridge, stream handling, player.
+- [tvOS UI guidelines](../.claude/skills/tvos-ui/SKILL.md) — Apple's tvOS UX rules and the SwiftUI APIs that implement them (an agent skill).
 - [Roadmap](roadmap.md) — build order and how each step is verified.
 
 ## Scope at a glance
