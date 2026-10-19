@@ -47,6 +47,9 @@ enum Metrics {
     static let headerSpacing: CGFloat = 20
     /// How far a focused list row grows past its resting bounds on each side.
     static let rowLift: CGFloat = 24
+    /// Room between a settings row's text and the sides of its focus platter, so the text clears
+    /// the platter's rounded ends.
+    static let rowPadding: CGFloat = 40
     /// The player's list of tracks or speeds.
     static let playerPanelWidth: CGFloat = 720
     static let playerPanelMaxHeight: CGFloat = 560
