@@ -21,7 +21,7 @@ scripts/build-app.sh tvos-device          # tvOS device, unsigned (compile and l
 scripts/install-tvos.sh                   # tvOS device: pick a paired Apple TV, build signed, install, launch
 ```
 
-Or `xcodegen generate`, open `StremioTV.xcodeproj` in Xcode and run the `StremioTV-macOS` or `StremioTV-tvOS` scheme. The `StremioBridge_*` targets rebuild the Rust bridge before every app build. Signing uses the personal team (`F43U35GPD2`) with the `Apple Development: szymon@ograbek.com` identity.
+Or `xcodegen generate`, open `StremioTV.xcodeproj` in Xcode and run the `StremioTV-macOS` or `StremioTV-tvOS` scheme. The `StremioBridge_*` targets rebuild the Rust bridge before every app build. To sign with your own Apple account, set `DEVELOPMENT_TEAM` and the macOS target's `CODE_SIGN_IDENTITY` in `project.yml`.
 
 The app is Takane. First launch asks to sign in with Stremio (a link code confirmed on another device, or email and password) or continue without an account. Then five tabs: Home (a featured title, Continue Watching, every add-on catalog), Library, Calendar, Search and Settings (Account, Add-ons, Playback, Subtitles, About). A title opens Details, Play lists the add-ons' playable streams, and the player shows only the video until the remote asks for controls: progress, ±10 s, play/pause, subtitles, audio, speed and Skip Intro.
 
