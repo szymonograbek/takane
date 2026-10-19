@@ -49,7 +49,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
         let options = LoadOptions(
             httpHeaders: source.headers,
             preferredAudioLanguages: languages.audio.map { [$0.code] } ?? [],
-            preferredSubtitleLanguages: languages.subtitles.map { [$0.code] } ?? []
+            preferredSubtitleLanguages: languages.subtitles.inPreferenceOrder.map(\.code)
         )
         Log.player.info("load \(url.absoluteString) from \(startPosition ?? 0)s headers=\(source.headers.keys.sorted())")
         loading = Task { [player] in

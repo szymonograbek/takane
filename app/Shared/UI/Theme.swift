@@ -13,13 +13,19 @@ enum Palette {
     static let text = Color(red: 0.937, green: 0.910, blue: 0.871)
     /// Metadata and labels: the text color, dimmed.
     static let secondary = text.opacity(0.6)
-    /// Subtitle text, pure white for contrast on any picture, over a dark translucent backing.
-    static let subtitle = Color.white
-    static let subtitleBacking = Color.black.opacity(0.6)
 
     /// Burgundy fading into the canvas from the top, behind sign-in and empty screens.
     static let wash = RadialGradient(
         colors: [burgundy, surface, canvas], center: .top, startRadius: 0, endRadius: 1_400
+    )
+    /// A dusk sky behind the subtitle preview, pale on the left and dark on the right, so one line
+    /// of text crosses both.
+    static let previewScene = LinearGradient(
+        colors: [
+            Color(red: 0.98, green: 0.90, blue: 0.76), Color(red: 0.89, green: 0.58, blue: 0.44),
+            Color(red: 0.42, green: 0.20, blue: 0.30), Color(red: 0.06, green: 0.05, blue: 0.10),
+        ],
+        startPoint: .leading, endPoint: .trailing
     )
 }
 
@@ -49,11 +55,8 @@ enum Metrics {
     static let progressHeight: CGFloat = 5
     /// The player's progress bar while it has focus.
     static let focusedProgressHeight: CGFloat = 14
-    static let subtitleStyle = Font.TextStyle.title2
-    /// Space between the subtitles and the bottom of the picture.
-    static let subtitleInset: CGFloat = 60
-    /// Horizontal room inside the subtitle backing; a third of it above and below.
-    static let subtitlePadding: CGFloat = 18
+    /// The color dot beside a subtitle color choice.
+    static let swatchSize: CGFloat = 36
     #else
     static let posterWidth: CGFloat = 140
     static let wideCardWidth: CGFloat = 280
@@ -72,10 +75,18 @@ enum Metrics {
     static let welcomeLogoSize: CGFloat = 160
     static let progressHeight: CGFloat = 5
     static let focusedProgressHeight: CGFloat = 9
-    static let subtitleStyle = Font.TextStyle.largeTitle
-    static let subtitleInset: CGFloat = 28
-    static let subtitlePadding: CGFloat = 10
+    static let swatchSize: CGFloat = 14
     #endif
+
+    // Subtitles scale with the picture rather than the screen, so the preview in Settings is the
+    // player's overlay in miniature.
+    /// Text size at 100 %, as a fraction of the picture's height.
+    static let subtitleTextHeight: CGFloat = 0.053
+    /// Horizontal room inside the subtitle backing, as a fraction of the text size; a third of it
+    /// above and below.
+    static let subtitlePadding: CGFloat = 0.32
+    /// Outline thickness, as a fraction of the text size.
+    static let subtitleOutline: CGFloat = 0.06
 }
 
 /// Takane's logo, a mountain with a play button, `size` points wide. Generated with

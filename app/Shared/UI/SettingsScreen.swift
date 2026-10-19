@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Four categories, laid out like the system's Settings: an emblem on the left, the list on the right.
+/// Five categories, laid out like the system's Settings: an emblem on the left, the list on the right.
 struct SettingsScreen: View {
     @Environment(AppContext.self) private var app
 
@@ -23,6 +23,12 @@ struct SettingsScreen: View {
                 .accessibilityIdentifier("settings.addons")
                 NavigationLink("Playback") { PlaybackSettings() }
                     .accessibilityIdentifier("settings.playback")
+                NavigationLink {
+                    SubtitleSettings()
+                } label: {
+                    LabeledContent("Subtitles", value: app.preferences.state.playback?.languages.subtitles.primary?.displayName ?? "Off")
+                }
+                .accessibilityIdentifier("settings.subtitles")
                 NavigationLink("About") { AboutSettings() }
                     .accessibilityIdentifier("settings.about")
             }

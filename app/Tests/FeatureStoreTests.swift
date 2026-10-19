@@ -14,7 +14,7 @@ private final class FakeEngine: PlaybackEngine {
     }
 
     func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) {
-        commands.append("load \(source.url.lastPathComponent) from \(start) \(languages.subtitles?.code ?? "-")")
+        commands.append("load \(source.url.lastPathComponent) from \(start) \(languages.subtitles.primary?.code ?? "-")")
     }
     func setPaused(_ paused: Bool) { commands.append("paused \(paused)") }
     func seek(by offset: Duration) { commands.append("seek \(offset)") }
@@ -111,8 +111,8 @@ private struct NoSegments: SkipSegmentService {
 
 private struct FixedPreferences: PreferencesService {
     func playback() -> AsyncStream<PlaybackPreferences> {
-        let languages = TrackLanguages(audio: nil, subtitles: Language("pol"))
-        return AsyncStream { $0.yield(PlaybackPreferences(languages: languages)) }
+        let languages = TrackLanguages(audio: nil, subtitles: .preferred(Language("pol").require(), fallback: nil))
+        return AsyncStream { $0.yield(PlaybackPreferences(languages: languages, subtitleStyle: .defaults)) }
     }
 
     func update(_ preferences: PlaybackPreferences) throws(PreferencesError) {}

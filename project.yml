@@ -114,7 +114,8 @@ targets:
         CODE_SIGN_IDENTITY: "-"
     scheme:
       testTargets: [StremioTVTests]
-  # Unit tests for the HTTP adapters, against recorded responses served by a URLProtocol stub.
+  # Unit tests for the HTTP adapters, against recorded responses served by a URLProtocol stub, and for
+  # the bridge-free core mappings.
   # Live tests run against the real services when STREMIO_LIVE_TESTS=1 (see scripts/test.sh).
   StremioTVAdapterTests:
     type: bundle.unit-test
@@ -125,6 +126,7 @@ targets:
       - path: app/Shared/App/LaunchOptions.swift
       - path: app/Shared/Adapters/HTTP
       - path: app/Shared/Adapters/SkipDB
+      - path: app/Shared/Adapters/Core/CoreSubtitleSettings.swift
       - path: app/Tests/Fixtures.swift
       - path: app/AdapterTests
     buildToolPlugins:

@@ -148,7 +148,7 @@ struct PlayerControls: View {
         }
     }
 
-    /// Files grouped by language in the add-on's order, the preferred language first.
+    /// Files grouped by language in the add-on's order, the preferred languages first.
     private func languageGroups(_ files: [AddonSubtitle]) -> [(language: String, files: [AddonSubtitle])] {
         var groups: [(language: String, files: [AddonSubtitle])] = []
         for file in files {
@@ -158,9 +158,11 @@ struct PlayerControls: View {
                 groups.append((file.language, [file]))
             }
         }
-        let preferred = app.preferences.state.playback?.languages.subtitles
-        if let preferred, let index = groups.firstIndex(where: { Language($0.language) == preferred }) {
-            groups.insert(groups.remove(at: index), at: 0)
+        let preferred = app.preferences.state.playback?.languages.subtitles.inPreferenceOrder ?? []
+        for language in preferred.reversed() {
+            if let index = groups.firstIndex(where: { Language($0.language) == language }) {
+                groups.insert(groups.remove(at: index), at: 0)
+            }
         }
         return groups
     }

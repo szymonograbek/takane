@@ -42,12 +42,35 @@ enum PlaybackSpeed: Double, CaseIterable, Hashable, Sendable {
     case double = 2
 }
 
-/// Languages to pick tracks in when a stream starts, as ISO 639-2 codes. Nil leaves it to the stream.
+/// Languages to pick tracks in when a stream starts, as ISO 639-2 codes.
 struct TrackLanguages: Hashable, Sendable {
+    /// Nil leaves it to the stream.
     var audio: Language?
-    var subtitles: Language?
+    var subtitles: SubtitleLanguages
 
-    static let streamDefaults = TrackLanguages(audio: nil, subtitles: nil)
+    static let streamDefaults = TrackLanguages(audio: nil, subtitles: .off)
+}
+
+/// Whether a stream starts with subtitles, and in which language.
+enum SubtitleLanguages: Hashable, Sendable {
+    case off
+    /// A track in the first language, else one in `fallback`.
+    case preferred(Language, fallback: Language?)
+
+    var primary: Language? {
+        switch self {
+        case .off: nil
+        case .preferred(let language, _): language
+        }
+    }
+
+    /// Most preferred first; empty when off.
+    var inPreferenceOrder: [Language] {
+        switch self {
+        case .off: []
+        case .preferred(let language, let fallback): [language] + (fallback.map { [$0] } ?? [])
+        }
+    }
 }
 
 /// A subtitle on screen. Styled text arrives flattened to its characters.
