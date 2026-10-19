@@ -16,26 +16,47 @@ extension View {
     }
 }
 
-/// A title's poster in a shelf or grid, named underneath. Selecting it opens the title.
+/// A title's poster in a shelf or grid, named underneath. Selecting it opens the title. On tvOS
+/// focus lifts the poster and moves its name out of the way; macOS keeps it plain.
 struct PosterCard: View {
     let preview: MetaPreview
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
-            NavigationLink(value: Route.details(preview)) {
-                Artwork(url: preview.poster, title: preview.name)
-                    .aspectRatio(preview.posterShape.aspectRatio, contentMode: .fit)
-                    .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+        NavigationLink(value: Route.details(preview)) {
+            #if os(tvOS)
+            // The borderless style stacks the poster over its name and lifts the label's first
+            // `Image`, which `Artwork` is not, hence the highlight.
+            poster.hoverEffect(.highlight)
+            name
+            #else
+            VStack(alignment: .leading) {
+                poster
+                name
             }
-            .cardButtonStyle()
-            .accessibilityLabel(preview.name)
-            .accessibilityIdentifier("poster.\(preview.media.rawValue)")
-            Text(preview.name)
-                .font(.caption)
-                .foregroundStyle(Palette.secondary)
-                .lineLimit(1)
+            #endif
         }
-        .lockupFrame(.poster)
+        #if os(tvOS)
+        .buttonStyle(.borderless)
+        #else
+        .buttonStyle(.plain)
+        #endif
+        .accessibilityLabel(preview.name)
+        .accessibilityIdentifier("poster.\(preview.media.rawValue)")
+    }
+
+    private var poster: some View {
+        Artwork(url: preview.poster, title: preview.name)
+            .aspectRatio(preview.posterShape.aspectRatio, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+            .lockupFrame(.poster)
+    }
+
+    private var name: some View {
+        Text(preview.name)
+            .font(.caption)
+            .foregroundStyle(Palette.secondary)
+            .lineLimit(1)
+            .lockupFrame(.poster)
     }
 }
 
