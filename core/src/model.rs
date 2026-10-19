@@ -1,6 +1,7 @@
 //! The stremio-core models this app runs, and how they are created from storage.
 
 use futures::try_join;
+use serde::Serialize;
 use stremio_core::constants::{
     DISMISSED_EVENTS_STORAGE_KEY, LIBRARY_RECENT_STORAGE_KEY, LIBRARY_STORAGE_KEY,
     NOTIFICATIONS_STORAGE_KEY, PROFILE_STORAGE_KEY, SEARCH_HISTORY_STORAGE_KEY,
@@ -11,6 +12,7 @@ use stremio_core::models::catalogs_with_extra::CatalogsWithExtra;
 use stremio_core::models::continue_watching_preview::ContinueWatchingPreview;
 use stremio_core::models::ctx::Ctx;
 use stremio_core::models::link::Link;
+use stremio_core::models::common::Loadable;
 use stremio_core::models::meta_details::MetaDetails;
 use stremio_core::models::player::Player;
 use stremio_core::runtime::{Effects, Env, EnvError};
@@ -113,9 +115,78 @@ impl AppModel {
             AppModelField::AddonDetails => serde_json::to_vec(&self.addon_details),
             AppModelField::Board => serde_json::to_vec(&self.board),
             AppModelField::Search => serde_json::to_vec(&self.search),
-            AppModelField::MetaDetails => serde_json::to_vec(&self.meta_details),
+            AppModelField::MetaDetails => serde_json::to_vec(&MetaDetailsState::new(&self.meta_details)),
             AppModelField::Player => serde_json::to_vec(&self.player),
             AppModelField::Link => serde_json::to_vec(&self.link),
         }
+    }
+}
+
+/// Core's `MetaDetails` plus the ids of the shown title's videos the user has watched, which
+/// core keeps out of its serialized state.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MetaDetailsState<'a> {
+    #[serde(flatten)]
+    model: &'a MetaDetails,
+    watched_videos: Vec<&'a str>,
+}
+
+impl<'a> MetaDetailsState<'a> {
+    /// Core computes `watched` for the first ready meta item, so the ids come from that one.
+    fn new(model: &'a MetaDetails) -> Self {
+        let meta_item = model.meta_items.iter().find_map(|meta_item| match &meta_item.content {
+            Some(Loadable::Ready(meta_item)) => Some(meta_item),
+            _ => None,
+        });
+        let watched_videos = match (meta_item, &model.watched) {
+            (Some(meta_item), Some(watched)) => meta_item
+                .videos
+                .iter()
+                .filter(|video| watched.get_video(&video.id))
+                .map(|video| video.id.as_str())
+                .collect(),
+            _ => vec![],
+        };
+        MetaDetailsState { model, watched_videos }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use stremio_core::models::common::ResourceLoadable;
+    use stremio_watched_bitfield::WatchedBitField;
+
+    #[test]
+    fn meta_details_state_lists_the_watched_videos() {
+        let meta_item = serde_json::from_value(serde_json::json!({
+            "id": "tt0944947",
+            "type": "series",
+            "name": "Game of Thrones",
+            "videos": [
+                {"id": "tt0944947:1:1", "title": "Winter Is Coming", "season": 1, "episode": 1},
+                {"id": "tt0944947:1:2", "title": "The Kingsroad", "season": 1, "episode": 2},
+            ],
+        }))
+        .unwrap();
+        let request = serde_json::from_value(serde_json::json!({
+            "base": "https://example.com/manifest.json",
+            "path": {"resource": "meta", "type": "series", "id": "tt0944947", "extra": []},
+        }))
+        .unwrap();
+        let model = MetaDetails {
+            meta_items: vec![ResourceLoadable { request, content: Some(Loadable::Ready(meta_item)) }],
+            watched: Some(WatchedBitField::construct_from_array(
+                vec![true, false],
+                vec!["tt0944947:1:1".to_owned(), "tt0944947:1:2".to_owned()],
+            )),
+            ..Default::default()
+        };
+
+        let state = serde_json::to_value(MetaDetailsState::new(&model)).unwrap();
+
+        assert_eq!(state["watchedVideos"], serde_json::json!(["tt0944947:1:1"]));
+        assert_eq!(state["metaItems"][0]["content"]["content"]["name"], "Game of Thrones");
     }
 }

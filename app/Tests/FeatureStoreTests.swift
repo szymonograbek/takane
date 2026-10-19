@@ -114,7 +114,7 @@ private struct NoSegments: SkipSegmentService {
 private struct FixedPreferences: PreferencesService {
     func preferences() -> AsyncStream<Preferences> {
         let languages = TrackLanguages(audio: nil, subtitles: PreferredLanguages(primary: Language("pol").require(), fallback: nil))
-        return AsyncStream { $0.yield(Preferences(languages: languages, subtitleStyle: .defaults, seekStep: .thirty)) }
+        return AsyncStream { $0.yield(Preferences(languages: languages, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false)) }
     }
 
     func update(_ preferences: Preferences) throws(PreferencesError) {}

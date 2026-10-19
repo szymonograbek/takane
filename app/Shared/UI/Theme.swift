@@ -57,6 +57,8 @@ enum Metrics {
     static let focusedProgressHeight: CGFloat = 14
     /// The color dot beside a subtitle color choice.
     static let swatchSize: CGFloat = 36
+    /// How strongly an unwatched episode's still blurs while spoilers are hidden.
+    static let spoilerBlurRadius: CGFloat = 24
     #else
     static let posterWidth: CGFloat = 140
     static let wideCardWidth: CGFloat = 280
@@ -76,6 +78,7 @@ enum Metrics {
     static let progressHeight: CGFloat = 5
     static let focusedProgressHeight: CGFloat = 9
     static let swatchSize: CGFloat = 14
+    static let spoilerBlurRadius: CGFloat = 16
     #endif
 
     // Subtitles scale with the picture rather than the screen, so the preview in Settings is the

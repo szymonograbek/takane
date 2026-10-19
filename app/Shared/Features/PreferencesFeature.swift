@@ -16,6 +16,7 @@ enum PreferencesFeature: Feature {
         case setSubtitleLanguages(PreferredLanguages?)
         case setSubtitleStyle(SubtitleStyle)
         case setSeekStep(SeekStep)
+        case setHidesSpoilers(Bool)
         case updateFailed(PreferencesError)
     }
 
@@ -39,6 +40,8 @@ enum PreferencesFeature: Feature {
             return change(state) { $0.subtitleStyle = style }
         case .setSeekStep(let step):
             return change(state) { $0.seekStep = step }
+        case .setHidesSpoilers(let hides):
+            return change(state) { $0.hidesSpoilers = hides }
         case .updateFailed(let error):
             state.failure = error
             return []

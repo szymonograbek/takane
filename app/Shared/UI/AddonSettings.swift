@@ -81,7 +81,8 @@ private struct InstallAddonScreen: View {
     }
 }
 
-/// The languages to pick audio tracks in, and how far back and forward skip.
+/// The languages to pick audio tracks in, how far back and forward skip, and whether unwatched
+/// episodes hide spoilers.
 struct PlaybackSettings: View {
     @Environment(AppContext.self) private var app
 
@@ -118,10 +119,20 @@ struct PlaybackSettings: View {
             } header: {
                 Text("Player")
             } footer: {
+                Text("How far back and forward skip. Quick presses in a row skip further, up to a minute.")
+            }
+            Section {
+                Toggle("Hide Spoilers", isOn: Binding { preferences?.hidesSpoilers ?? false } set: { hides in
+                    app.preferences.send(.setHidesSpoilers(hides))
+                })
+                .accessibilityIdentifier("playback.hideSpoilers")
+            } header: {
+                Text("Episodes")
+            } footer: {
                 if case .rejected(let reason)? = app.preferences.state.failure {
                     Text("Couldn't save the change (\(reason)).")
                 } else {
-                    Text("How far back and forward skip. Quick presses in a row skip further, up to a minute.")
+                    Text("Episodes you haven't watched blur their picture and leave out their summary.")
                 }
             }
         }

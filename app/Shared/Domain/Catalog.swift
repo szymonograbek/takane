@@ -103,6 +103,7 @@ struct Video: Identifiable, Hashable, Sendable {
     let released: Date?
     let thumbnail: URL?
     let overview: String?
+    let isWatched: Bool
 
     var id: PlayableID { playable }
 }

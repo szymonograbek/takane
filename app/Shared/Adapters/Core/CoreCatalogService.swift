@@ -45,7 +45,7 @@ struct CoreCatalogService: CatalogService {
                 // Core asks every add-on with the `meta` resource for this type and id; none means none installed.
                 guard !details.metaItems.isEmpty else { return .failed(.noMetaAddons) }
                 if let item = details.metaItems.lazy.compactMap({ $0.content?.readyContent }).first {
-                    return Self.details(item).map(Probe.done) ?? .failed(.notFound)
+                    return Self.details(item, watched: details.watchedVideos).map(Probe.done) ?? .failed(.notFound)
                 }
                 return details.metaItems.allSatisfy { $0.content?.isSettled ?? false } ? .failed(.notFound) : .pending
             }
@@ -162,7 +162,7 @@ struct CoreCatalogService: CatalogService {
         )
     }
 
-    private static func details(_ item: MetaDetailsState.MetaItem) -> TitleDetails? {
+    private static func details(_ item: MetaDetailsState.MetaItem, watched: Set<String>) -> TitleDetails? {
         guard let preview = preview(item.preview) else { return nil }
         return TitleDetails(
             preview: preview,
@@ -174,7 +174,7 @@ struct CoreCatalogService: CatalogService {
                     Video(
                         playable: playable, name: video.title, season: video.season, episode: video.episode,
                         released: video.released.flatMap(date), thumbnail: video.thumbnail.flatMap(URL.init(string:)),
-                        overview: video.overview
+                        overview: video.overview, isWatched: watched.contains(video.id)
                     )
                 }
             }

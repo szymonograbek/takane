@@ -1,10 +1,12 @@
-/// Playback preferences apart from subtitles as core's profile settings hold them:
-/// `audioLanguage` and `secondaryAudioLanguage`, and `seekTimeDuration` in milliseconds.
+/// Preferences apart from subtitles as core's profile settings hold them: `audioLanguage` and
+/// `secondaryAudioLanguage`, `seekTimeDuration` in milliseconds, and `hideSpoilers`, which reads
+/// as false when missing or not a bool.
 /// A seek time no `SeekStep` matches, set by another Stremio app, reads as the default and is
 /// kept until the user picks another.
-enum CorePlaybackSettings {
+enum CoreGeneralSettings {
     static let audioLanguages = CoreLanguageKeys(primary: "audioLanguage", fallback: "secondaryAudioLanguage")
     private static let seekTimeKey = "seekTimeDuration"
+    private static let hideSpoilersKey = "hideSpoilers"
 
     static func seekStep(in settings: [String: JSONValue]) -> SeekStep {
         guard case .number(let milliseconds)? = settings[seekTimeKey] else { return .defaults }
@@ -15,6 +17,15 @@ enum CorePlaybackSettings {
     static func write(_ step: SeekStep, into settings: inout [String: JSONValue]) {
         guard seekStep(in: settings) != step else { return }
         settings[seekTimeKey] = .number(Double(step.seconds * 1_000))
+    }
+
+    static func hidesSpoilers(in settings: [String: JSONValue]) -> Bool {
+        guard case .bool(let hides)? = settings[hideSpoilersKey] else { return false }
+        return hides
+    }
+
+    static func writeHidesSpoilers(_ hides: Bool, into settings: inout [String: JSONValue]) {
+        settings[hideSpoilersKey] = .bool(hides)
     }
 }
 

@@ -1,4 +1,4 @@
-/// The preferences as core's profile settings hold them, in the keys `CorePlaybackSettings`
+/// The preferences as core's profile settings hold them, in the keys `CoreGeneralSettings`
 /// and `CoreSubtitleSettings` read.
 struct CorePreferencesService: PreferencesService {
     let runtime: CoreRuntime
@@ -6,15 +6,16 @@ struct CorePreferencesService: PreferencesService {
     func preferences() -> AsyncStream<Preferences> {
         runtime.observe(.ctx, as: CtxState.self) { ctx in
             guard case .object(let settings) = ctx.profile.settings else {
-                return Preferences(languages: .streamDefaults, subtitleStyle: .defaults, seekStep: .defaults)
+                return Preferences(languages: .streamDefaults, subtitleStyle: .defaults, seekStep: .defaults, hidesSpoilers: false)
             }
             return Preferences(
                 languages: TrackLanguages(
-                    audio: CorePlaybackSettings.audioLanguages.read(settings),
+                    audio: CoreGeneralSettings.audioLanguages.read(settings),
                     subtitles: CoreSubtitleSettings.languages(in: settings)
                 ),
                 subtitleStyle: CoreSubtitleSettings.style(in: settings),
-                seekStep: CorePlaybackSettings.seekStep(in: settings)
+                seekStep: CoreGeneralSettings.seekStep(in: settings),
+                hidesSpoilers: CoreGeneralSettings.hidesSpoilers(in: settings)
             )
         }
     }
@@ -22,8 +23,9 @@ struct CorePreferencesService: PreferencesService {
     func update(_ preferences: Preferences) throws(PreferencesError) {
         // core takes the whole settings object, so every other key goes back as it was.
         var settings = try currentSettings()
-        CorePlaybackSettings.audioLanguages.write(preferences.languages.audio, into: &settings)
-        CorePlaybackSettings.write(preferences.seekStep, into: &settings)
+        CoreGeneralSettings.audioLanguages.write(preferences.languages.audio, into: &settings)
+        CoreGeneralSettings.write(preferences.seekStep, into: &settings)
+        CoreGeneralSettings.writeHidesSpoilers(preferences.hidesSpoilers, into: &settings)
         CoreSubtitleSettings.write(preferences.languages.subtitles, into: &settings)
         CoreSubtitleSettings.write(preferences.subtitleStyle, into: &settings)
         do {

@@ -17,6 +17,8 @@ struct Preferences: Hashable, Sendable {
     var languages: TrackLanguages
     var subtitleStyle: SubtitleStyle
     var seekStep: SeekStep
+    /// Whether a title's unwatched episodes keep their still blurred and their overview hidden.
+    var hidesSpoilers: Bool
 }
 
 /// How far one press of back or forward skips. Each has an SF Symbol, `gobackward.<seconds>`.
