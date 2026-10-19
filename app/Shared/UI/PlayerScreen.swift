@@ -23,7 +23,7 @@ struct PlayerScreen: View {
             if let session = state.session {
                 SubtitleOverlay(
                     cues: session.subtitles, videoSize: session.videoSize,
-                    style: app.preferences.state.playback?.subtitleStyle ?? .defaults
+                    style: app.preferences.state.preferences?.subtitleStyle ?? .defaults
                 )
             }
             switch state {

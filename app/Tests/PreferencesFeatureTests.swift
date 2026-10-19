@@ -10,7 +10,7 @@ struct PreferencesFeatureTests {
     }
 
     private var loaded: PreferencesFeature.State {
-        PreferencesFeature.State(playback: PlaybackPreferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten))
+        PreferencesFeature.State(preferences: Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten))
     }
 
     @Test func editsBeforeThePreferencesLoadAreIgnored() {
@@ -36,27 +36,27 @@ struct PreferencesFeatureTests {
 
         let polishAudio = PreferredLanguages(primary: polish, fallback: english)
         #expect(PreferencesFeature.reduce(&state, .setAudioLanguages(polishAudio)) == [
-            .update(PlaybackPreferences(
+            .update(Preferences(
                 languages: TrackLanguages(audio: polishAudio, subtitles: PreferredLanguages(primary: english, fallback: nil)),
                 subtitleStyle: .defaults,
                 seekStep: .ten
             )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleLanguages(PreferredLanguages(primary: english, fallback: polish))) == [
-            .update(PlaybackPreferences(
+            .update(Preferences(
                 languages: TrackLanguages(audio: nil, subtitles: PreferredLanguages(primary: english, fallback: polish)),
                 subtitleStyle: .defaults,
                 seekStep: .ten
             )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleLanguages(nil)) == [
-            .update(PlaybackPreferences(languages: TrackLanguages(audio: nil, subtitles: nil), subtitleStyle: .defaults, seekStep: .ten)),
+            .update(Preferences(languages: TrackLanguages(audio: nil, subtitles: nil), subtitleStyle: .defaults, seekStep: .ten)),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleStyle(bold)) == [
-            .update(PlaybackPreferences(languages: englishSubtitles, subtitleStyle: bold, seekStep: .ten)),
+            .update(Preferences(languages: englishSubtitles, subtitleStyle: bold, seekStep: .ten)),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSeekStep(.thirty)) == [
-            .update(PlaybackPreferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .thirty)),
+            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .thirty)),
         ])
     }
 
@@ -69,8 +69,8 @@ struct PreferencesFeatureTests {
         var state = loaded
         _ = PreferencesFeature.reduce(&state, .updateFailed(.rejected(reason: "offline")))
         #expect(state.failure == .rejected(reason: "offline"))
-        let preferences = loaded.playback.require()
-        _ = PreferencesFeature.reduce(&state, .playbackChanged(preferences))
-        #expect(state == PreferencesFeature.State(playback: preferences, failure: nil))
+        let preferences = loaded.preferences.require()
+        _ = PreferencesFeature.reduce(&state, .changed(preferences))
+        #expect(state == PreferencesFeature.State(preferences: preferences, failure: nil))
     }
 }

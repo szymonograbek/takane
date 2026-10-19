@@ -86,14 +86,14 @@ struct PlaybackSettings: View {
     @Environment(AppContext.self) private var app
 
     var body: some View {
-        let playback = app.preferences.state.playback
-        let seekStep = playback?.seekStep ?? .defaults
+        let preferences = app.preferences.state.preferences
+        let seekStep = preferences?.seekStep ?? .defaults
         SettingsPage(title: "Playback") {
             SettingsSymbol(name: "play.rectangle")
         } rows: {
             Section {
                 PreferredLanguagesPicker(
-                    title: "Language", none: "Stream Default", selection: playback?.languages.audio,
+                    title: "Language", none: "Stream Default", selection: preferences?.languages.audio,
                     ids: (primary: "playback.audioLanguage", fallback: "playback.secondAudioLanguage")
                 ) {
                     app.preferences.send(.setAudioLanguages($0))

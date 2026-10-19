@@ -123,7 +123,7 @@ final class AppContext {
         preferences = FeatureStore(
             PreferencesFeature.State(),
             dependencies: PreferencesFeature.Dependencies(preferences: services.preferences),
-            start: [.observePlayback]
+            start: [.observe]
         )
     }
 }

@@ -6,8 +6,8 @@ struct SubtitleSettings: View {
     @State private var confirmingReset = false
 
     var body: some View {
-        let languages = app.preferences.state.playback?.languages.subtitles
-        let style = app.preferences.state.playback?.subtitleStyle ?? .defaults
+        let languages = app.preferences.state.preferences?.languages.subtitles
+        let style = app.preferences.state.preferences?.subtitleStyle ?? .defaults
         SettingsPage(title: "Subtitles") {
             SubtitlePreview(style: style)
         } rows: {

@@ -13,7 +13,7 @@ struct Language: Hashable, Sendable, CustomStringConvertible {
     var description: String { code }
 }
 
-struct PlaybackPreferences: Hashable, Sendable {
+struct Preferences: Hashable, Sendable {
     var languages: TrackLanguages
     var subtitleStyle: SubtitleStyle
     var seekStep: SeekStep
@@ -38,8 +38,8 @@ enum PreferencesError: Error, Equatable, Sendable {
 
 /// The user's settings, synced with the account when signed in.
 protocol PreferencesService: Sendable {
-    /// The playback preferences now, then after every change.
-    func playback() -> AsyncStream<PlaybackPreferences>
+    /// The preferences now, then after every change.
+    func preferences() -> AsyncStream<Preferences>
 
-    func update(_ preferences: PlaybackPreferences) throws(PreferencesError)
+    func update(_ preferences: Preferences) throws(PreferencesError)
 }

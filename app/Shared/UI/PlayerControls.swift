@@ -159,7 +159,7 @@ struct PlayerControls: View {
                 groups.append((file.language, [file]))
             }
         }
-        let preferred = app.preferences.state.playback?.languages.subtitles?.inPreferenceOrder ?? []
+        let preferred = app.preferences.state.preferences?.languages.subtitles?.inPreferenceOrder ?? []
         for language in preferred.reversed() {
             if let index = groups.firstIndex(where: { Language($0.language) == language }) {
                 groups.insert(groups.remove(at: index), at: 0)

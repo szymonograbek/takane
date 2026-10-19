@@ -277,7 +277,7 @@ extension PlayerFeature {
             }
         case .begin(let candidate, let source, let start):
             // The first value is the current one, so this does not wait on the network.
-            var updates = dependencies.preferences.playback().makeAsyncIterator()
+            var updates = dependencies.preferences.preferences().makeAsyncIterator()
             let preferences = await updates.next()
             if let preferences { send(.preferencesRead(candidate, preferences.seekStep)) }
             tracker.begin(candidate)

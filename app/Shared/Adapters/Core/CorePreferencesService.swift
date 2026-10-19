@@ -1,14 +1,14 @@
-/// Playback preferences as core's profile settings hold them, in the keys `CorePlaybackSettings`
+/// The preferences as core's profile settings hold them, in the keys `CorePlaybackSettings`
 /// and `CoreSubtitleSettings` read.
 struct CorePreferencesService: PreferencesService {
     let runtime: CoreRuntime
 
-    func playback() -> AsyncStream<PlaybackPreferences> {
+    func preferences() -> AsyncStream<Preferences> {
         runtime.observe(.ctx, as: CtxState.self) { ctx in
             guard case .object(let settings) = ctx.profile.settings else {
-                return PlaybackPreferences(languages: .streamDefaults, subtitleStyle: .defaults, seekStep: .defaults)
+                return Preferences(languages: .streamDefaults, subtitleStyle: .defaults, seekStep: .defaults)
             }
-            return PlaybackPreferences(
+            return Preferences(
                 languages: TrackLanguages(
                     audio: CorePlaybackSettings.audioLanguages.read(settings),
                     subtitles: CoreSubtitleSettings.languages(in: settings)
@@ -19,7 +19,7 @@ struct CorePreferencesService: PreferencesService {
         }
     }
 
-    func update(_ preferences: PlaybackPreferences) throws(PreferencesError) {
+    func update(_ preferences: Preferences) throws(PreferencesError) {
         // core takes the whole settings object, so every other key goes back as it was.
         var settings = try currentSettings()
         CorePlaybackSettings.audioLanguages.write(preferences.languages.audio, into: &settings)
