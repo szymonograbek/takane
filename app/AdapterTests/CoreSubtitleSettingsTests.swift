@@ -14,6 +14,7 @@ struct CoreSubtitleSettingsTests {
         "subtitlesBackgroundColor": .string("#00000000"),
         "subtitlesOutlineColor": .string("#000000"),
         "subtitlesOpacity": .number(100),
+        "assSubtitlesStyling": .bool(false),
     ]
 
     private let english = Language("eng").require()
@@ -47,6 +48,14 @@ struct CoreSubtitleSettingsTests {
         #expect(CoreSubtitleSettings.style(in: settings) == expected)
     }
 
+    @Test func fileStylingReadsFromTheASSKey() {
+        var settings = Self.coreDefaults
+        settings["assSubtitlesStyling"] = .bool(true)
+        #expect(CoreSubtitleSettings.style(in: settings).usesFileStyling)
+        settings["assSubtitlesStyling"] = .string("true")
+        #expect(!CoreSubtitleSettings.style(in: settings).usesFileStyling)
+    }
+
     @Test func fontsReadByFamilyAndAnyOtherIsTheSystemFont() {
         let fonts = ["ui-rounded", "serif", "monospace", "sans-serif", "Roboto"].map { name in
             CoreSubtitleSettings.style(in: ["subtitlesFont": .string(name)]).font
@@ -56,7 +65,7 @@ struct CoreSubtitleSettingsTests {
 
     @Test func writingTheStyleWritesUppercaseHexWithAlpha() {
         let style = SubtitleStyle(
-            size: Percent(125), font: .serif, isBold: true,
+            size: Percent(125), font: .serif, isBold: true, usesFileStyling: true,
             textColor: SubtitleColor(red: 255, green: 204, blue: 0),
             outlineColor: SubtitleColor(red: 0, green: 0, blue: 0, alpha: 0),
             backgroundColor: SubtitleColor(red: 0, green: 0, blue: 0, alpha: 128),
@@ -67,6 +76,7 @@ struct CoreSubtitleSettingsTests {
         #expect(settings["subtitlesSize"] == .number(125))
         #expect(settings["subtitlesFont"] == .string("serif"))
         #expect(settings["subtitlesBold"] == .bool(true))
+        #expect(settings["assSubtitlesStyling"] == .bool(true))
         #expect(settings["subtitlesTextColor"] == .string("#FFCC00FF"))
         #expect(settings["subtitlesOutlineColor"] == .string("#00000000"))
         #expect(settings["subtitlesBackgroundColor"] == .string("#00000080"))

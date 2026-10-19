@@ -1,7 +1,8 @@
 import Foundation
 
 /// Subtitle preferences as core's profile settings hold them: `subtitlesLanguage` and
-/// `secondarySubtitlesLanguage`, then the style keys (`subtitlesSize`, `subtitlesTextColor`…).
+/// `secondarySubtitlesLanguage`, then the style keys (`subtitlesSize`, `subtitlesTextColor`…) and
+/// `assSubtitlesStyling`, which keeps a file's own styling.
 /// Colors are CSS hex, `#RRGGBB` or `#RRGGBBAA`; sizes, opacity and offset are whole percents.
 /// A key that is missing or unreadable reads as its default.
 enum CoreSubtitleSettings {
@@ -12,11 +13,11 @@ enum CoreSubtitleSettings {
 
     static func style(in settings: [String: JSONValue]) -> SubtitleStyle {
         let defaults = SubtitleStyle.defaults
-        let isBold = if case .bool(let flag)? = settings[Key.bold] { flag } else { defaults.isBold }
         return SubtitleStyle(
             size: percent(settings[Key.size]) ?? defaults.size,
             font: font(settings[Key.font]),
-            isBold: isBold,
+            isBold: flag(settings[Key.bold], or: defaults.isBold),
+            usesFileStyling: flag(settings[Key.fileStyling], or: defaults.usesFileStyling),
             textColor: color(settings[Key.textColor]) ?? defaults.textColor,
             outlineColor: color(settings[Key.outlineColor]) ?? defaults.outlineColor,
             backgroundColor: color(settings[Key.backgroundColor]) ?? defaults.backgroundColor,
@@ -43,6 +44,7 @@ enum CoreSubtitleSettings {
             settings[Key.font] = .string(fontName(style.font))
         }
         settings[Key.bold] = .bool(style.isBold)
+        settings[Key.fileStyling] = .bool(style.usesFileStyling)
         settings[Key.textColor] = .string(hex(style.textColor))
         settings[Key.outlineColor] = .string(hex(style.outlineColor))
         settings[Key.backgroundColor] = .string(hex(style.backgroundColor))
@@ -56,6 +58,7 @@ enum CoreSubtitleSettings {
         static let size = "subtitlesSize"
         static let font = "subtitlesFont"
         static let bold = "subtitlesBold"
+        static let fileStyling = "assSubtitlesStyling"
         static let offset = "subtitlesOffset"
         static let textColor = "subtitlesTextColor"
         static let backgroundColor = "subtitlesBackgroundColor"
@@ -66,6 +69,11 @@ enum CoreSubtitleSettings {
     private static func language(_ value: JSONValue?) -> Language? {
         guard case .string(let code)? = value else { return nil }
         return Language(code)
+    }
+
+    private static func flag(_ value: JSONValue?, or fallback: Bool) -> Bool {
+        guard case .bool(let flag)? = value else { return fallback }
+        return flag
     }
 
     private static func percent(_ value: JSONValue?) -> Percent? {

@@ -73,13 +73,84 @@ enum SubtitleLanguages: Hashable, Sendable {
     }
 }
 
-/// A subtitle on screen. Styled text arrives flattened to its characters.
+/// A subtitle on screen.
 enum SubtitleCue: Equatable, Sendable {
-    /// Drawn centered at the bottom of the picture. Lines are separated by newlines.
-    case text(String)
+    case text(SubtitleText)
     /// A rendered bitmap, such as a Blu-ray subtitle. `frame` places it as a fraction of the
     /// video frame, origin at the top left.
     case image(CGImage, frame: CGRect)
+}
+
+/// Subtitle text as the file styles and places it. Lines are separated by newlines.
+struct SubtitleText: Hashable, Sendable {
+    var runs: [SubtitleRun]
+    /// Nil leaves the text to the player, centered above the picture's bottom edge.
+    var placement: SubtitlePlacement?
+}
+
+extension SubtitleText {
+    /// Unstyled text, placed by the player.
+    init(_ plain: String) {
+        self.init(runs: [SubtitleRun(text: plain)], placement: nil)
+    }
+}
+
+/// A span of subtitle text styled alike.
+struct SubtitleRun: Hashable, Sendable {
+    var text: String
+    var isBold = false
+    var isItalic = false
+    var isUnderlined = false
+    var isStruckThrough = false
+    /// Nil keeps the text color of the user's style.
+    var color: SubtitleColor?
+    /// A font family by name. Nil keeps the font of the user's style.
+    var fontName: String?
+}
+
+/// Where a subtitle file asks its text to be drawn.
+struct SubtitlePlacement: Hashable, Sendable {
+    /// The edge or corner of the picture the text sits at, or, with a `position`, the point of the
+    /// text's block that sits on it.
+    var alignment: SubtitleAlignment
+    /// A point on the picture as a fraction of its size, origin at the top left. It may lie outside
+    /// the picture.
+    var position: CGPoint?
+}
+
+/// One of nine anchors: an edge, a corner or the center.
+struct SubtitleAlignment: Hashable, Sendable {
+    enum Horizontal: Hashable, Sendable {
+        case leading
+        case center
+        case trailing
+    }
+
+    enum Vertical: Hashable, Sendable {
+        case top
+        case middle
+        case bottom
+    }
+
+    /// Where the player draws text that no file places.
+    static let bottomCenter = SubtitleAlignment(horizontal: .center, vertical: .bottom)
+
+    let horizontal: Horizontal
+    let vertical: Vertical
+
+    init(horizontal: Horizontal, vertical: Vertical) {
+        self.horizontal = horizontal
+        self.vertical = vertical
+    }
+
+    /// An ASS numpad alignment (`\an`): 1 to 3 along the bottom, 4 to 6 through the middle and 7 to 9
+    /// along the top, each row left to right.
+    init?(numpad: Int) {
+        guard (1...9).contains(numpad) else { return nil }
+        let columns: [Horizontal] = [.leading, .center, .trailing]
+        let rows: [Vertical] = [.bottom, .middle, .top]
+        self.init(horizontal: columns[(numpad - 1) % 3], vertical: rows[(numpad - 1) / 3])
+    }
 }
 
 /// What a playback engine reports, in the order it happened.

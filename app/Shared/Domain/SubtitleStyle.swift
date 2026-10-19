@@ -6,6 +6,9 @@ struct SubtitleStyle: Hashable, Sendable {
     var size: Percent
     var font: SubtitleFont
     var isBold: Bool
+    /// Keeps the colors, fonts and placement a subtitle file sets. Bold, italic, underline and
+    /// strikethrough show either way.
+    var usesFileStyling: Bool
     var textColor: SubtitleColor
     /// Drawn only when not fully transparent.
     var outlineColor: SubtitleColor
@@ -19,6 +22,7 @@ struct SubtitleStyle: Hashable, Sendable {
         size: Percent(100),
         font: .system,
         isBold: false,
+        usesFileStyling: false,
         textColor: SubtitleColor(red: 255, green: 255, blue: 255),
         outlineColor: SubtitleColor(red: 0, green: 0, blue: 0),
         backgroundColor: SubtitleColor(red: 0, green: 0, blue: 0, alpha: 0),

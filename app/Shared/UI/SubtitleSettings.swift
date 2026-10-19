@@ -35,14 +35,14 @@ struct SubtitleSettings: View {
                 if case .rejected(let reason)? = app.preferences.state.failure {
                     Text("Couldn't save the change (\(reason)).")
                 } else {
-                    Text("Applies to text subtitles. Picture-based subtitles keep their own look.")
+                    Text("Applies to text subtitles; picture-based ones keep their look. File styling keeps a subtitle file's colors, fonts and positions.")
                 }
             }
         }
         .confirmationDialog("Reset the subtitle style?", isPresented: $confirmingReset) {
             Button("Reset Style", role: .destructive) { app.preferences.send(.setSubtitleStyle(.defaults)) }
         } message: {
-            Text("Size, font, colors, opacity and position go back to Stremio's defaults.")
+            Text("Size, font, colors, opacity, position and file styling go back to Stremio's defaults.")
         }
     }
 
@@ -57,6 +57,12 @@ struct SubtitleSettings: View {
             save(bold)
         })
         .accessibilityIdentifier("subtitles.bold")
+        Toggle("Subtitle File Styling", isOn: Binding { style.usesFileStyling } set: { usesFileStyling in
+            var styled = style
+            styled.usesFileStyling = usesFileStyling
+            save(styled)
+        })
+        .accessibilityIdentifier("subtitles.fileStyling")
         StylePicker(setting: .textColor, style: style, choose: save)
         StylePicker(setting: .outlineColor, style: style, choose: save)
         StylePicker(setting: .backgroundColor, style: style, choose: save)
@@ -78,8 +84,12 @@ struct SubtitleSettings: View {
 }
 
 /// Sample dialogue in `style` over a scene with light and dark areas, drawn by the player's own overlay.
+/// Its second line is styled as a file would, so turning file styling on shows a color.
 struct SubtitlePreview: View {
-    private static let sample = SubtitleCue.text("I thought you'd never get here.\nCome on, the boat leaves at dawn.")
+    private static let sample = SubtitleCue.text(SubtitleText(runs: [
+        SubtitleRun(text: "I thought you'd never get here.\n"),
+        SubtitleRun(text: "Come on, the boat leaves at dawn.", isItalic: true, color: SubtitleColor(red: 140, green: 220, blue: 255)),
+    ], placement: nil))
 
     let style: SubtitleStyle
 

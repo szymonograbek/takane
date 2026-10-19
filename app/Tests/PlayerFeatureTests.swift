@@ -96,24 +96,24 @@ struct PlayerFeatureTests {
 
     @Test func subtitlesShowForTheSession() {
         var state = playing()
-        let line = SubtitleCue.text("Get busy living,\nor get busy dying.")
+        let line = SubtitleCue.text(SubtitleText("Get busy living,\nor get busy dying."))
         #expect(PlayerFeature.reduce(&state, .engine(.subtitles([line]))).isEmpty)
         #expect(state.session?.subtitles == [line])
     }
 
     @Test func aNewLoadStartsWithoutSubtitles() {
         var state = playing()
-        _ = PlayerFeature.reduce(&state, .engine(.subtitles([.text("Hope is a good thing.")])))
+        _ = PlayerFeature.reduce(&state, .engine(.subtitles([.text(SubtitleText("Hope is a good thing."))])))
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
         #expect(state == .active(PlayerFeature.Session(candidate: Fixture.candidate())))
     }
 
     @Test func subtitlesWithoutASessionAreDropped() {
         var state = PlayerFeature.State.idle
-        #expect(PlayerFeature.reduce(&state, .engine(.subtitles([.text("Brooks was here")]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(.subtitles([.text(SubtitleText("Brooks was here"))]))).isEmpty)
         #expect(state == .idle)
         state = .failed(Fixture.candidate(), .failed(reason: "refused"))
-        _ = PlayerFeature.reduce(&state, .engine(.subtitles([.text("So was Red")])))
+        _ = PlayerFeature.reduce(&state, .engine(.subtitles([.text(SubtitleText("So was Red"))])))
         #expect(state == .failed(Fixture.candidate(), .failed(reason: "refused")))
     }
 }
