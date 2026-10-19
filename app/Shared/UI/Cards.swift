@@ -54,6 +54,7 @@ struct PosterPlaceholders: View {
 struct ContinueCard: View {
     let item: ContinueWatchingItem
     let remove: () -> Void
+    let markWatched: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
@@ -67,6 +68,9 @@ struct ContinueCard: View {
             }
             .cardButtonStyle()
             .contextMenu {
+                if item.canBeMarkedWatched {
+                    Button("Mark as Watched", systemImage: "checkmark.circle", action: markWatched)
+                }
                 Button("Remove from Continue Watching", systemImage: "minus.circle", role: .destructive, action: remove)
             }
             .accessibilityLabel("\(item.name), \(item.remainingLabel)")

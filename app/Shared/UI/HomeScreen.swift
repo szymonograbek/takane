@@ -100,7 +100,11 @@ private struct ContinueWatchingShelf: View {
     var body: some View {
         Shelf(title: "Continue Watching") {
             ForEach(items) { item in
-                ContinueCard(item: item) { app.home.send(.removeFromContinueWatching(item.media)) }
+                ContinueCard(
+                    item: item,
+                    remove: { app.home.send(.removeFromContinueWatching(item.media)) },
+                    markWatched: { app.home.send(.markWatched(item.media)) }
+                )
             }
         }
     }

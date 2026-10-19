@@ -16,6 +16,7 @@ enum HomeFeature: Feature {
         /// Sent when the end of a row comes into view.
         case loadMore(CatalogID)
         case removeFromContinueWatching(MediaID)
+        case markWatched(MediaID)
     }
 
     enum Effect: Equatable, Sendable {
@@ -24,6 +25,7 @@ enum HomeFeature: Feature {
         case observeBoard
         case loadMore(CatalogID)
         case removeFromContinueWatching(MediaID)
+        case markWatched(MediaID)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -42,6 +44,9 @@ enum HomeFeature: Feature {
         case .removeFromContinueWatching(let media):
             guard state.continueWatching.contains(where: { $0.media == media }) else { return [] }
             return [.removeFromContinueWatching(media)]
+        case .markWatched(let media):
+            guard state.continueWatching.contains(where: { $0.media == media && $0.canBeMarkedWatched }) else { return [] }
+            return [.markWatched(media)]
         }
     }
 
@@ -60,8 +65,20 @@ enum HomeFeature: Feature {
             dependencies.catalog.loadMore(id)
         case .removeFromContinueWatching(let media):
             dependencies.library.removeFromContinueWatching(media)
+        case .markWatched(let media):
+            do {
+                try dependencies.library.setWatched(.title(media), true)
+            } catch {
+                Log.features.error("marking \(media) watched failed: \(error)")
+            }
         }
     }
+}
+
+extension ContinueWatchingItem {
+    /// A movie is marked as a whole. Marking a series as a whole would leave the episode in
+    /// progress unmarked, so a series is marked on its page instead.
+    var canBeMarkedWatched: Bool { type == .movie }
 }
 
 extension HomeFeature.State {

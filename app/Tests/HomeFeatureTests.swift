@@ -26,6 +26,18 @@ struct HomeFeatureTests {
         #expect(HomeFeature.reduce(&state, .loadMore(paging.id)) == [.loadMore(paging.id)])
     }
 
+    @Test func onlyAMovieInContinueWatchingIsMarkedWatched() {
+        let movie = ContinueWatchingItem(
+            media: Fixture.movie.media, type: .movie, name: "Movie", poster: nil, background: nil,
+            video: Fixture.movie, offset: .seconds(600), duration: .seconds(6_000)
+        )
+        let series = Fixture.continueWatching(video: Fixture.episode, offset: .seconds(600))
+        var state = HomeFeature.State(continueWatching: [movie, series])
+        #expect(HomeFeature.reduce(&state, .markWatched(movie.media)) == [.markWatched(movie.media)])
+        #expect(HomeFeature.reduce(&state, .markWatched(series.media)).isEmpty)
+        #expect(HomeFeature.reduce(&state, .markWatched(MediaID("tt9999999").require())).isEmpty)
+    }
+
     @Test func resumingNeedsTheSameVideo() {
         let item = Fixture.continueWatching(video: Fixture.episode, offset: .seconds(600))
         let state = HomeFeature.State(continueWatching: [item])

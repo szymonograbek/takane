@@ -126,6 +126,7 @@ private final class RecordingCatalog: CatalogService {
     func board() -> AsyncStream<Board> { AsyncStream { $0.finish() } }
     func loadMore(_ row: CatalogID) {}
     func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails { throw .notFound }
+    func detailsChanges(_ media: MediaID, type: ContentType) -> AsyncStream<TitleDetails> { AsyncStream { $0.finish() } }
 
     func search(_ text: SearchText) -> AsyncStream<SearchResults> {
         searched.withLock { $0.append(text.rawValue) }

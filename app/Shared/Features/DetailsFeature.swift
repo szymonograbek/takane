@@ -1,7 +1,8 @@
-/// One title's page: its metadata and videos, loaded from the add-ons.
+/// One title's page: its metadata and videos, loaded from the add-ons, and the watched marks on them.
 enum DetailsFeature: Feature {
     struct Dependencies: Sendable {
         let catalog: any CatalogService
+        let library: any LibraryService
     }
 
     enum State: Equatable, Sendable {
@@ -13,12 +14,16 @@ enum DetailsFeature: Feature {
 
     enum Event: Sendable {
         case loaded(MediaID, Result<TitleDetails, DetailsError>)
+        /// The loaded details changed, such as a video marked watched here or in the player.
+        case changed(TitleDetails)
         case retry
+        case setWatched(WatchedTarget, Bool)
     }
 
     enum Effect: Equatable, Sendable {
-        /// Start it when the store is created.
+        /// Start it when the store is created. Once loaded, it follows the details' changes.
         case load(MetaPreview)
+        case setWatched(WatchedTarget, Bool)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -29,10 +34,15 @@ enum DetailsFeature: Feature {
             case .failure(let error): state = .failed(preview, error)
             }
             return []
+        case (.loaded(let current), .changed(let details)) where details.preview.media == current.preview.media:
+            state = .loaded(details)
+            return []
         case (.failed(let preview, _), .retry):
             state = .loading(preview)
             return [.load(preview)]
-        case (_, .loaded), (.loading, .retry), (.loaded, .retry):
+        case (.loaded(let details), .setWatched(let target, let isWatched)) where target.media == details.preview.media:
+            return [.setWatched(target, isWatched)]
+        case (_, .loaded), (_, .changed), (.loading, .retry), (.loaded, .retry), (_, .setWatched):
             return []
         }
     }
@@ -46,6 +56,16 @@ enum DetailsFeature: Feature {
                 send(.loaded(preview.media, .success(details)))
             } catch {
                 send(.loaded(preview.media, .failure(error)))
+                return
+            }
+            for await details in dependencies.catalog.detailsChanges(preview.media, type: preview.type) {
+                send(.changed(details))
+            }
+        case .setWatched(let target, let isWatched):
+            do {
+                try dependencies.library.setWatched(target, isWatched)
+            } catch {
+                Log.features.error("marking \(target) as watched: \(isWatched) failed: \(error)")
             }
         }
     }

@@ -44,8 +44,8 @@ struct CoreCatalogService: CatalogService {
                 guard details.selected?.metaPath == metaPath else { return .pending }
                 // Core asks every add-on with the `meta` resource for this type and id; none means none installed.
                 guard !details.metaItems.isEmpty else { return .failed(.noMetaAddons) }
-                if let item = details.metaItems.lazy.compactMap({ $0.content?.readyContent }).first {
-                    return Self.details(item, watched: details.watchedVideos).map(Probe.done) ?? .failed(.notFound)
+                if let item = details.metaItem(at: metaPath) {
+                    return Self.details(item, in: details).map(Probe.done) ?? .failed(.notFound)
                 }
                 return details.metaItems.allSatisfy { $0.content?.isSettled ?? false } ? .failed(.notFound) : .pending
             }
@@ -56,6 +56,22 @@ struct CoreCatalogService: CatalogService {
             case .failed(let error): throw error
             }
         }
+    }
+
+    func detailsChanges(_ media: MediaID, type: ContentType) -> AsyncStream<TitleDetails> {
+        let metaPath = ResourcePath.meta(type: type.rawValue, id: media.rawValue)
+        let states = runtime.observe(.metaDetails, as: MetaDetailsState.self) { state in
+            state.metaItem(at: metaPath).flatMap { Self.details($0, in: state) }
+        }
+        let (values, continuation) = AsyncStream.makeStream(of: TitleDetails.self, bufferingPolicy: .bufferingNewest(1))
+        let task = Task {
+            for await case let details? in states {
+                continuation.yield(details)
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        return values
     }
 
     /// Loads `selection` into `field`, then yields `pending` until core holds it and `transform` of
@@ -162,7 +178,7 @@ struct CoreCatalogService: CatalogService {
         )
     }
 
-    private static func details(_ item: MetaDetailsState.MetaItem, watched: Set<String>) -> TitleDetails? {
+    private static func details(_ item: MetaDetailsState.MetaItem, in state: MetaDetailsState) -> TitleDetails? {
         guard let preview = preview(item.preview) else { return nil }
         return TitleDetails(
             preview: preview,
@@ -174,10 +190,11 @@ struct CoreCatalogService: CatalogService {
                     Video(
                         playable: playable, name: video.title, season: video.season, episode: video.episode,
                         released: video.released.flatMap(date), thumbnail: video.thumbnail.flatMap(URL.init(string:)),
-                        overview: video.overview, isWatched: watched.contains(video.id)
+                        overview: video.overview, isWatched: state.watchedVideos.contains(video.id)
                     )
                 }
-            }
+            },
+            isWatched: (state.libraryItem?.state.timesWatched ?? 0) > 0
         )
     }
 

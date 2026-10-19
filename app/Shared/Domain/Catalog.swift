@@ -116,6 +116,9 @@ struct TitleDetails: Equatable, Sendable {
     /// The add-on's videos whose ids are `PlayableID`s (`tt0944947:1:1`), in its order. Videos with
     /// other ids are left out, so non-IMDb add-ons may list none. Movies usually have none.
     let videos: [Video]
+    /// The title as a whole was watched or marked watched. Meaningful for a movie; a series reads
+    /// its episodes' marks instead.
+    let isWatched: Bool
 }
 
 enum DetailsError: Error, Equatable, Sendable {
@@ -143,6 +146,10 @@ protocol CatalogService: Sendable {
     /// Waits for the first add-on that answers with metadata. Providers may share one selection with
     /// `StreamService`, so this can finish a running `streams(for:)` lookup.
     func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails
+
+    /// The title's details now and after every change while the provider holds them, such as a
+    /// video marked watched. Yields nothing while another title's details replace them.
+    func detailsChanges(_ media: MediaID, type: ContentType) -> AsyncStream<TitleDetails>
 }
 
 extension TitleDetails {

@@ -208,6 +208,10 @@ mod tests {
             r#"{"field":"link","action":{"action":"Unload"}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"LoginWithToken","token":"key"}}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Logout"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"LibraryItemMarkAsWatched","args":{"id":"tt0111161","is_watched":true}}}}"#,
+            r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkAsWatched","args":false}}}"#,
+            r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkVideoAsWatched","args":[{"id":"tt0944947:1:1","title":"Winter Is Coming","released":"2011-04-17T00:00:00.000Z","season":1,"episode":1},true]}}}"#,
+            r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkSeasonAsWatched","args":[1,false]}}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);

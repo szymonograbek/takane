@@ -203,6 +203,22 @@ struct MetaDetailsState: Decodable, Sendable {
         let thumbnail: String?
         let season: Int?
         let episode: Int?
+        /// core's full video JSON, handed back when marking it watched.
+        let raw: JSONValue
+
+        private enum CodingKeys: String, CodingKey { case id, title, released, overview, thumbnail, season, episode }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            title = try container.decode(String.self, forKey: .title)
+            released = try container.decodeIfPresent(String.self, forKey: .released)
+            overview = try container.decodeIfPresent(String.self, forKey: .overview)
+            thumbnail = try container.decodeIfPresent(String.self, forKey: .thumbnail)
+            season = try container.decodeIfPresent(Int.self, forKey: .season)
+            episode = try container.decodeIfPresent(Int.self, forKey: .episode)
+            raw = try JSONValue(from: decoder)
+        }
     }
 
     let selected: Selected?
@@ -211,9 +227,17 @@ struct MetaDetailsState: Decodable, Sendable {
     /// the stream resource from the meta add-on.
     let metaStreams: [ResourceLoadable<[Stream]>]
     let streams: [ResourceLoadable<[Stream]>]
+    /// The shown title's library item, also when the library does not hold it yet.
+    let libraryItem: LibraryItem?
     /// Ids of the first ready meta item's videos the user has watched. The bridge adds it, since
     /// core leaves its watched bitfield out of the state.
     let watchedVideos: Set<String>
+
+    /// The first ready meta item, which core's watched marks refer to, when the model holds `metaPath`.
+    func metaItem(at metaPath: ResourcePath) -> MetaItem? {
+        guard selected?.metaPath == metaPath else { return nil }
+        return metaItems.lazy.compactMap { $0.content?.readyContent }.first
+    }
 }
 
 /// An addon stream. Only `.url` sources are playable without a streaming server.
@@ -307,9 +331,11 @@ struct LibraryItem: Decodable, Sendable {
         let duration: UInt64
         /// The video watched last, such as `tt0944947:1:2`.
         let videoId: String?
+        /// Counts each watch of a movie, or of any episode of a series; zero once marked unwatched.
+        let timesWatched: UInt32
 
         private enum CodingKeys: String, CodingKey {
-            case timeOffset, duration
+            case timeOffset, duration, timesWatched
             case videoId = "video_id"
         }
     }

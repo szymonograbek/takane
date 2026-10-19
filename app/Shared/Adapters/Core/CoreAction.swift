@@ -21,6 +21,7 @@ enum CoreAction: Sendable {
     case ctx(Ctx)
     case player(Player)
     case link(Link)
+    case metaDetails(MetaDetails)
     case unload
 
     enum Load: Sendable {
@@ -50,6 +51,16 @@ enum CoreAction: Sendable {
         case updateSettings(JSONValue)
         /// Resets a library item's progress, which takes it out of continue watching.
         case rewindLibraryItem(id: String)
+        /// Marks a library item as a whole. Core ignores an id not in the library.
+        case libraryItemMarkAsWatched(id: String, isWatched: Bool)
+    }
+
+    /// Watched marks on the title the `meta_details` model holds, through its library item.
+    enum MetaDetails: Sendable {
+        case markAsWatched(Bool)
+        /// core's full video JSON, as the model's first ready meta item lists it.
+        case markVideoAsWatched(video: JSONValue, Bool)
+        case markSeasonAsWatched(UInt32, Bool)
     }
 
     /// core's `AuthRequest`.
@@ -207,6 +218,7 @@ extension CoreAction: Encodable {
         case .ctx(let ctx): try action("Ctx", ctx).encode(to: encoder)
         case .player(let player): try action("Player", player).encode(to: encoder)
         case .link(.readData): try action("Link", action("ReadData")).encode(to: encoder)
+        case .metaDetails(let metaDetails): try action("MetaDetails", metaDetails).encode(to: encoder)
         case .unload: try action("Unload").encode(to: encoder)
         }
     }
@@ -260,6 +272,48 @@ extension CoreAction.Ctx: Encodable {
         case .logout: try action("Logout").encode(to: encoder)
         case .updateSettings(let settings): try action("UpdateSettings", settings).encode(to: encoder)
         case .rewindLibraryItem(let id): try action("RewindLibraryItem", id).encode(to: encoder)
+        case .libraryItemMarkAsWatched(let id, let isWatched):
+            try action("LibraryItemMarkAsWatched", MarkAsWatchedArgs(id: id, isWatched: isWatched)).encode(to: encoder)
+        }
+    }
+
+    private struct MarkAsWatchedArgs: Encodable {
+        let id: String
+        let isWatched: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case isWatched = "is_watched"
+        }
+    }
+}
+
+extension CoreAction.MetaDetails: Encodable {
+    /// A Rust tuple variant's arguments: a JSON array.
+    private struct Pair<First: Encodable, Second: Encodable>: Encodable {
+        let first: First
+        let second: Second
+
+        init(_ first: First, _ second: Second) {
+            self.first = first
+            self.second = second
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.unkeyedContainer()
+            try container.encode(first)
+            try container.encode(second)
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        switch self {
+        case .markAsWatched(let isWatched):
+            try action("MarkAsWatched", isWatched).encode(to: encoder)
+        case .markVideoAsWatched(let video, let isWatched):
+            try action("MarkVideoAsWatched", Pair(video, isWatched)).encode(to: encoder)
+        case .markSeasonAsWatched(let season, let isWatched):
+            try action("MarkSeasonAsWatched", Pair(season, isWatched)).encode(to: encoder)
         }
     }
 }
