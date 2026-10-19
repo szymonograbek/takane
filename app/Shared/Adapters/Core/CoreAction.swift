@@ -11,6 +11,8 @@ enum CoreField: String, Codable, Sendable {
     case metaDetails = "meta_details"
     case player
     case link
+    case library
+    case calendar
 }
 
 /// Actions the app sends to stremio-core, encoded in core's `Action` JSON shape
@@ -19,6 +21,7 @@ enum CoreField: String, Codable, Sendable {
 enum CoreAction: Sendable {
     case load(Load)
     case catalogs(Catalogs)
+    case library(Library)
     case ctx(Ctx)
     case player(Player)
     case link(Link)
@@ -35,6 +38,11 @@ enum CoreAction: Sendable {
         case player(selection: JSONValue)
         /// Requests a new sign-in code.
         case link
+        /// The library's first page for the request.
+        case libraryWithFilters(LibraryRequest)
+        /// The library's shows with their videos. Core asks the add-ons only while it holds none,
+        /// so reloading means unloading first.
+        case calendar
     }
 
     /// Paging of the `CatalogsWithExtra` model the action targets.
@@ -43,6 +51,12 @@ enum CoreAction: Sendable {
         case loadRange(Range<Int>)
         /// Requests the next page of the catalog at this index, if its last page loaded and it pages.
         case loadNextPage(index: Int)
+    }
+
+    /// Paging of the `LibraryWithFilters` model.
+    enum Library: Sendable {
+        /// Adds the next page to the loaded ones, if there is one.
+        case loadNextPage
     }
 
     enum Ctx: Sendable {
@@ -67,6 +81,9 @@ enum CoreAction: Sendable {
         /// Pulls library items changed elsewhere and pushes the ones changed here.
         case syncLibraryWithAPI
         case clearSearchHistory
+        /// Adds the title to the library, or brings back one removed from it.
+        case addToLibrary(MetaPreview)
+        case removeFromLibrary(id: String)
     }
 
     /// Watched marks on the title the `meta_details` model holds, through its library item.
@@ -168,6 +185,7 @@ extension CoreAction: Encodable {
         switch self {
         case .load(let load): try action("Load", load).encode(to: encoder)
         case .catalogs(let catalogs): try action("CatalogsWithExtra", catalogs).encode(to: encoder)
+        case .library(.loadNextPage): try action("LibraryWithFilters", action("LoadNextPage")).encode(to: encoder)
         case .ctx(let ctx): try action("Ctx", ctx).encode(to: encoder)
         case .player(let player): try action("Player", player).encode(to: encoder)
         case .link(.readData): try action("Link", action("ReadData")).encode(to: encoder)
@@ -200,6 +218,11 @@ extension CoreAction.Load: Encodable {
             try model("Player", selection).encode(to: encoder)
         case .link:
             try model("Link").encode(to: encoder)
+        case .libraryWithFilters(let request):
+            try model("LibraryWithFilters", ["request": request]).encode(to: encoder)
+        case .calendar:
+            // No month: core picks the current one, which the app does not use.
+            try model("Calendar", JSONValue.null).encode(to: encoder)
         }
     }
 }
@@ -236,6 +259,29 @@ extension CoreAction.Ctx: Encodable {
         case .pullAddonsFromAPI: try action("PullAddonsFromAPI").encode(to: encoder)
         case .syncLibraryWithAPI: try action("SyncLibraryWithAPI").encode(to: encoder)
         case .clearSearchHistory: try action("ClearSearchHistory").encode(to: encoder)
+        case .addToLibrary(let title): try action("AddToLibrary", MetaItemPreviewArgs(title)).encode(to: encoder)
+        case .removeFromLibrary(let id): try action("RemoveFromLibrary", id).encode(to: encoder)
+        }
+    }
+
+    /// The part of core's `MetaItemPreview` its library item keeps.
+    private struct MetaItemPreviewArgs: Encodable {
+        let id: String
+        let type: String
+        let name: String
+        let poster: URL?
+        let posterShape: String
+        let background: URL?
+        let logo: URL?
+
+        init(_ title: MetaPreview) {
+            id = title.media.rawValue
+            type = title.type.rawValue
+            name = title.name
+            poster = title.poster
+            posterShape = title.posterShape.coreName
+            background = title.background
+            logo = title.logo
         }
     }
 

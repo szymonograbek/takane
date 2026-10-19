@@ -32,6 +32,10 @@ extension Fixture {
         )
     }
 
+    static func details(_ preview: MetaPreview, videos: [Video] = [], isWatched: Bool = false, isInLibrary: Bool = false) -> TitleDetails {
+        TitleDetails(preview: preview, genres: [], runtime: nil, imdbRating: nil, videos: videos, isWatched: isWatched, isInLibrary: isInLibrary)
+    }
+
     static func continueWatching(video: PlayableID, offset: Duration) -> ContinueWatchingItem {
         continueWatching(video: video, reason: .partway(offset: offset, duration: .seconds(3_000)))
     }

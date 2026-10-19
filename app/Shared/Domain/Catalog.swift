@@ -151,6 +151,8 @@ struct TitleDetails: Equatable, Sendable {
     /// The title as a whole was watched or marked watched. Meaningful for a movie; a series reads
     /// its episodes' marks instead.
     let isWatched: Bool
+    /// The user added the title to their library and has not removed it.
+    let isInLibrary: Bool
 }
 
 enum DetailsError: Error, Equatable, Sendable {

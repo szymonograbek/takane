@@ -35,6 +35,40 @@ struct ResourceLoadable<Content: Decodable & Sendable>: Decodable, Sendable {
     let content: Loadable<Content>?
 }
 
+extension JSONValue {
+    /// core's error for an add-on that answered with an empty list.
+    static let emptyContent = JSONValue.object(["type": .string("EmptyContent")])
+}
+
+extension PosterShape {
+    /// core's `posterShape`. Like core, it reads anything else as a poster.
+    init(core name: String) {
+        self = switch name {
+        case "landscape": .landscape
+        case "square": .square
+        default: .poster
+        }
+    }
+
+    var coreName: String {
+        switch self {
+        case .poster: "poster"
+        case .landscape: "landscape"
+        case .square: "square"
+        }
+    }
+}
+
+extension Date {
+    /// core's RFC 3339 times: whole seconds without a fraction, other times with one.
+    init?(core text: String) {
+        guard let date = (try? Date(text, strategy: .iso8601))
+            ?? (try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
+        else { return nil }
+        self = date
+    }
+}
+
 // MARK: - ctx
 
 struct CtxState: Decodable, Sendable {
@@ -313,57 +347,6 @@ struct Stream: Decodable, Sendable {
         filename = hints?.filename
         requestHeaders = hints?.proxyHeaders?.request ?? [:]
         raw = try JSONValue(from: decoder)
-    }
-}
-
-// MARK: - continue_watching_preview
-
-struct ContinueWatchingState: Decodable, Sendable {
-    /// A library item, flattened, with the number of new episodes core found for it.
-    struct Item: Decodable, Sendable {
-        let library: LibraryItem
-        let notifications: Int
-
-        init(from decoder: any Decoder) throws {
-            library = try LibraryItem(from: decoder)
-            notifications = try decoder.container(keyedBy: CodingKeys.self).decode(Int.self, forKey: .notifications)
-        }
-
-        private enum CodingKeys: String, CodingKey { case notifications }
-    }
-
-    let items: [Item]
-}
-
-// MARK: - library
-
-struct LibraryItem: Decodable, Sendable {
-    struct State: Decodable, Sendable {
-        /// Milliseconds.
-        let timeOffset: UInt64
-        /// Milliseconds.
-        let duration: UInt64
-        /// The video watched last, such as `tt0944947:1:2`.
-        let videoId: String?
-        /// Counts each watch of a movie, or of any episode of a series; zero once marked unwatched.
-        let timesWatched: UInt32
-
-        private enum CodingKeys: String, CodingKey {
-            case timeOffset, duration, timesWatched
-            case videoId = "video_id"
-        }
-    }
-
-    let id: String
-    let name: String
-    let type: String
-    /// Decoded as text so one malformed URL drops the image instead of the item.
-    let poster: String?
-    let state: State
-
-    private enum CodingKeys: String, CodingKey {
-        case id = "_id"
-        case name, type, poster, state
     }
 }
 

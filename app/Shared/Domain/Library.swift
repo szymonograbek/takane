@@ -22,10 +22,67 @@ struct ContinueWatchingItem: Identifiable, Hashable, Sendable {
     }
 }
 
+/// The order the library lists its titles in.
+enum LibrarySort: CaseIterable, Hashable, Sendable {
+    /// Watched or added most recently first.
+    case recentlyWatched
+    /// A to Z.
+    case name
+    /// Titles never watched first, then the ones watched longest ago.
+    case unwatchedFirst
+}
+
+/// Which of the library's titles to list, and in what order.
+struct LibraryFilter: Hashable, Sendable {
+    /// One type, or every type when nil.
+    let type: ContentType?
+    let sort: LibrarySort
+}
+
+/// The library's titles for one filter.
+struct LibraryContents: Equatable, Sendable {
+    /// The filter these titles answer.
+    let filter: LibraryFilter
+    /// The types the library holds, whatever the filter, in the provider's order.
+    let types: [ContentType]
+    /// The titles loaded so far, in the filter's order. Empty when none matches.
+    let titles: [MetaPreview]
+    /// `LibraryService.loadMoreLibrary()` would add titles.
+    let canLoadMore: Bool
+}
+
+/// An episode of a show in the library, with the date it comes out.
+struct UpcomingEpisode: Identifiable, Hashable, Sendable {
+    let show: MetaPreview
+    let video: PlayableID
+    let name: String
+    let released: Date
+
+    var id: PlayableID { video }
+}
+
 /// The user's library as it changes.
 protocol LibraryService: Sendable {
     /// Continue watching now, then after every change.
     func continueWatching() -> AsyncStream<[ContinueWatchingItem]>
+
+    /// The library's titles that match `filter` now, then after every change, such as a title added
+    /// or removed anywhere. Finishes when a newer `library(_:)` call replaces it: providers may serve
+    /// one filter at a time.
+    func library(_ filter: LibraryFilter) -> AsyncStream<LibraryContents>
+
+    /// Asks the current `library(_:)` filter for more titles; its stream reports them. Ignored when it
+    /// has no more.
+    func loadMoreLibrary()
+
+    /// Adds `title` to the library or removes it. Details and the library report the change.
+    func setInLibrary(_ title: MetaPreview, _ isInLibrary: Bool)
+
+    /// The library's shows' episodes that come out from the start of the viewer's today on, earliest
+    /// first, asked for again on every call so the shows added since are included. Loaded and empty
+    /// when no add-on lists episodes by date or the library holds no shows; failed only when every
+    /// add-on that lists them failed.
+    func upcomingEpisodes() -> AsyncStream<Remote<[UpcomingEpisode], CatalogError>>
 
     /// Forgets the progress and new episodes of `media`, which takes it out of continue watching.
     func removeFromContinueWatching(_ media: MediaID)

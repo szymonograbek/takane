@@ -64,7 +64,7 @@ struct CoreCatalogService: CatalogService {
             base: filter.catalog.addon.url,
             path: .catalog(type: filter.catalog.type.rawValue, id: filter.catalog.id, extra: [["genre", filter.genre.rawValue]])
         )
-        return load(.catalogWithFilters(request), into: .discover, pending: .loading) { (state: CatalogWithFiltersState) in
+        return runtime.load(.catalogWithFilters(request), into: .discover, pending: .loading) { (state: CatalogWithFiltersState) in
             state.selected?.request == request ? Self.items(state.catalog) : nil
         }
     }
@@ -109,7 +109,7 @@ struct CoreCatalogService: CatalogService {
         return values
     }
 
-    /// Loads `selection` into the `CatalogsWithExtra` model `field`, as `load` does, and requests
+    /// Loads `selection` into the `CatalogsWithExtra` model `field`, as `CoreRuntime.load` does, and requests
     /// every catalog core lists.
     private func loadCatalogs<Value: Sendable>(
         _ selection: CatalogsSelection,
@@ -118,7 +118,7 @@ struct CoreCatalogService: CatalogService {
         _ transform: @escaping @Sendable (CatalogsState, [Addon]) -> Value
     ) -> AsyncStream<Value> {
         let runtime = runtime
-        return load(.catalogsWithExtra(selection), into: field, pending: pending) { (state: CatalogsState) in
+        return runtime.load(.catalogsWithExtra(selection), into: field, pending: pending) { (state: CatalogsState) in
             guard state.selected == selection else { return nil }
             // Core lists catalogs without requesting them, on load and when add-ons change.
             if state.catalogs.contains(where: { $0.first?.content == nil }) {
@@ -130,43 +130,6 @@ struct CoreCatalogService: CatalogService {
             }
             return transform(state, Self.addons(runtime))
         }
-    }
-
-    /// Loads `selection` into `field`, then yields `pending` until core holds it and `answer` of every
-    /// state after. `answer` is nil for a state of another selection; once core held this one, that
-    /// means another load replaced it, and the stream finishes.
-    private func load<State: Decodable & Sendable, Value: Sendable>(
-        _ selection: CoreAction.Load,
-        into field: CoreField,
-        pending: Value,
-        _ answer: @escaping @Sendable (State) -> Value?
-    ) -> AsyncStream<Value> {
-        let (values, continuation) = AsyncStream.makeStream(of: Value.self, bufferingPolicy: .bufferingNewest(1))
-        // Subscribe before dispatching so no change is missed.
-        let states = runtime.states(field, as: State.self)
-        do {
-            try runtime.dispatch(.load(selection), to: field)
-        } catch {
-            Log.core.error("loading \(field.rawValue) rejected: \(error)")
-            continuation.finish()
-            return values
-        }
-        let task = Task {
-            var wasSelected = false
-            for await state in states {
-                guard let value = answer(state) else {
-                    // Before our load lands the previous selection still shows; after, another load replaced ours.
-                    if wasSelected { break }
-                    continuation.yield(pending)
-                    continue
-                }
-                wasSelected = true
-                continuation.yield(value)
-            }
-            continuation.finish()
-        }
-        continuation.onTermination = { _ in task.cancel() }
-        return values
     }
 
     private static func addons(_ runtime: CoreRuntime) -> [Addon] {
@@ -202,14 +165,11 @@ struct CoreCatalogService: CatalogService {
     private static func items(_ pages: [ResourceLoadable<[MetaItemPreview]>]) -> Remote<[MetaPreview], CatalogError> {
         switch pages.first?.content {
         case .none, .loading: .loading
-        case .failed(let error) where error == emptyContent: .loaded([])
+        case .failed(let error) where error == .emptyContent: .loaded([])
         case .failed(let error): .failed(.addonFailed(reason: error.compactDescription))
         case .ready: .loaded(previews(pages))
         }
     }
-
-    /// core's error for an add-on that answered with an empty list.
-    private static let emptyContent = JSONValue.object(["type": .string("EmptyContent")])
 
     private static func previews(_ pages: [ResourceLoadable<[MetaItemPreview]>]) -> [MetaPreview] {
         // Pages may overlap; a title shows once, where it first appeared.
@@ -219,14 +179,9 @@ struct CoreCatalogService: CatalogService {
 
     private static func preview(_ item: MetaItemPreview) -> MetaPreview? {
         guard let media = MediaID(item.id), let type = ContentType(item.type) else { return nil }
-        let shape: PosterShape = switch item.posterShape {
-        case "landscape": .landscape
-        case "square": .square
-        default: .poster
-        }
         return MetaPreview(
             media: media, type: type, name: item.name,
-            poster: item.poster.flatMap(URL.init(string:)), posterShape: shape,
+            poster: item.poster.flatMap(URL.init(string:)), posterShape: PosterShape(core: item.posterShape),
             background: item.background.flatMap(URL.init(string:)), logo: item.logo.flatMap(URL.init(string:)),
             releaseInfo: item.releaseInfo, description: item.description
         )
@@ -243,17 +198,13 @@ struct CoreCatalogService: CatalogService {
                 PlayableID(video.id).map { playable in
                     Video(
                         playable: playable, name: video.title, season: video.season, episode: video.episode,
-                        released: video.released.flatMap(date), thumbnail: video.thumbnail.flatMap(URL.init(string:)),
+                        released: video.released.flatMap(Date.init(core:)), thumbnail: video.thumbnail.flatMap(URL.init(string:)),
                         overview: video.overview, isWatched: state.watchedVideos.contains(video.id)
                     )
                 }
             },
-            isWatched: (state.libraryItem?.state.timesWatched ?? 0) > 0
+            isWatched: (state.libraryItem?.state.timesWatched ?? 0) > 0,
+            isInLibrary: state.libraryItem?.isInLibrary ?? false
         )
-    }
-
-    /// Core writes whole seconds without a fraction and other times with one.
-    private static func date(_ text: String) -> Date? {
-        (try? Date(text, strategy: .iso8601)) ?? (try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
     }
 }

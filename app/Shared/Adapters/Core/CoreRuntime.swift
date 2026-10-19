@@ -172,3 +172,42 @@ final class CoreRuntime: Sendable {
         affected.forEach { $0.refresh() }
     }
 }
+
+extension CoreRuntime {
+    /// Loads `selection` into `field`, then yields `pending`, when given, until core holds it and
+    /// `answer` of every state after. `answer` is nil for a state of another selection; once core held
+    /// this one, that means another load replaced it, and the stream finishes.
+    func load<State: Decodable & Sendable, Value: Sendable>(
+        _ selection: CoreAction.Load,
+        into field: CoreField,
+        pending: Value? = nil,
+        _ answer: @escaping @Sendable (State) -> Value?
+    ) -> AsyncStream<Value> {
+        let (values, continuation) = AsyncStream.makeStream(of: Value.self, bufferingPolicy: .bufferingNewest(1))
+        // Subscribe before dispatching so no change is missed.
+        let states = states(field, as: State.self)
+        do {
+            try dispatch(.load(selection), to: field)
+        } catch {
+            Log.core.error("loading \(field.rawValue) rejected: \(error)")
+            continuation.finish()
+            return values
+        }
+        let task = Task {
+            var wasSelected = false
+            for await state in states {
+                guard let value = answer(state) else {
+                    // Before our load lands the previous selection still shows; after, another load replaced ours.
+                    if wasSelected { break }
+                    if let pending { continuation.yield(pending) }
+                    continue
+                }
+                wasSelected = true
+                continuation.yield(value)
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        return values
+    }
+}
