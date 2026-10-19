@@ -2,8 +2,9 @@ import SwiftUI
 
 /// Full-screen playback. Only the video shows until the viewer asks for the controls.
 ///
-/// Remote: select shows the controls, play/pause pauses, left and right skip 10 s while the
-/// controls are hidden, Menu backs out of an open panel, hides the controls and then leaves. On the
+/// Remote: while the controls are hidden, pressing the clickpad's left or right edge skips one seek
+/// step and pressing its centre, top or bottom shows the controls; swipes and a resting thumb do
+/// nothing. Play/pause pauses. Menu backs out of an open panel, hides the controls and then leaves. On the
 /// focused progress bar, left and right jump (further with each quick tap) or, held, rewind and
 /// fast forward until select, play/pause or Menu. macOS: space, arrows and Esc. While the controls
 /// are hidden, the next episode's card takes focus near the end, ahead of a skip button.
@@ -168,6 +169,17 @@ private struct RemoteSurface: View {
     let interacted: () -> Void
 
     var body: some View {
+        #if os(tvOS)
+        // Presses only: a swipe from a resting thumb arrives as a move command and would seek.
+        RemotePresses(
+            arrow: { isDown, direction in
+                if isDown { app.player.send(.jump(direction)) }
+            },
+            vertical: interacted,
+            select: interacted
+        )
+        .focused(focus, equals: .surface)
+        #else
         Color.clear
             .contentShape(.rect)
             .focusable()
@@ -181,6 +193,7 @@ private struct RemoteSurface: View {
                 @unknown default: break
                 }
             }
+        #endif
     }
 }
 
