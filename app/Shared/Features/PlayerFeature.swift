@@ -1,6 +1,6 @@
 import Foundation
 
-/// Plays one stream at a time and keeps the tracker informed of progress.
+/// Plays one stream at a time, keeps the tracker informed of progress and offers the next episode.
 enum PlayerFeature: Feature {
     struct Dependencies: Sendable {
         let engine: any PlaybackEngine
@@ -47,6 +47,9 @@ enum PlayerFeature: Feature {
         var scan: Scan?
         var streak: StepStreak?
         var restore = Restore.awaiting
+        /// When to offer the next episode and whether it plays by itself, from the preferences.
+        var upNextBehavior = UpNextBehavior.defaults
+        var upNext = UpNextOffer.notFound
     }
 
     enum State: Equatable, Sendable {
@@ -70,8 +73,9 @@ enum PlayerFeature: Feature {
         case engine(PlaybackEvent)
         case segmentsFound(PlayableID, Result<[SkipSegment], SkipSegmentError>)
         case subtitlesFound(StreamCandidate, [SubtitleSource])
-        case preferencesRead(StreamCandidate, SeekStep)
+        case preferencesRead(StreamCandidate, Preferences)
         case remembered(StreamCandidate, TrackChoices)
+        case upNext(UpNextEvent)
     }
 
     enum Report: Equatable, Sendable {
@@ -81,6 +85,7 @@ enum PlayerFeature: Feature {
         case ended
         /// The viewer chose these tracks and speed.
         case choices(TrackChoices)
+        case movedToNext
     }
 
     enum Effect: Equatable, Sendable {
@@ -89,6 +94,8 @@ enum PlayerFeature: Feature {
         /// Reads the preferences and starts playback, then follows the add-ons' subtitles and what was
         /// remembered for it until another candidate replaces it.
         case begin(StreamCandidate, PlaybackSource, from: Duration)
+        /// Feeds the episode after the candidate back as `.upNext(.found)` until another candidate replaces it.
+        case watchUpNext(StreamCandidate)
         case setPaused(Bool)
         case seek(by: Duration)
         case seekTo(Duration)
@@ -146,19 +153,19 @@ enum PlayerFeature: Feature {
             state = .active(session)
             return []
 
-        case (.active(var session), .subtitlesFound(let candidate, let sources)) where candidate == session.candidate:
-            session.addonSubtitles = sources
-            let effects = session.continueRestore()
-            state = .active(session)
-            return effects
+        case (.active(let session), .subtitlesFound(let candidate, let sources)) where candidate == session.candidate:
+            return update(&state, session) { $0.receive(sources) }
 
         case (.active(let session), .remembered(let candidate, let choices)) where candidate == session.candidate:
             return update(&state, session) { $0.restoreRemembered(choices) }
 
-        case (.active(var session), .preferencesRead(let candidate, let step)) where candidate == session.candidate:
-            session.seekStep = step
+        case (.active(var session), .preferencesRead(let candidate, let preferences)) where candidate == session.candidate:
+            session.read(preferences)
             state = .active(session)
             return []
+
+        case (.active(let session), .upNext(let event)):
+            return reduce(event, in: session, replacing: &state)
 
         case (.active, .stop), (.failed, .stop):
             state = .idle
@@ -171,7 +178,7 @@ enum PlayerFeature: Feature {
             case .stopped where session.phase != .opening: state = .idle
             default: state = .active(session)
             }
-            return effects
+            return event == .ended ? effects + autoplayNext(after: session, replacing: &state) : effects
 
         case (.idle, .togglePause), (.idle, .jump), (.idle, .stop), (.idle, .engine),
              (.failed, .togglePause), (.failed, .jump), (.failed, .engine),
@@ -179,17 +186,18 @@ enum PlayerFeature: Feature {
              (.failed, .select), (.failed, .chooseSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
              (.idle, .subtitlesFound), (.failed, .subtitlesFound), (.idle, .timeline), (.failed, .timeline),
              (.idle, .preferencesRead), (.failed, .preferencesRead), (.idle, .remembered), (.failed, .remembered),
+             (.idle, .upNext), (.failed, .upNext),
              (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .preferencesRead), (.active, .skip), (.active, .remembered):
             return []
         }
     }
 
     /// Starts a session for `candidate`, or fails it when it cannot play, stopping what played before.
-    private static func open(_ candidate: StreamCandidate, from start: Duration, title: String, replacing state: inout State) -> [Effect] {
+    static func open(_ candidate: StreamCandidate, from start: Duration, title: String, replacing state: inout State) -> [Effect] {
         switch candidate.playability {
         case .playable(let source):
             state = .active(Session(candidate: candidate, title: title))
-            return [.begin(candidate, source, from: start)]
+            return [.begin(candidate, source, from: start), .watchUpNext(candidate)]
         case .unsupported(let kind):
             let wasActive = state.session != nil
             state = .failed(candidate, .unsupported(kind: kind))
@@ -274,10 +282,14 @@ extension PlayerFeature {
             // The first value is the current one, so this does not wait on the network.
             var updates = dependencies.preferences.preferences().makeAsyncIterator()
             let preferences = await updates.next()
-            if let preferences { send(.preferencesRead(candidate, preferences.seekStep)) }
+            if let preferences { send(.preferencesRead(candidate, preferences)) }
             tracker.begin(candidate)
             engine.load(source, from: start, languages: preferences?.languages ?? .streamDefaults)
             await follow(candidate, playing: source, dependencies, send)
+        case .watchUpNext(let candidate):
+            for await next in tracker.upNext(after: candidate) {
+                send(.upNext(.found(candidate, next)))
+            }
         case .setPaused(let paused):
             engine.setPaused(paused)
         case .seek(let offset):
@@ -315,11 +327,19 @@ extension PlayerFeature {
             tracker.ended()
         case .report(.choices(let choices)):
             tracker.remember(choices)
+        case .report(.movedToNext):
+            tracker.movedToNext()
         }
     }
 }
 
 extension PlayerFeature.Session {
+    /// Takes the seek step and up next behavior from the preferences.
+    mutating func read(_ preferences: Preferences) {
+        seekStep = preferences.seekStep
+        upNextBehavior = preferences.upNext
+    }
+
     /// The stream's own subtitle tracks, without files added from add-ons.
     var builtInSubtitles: [MediaTrack] {
         tracks.filter { $0.id.kind == .subtitle && $0.externalFile == nil }
@@ -364,23 +384,5 @@ extension PlayerFeature.State {
         case .active(let session): session.phase.rawValue
         case .failed(_, let error): "failed: \(error)"
         }
-    }
-}
-
-extension PlayerFeature.State {
-    /// Position, duration, phase, video size and decoder, such as
-    /// `0:00:10 / 2:22:32 · playing · 1920×1080 · VideoToolbox HEVC (HW)`.
-    var statusLine: String {
-        let session = session
-        var parts = [phaseName]
-        if let size = session?.videoSize { parts.append("\(size.width)×\(size.height)") }
-        if let decoder = session?.decoder { parts.append(decoder) }
-        let time = "\(Self.clock(session?.position ?? .zero)) / \(Self.clock(session?.duration ?? .zero))"
-        return ([time] + parts).joined(separator: " · ")
-    }
-
-    private static func clock(_ duration: Duration) -> String {
-        let total = Int(duration.components.seconds)
-        return String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
     }
 }

@@ -17,6 +17,8 @@ enum PreferencesFeature: Feature {
         case setSubtitleStyle(SubtitleStyle)
         case setSeekStep(SeekStep)
         case setHidesSpoilers(Bool)
+        case setUpNextNotice(UpNextNotice)
+        case setAutoplaysNext(Bool)
         case updateFailed(PreferencesError)
     }
 
@@ -42,6 +44,10 @@ enum PreferencesFeature: Feature {
             return change(state) { $0.seekStep = step }
         case .setHidesSpoilers(let hides):
             return change(state) { $0.hidesSpoilers = hides }
+        case .setUpNextNotice(let notice):
+            return change(state) { $0.upNext.notice = notice }
+        case .setAutoplaysNext(let autoplay):
+            return change(state) { $0.upNext.autoplay = autoplay }
         case .updateFailed(let error):
             state.failure = error
             return []

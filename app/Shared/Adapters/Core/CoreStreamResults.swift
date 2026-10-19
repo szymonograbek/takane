@@ -57,7 +57,8 @@ enum CoreStreamResults {
         return .loaded(candidates)
     }
 
-    private static func candidate(
+    /// `stream` as a candidate whose tracking token loads core's player model with it.
+    static func candidate(
         _ stream: Stream,
         id: StreamCandidate.ID,
         item: PlayableID,

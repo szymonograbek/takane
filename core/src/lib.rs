@@ -204,6 +204,7 @@ mod tests {
             r#"{"field":"player","action":{"action":"Player","args":{"action":"VideoParamsChanged","args":{"videoParams":{"filename":"movie.mkv"}}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"StreamStateChanged","args":{"state":{"subtitleDelay":250,"subtitleTrack":{"id":"https://subs.example/1.srt","embedded":false,"language":"pol"},"audioTrack":{"id":"2","language":"eng"},"playbackSpeed":1.25}}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"StreamStateChanged","args":{"state":{}}}}}"#,
+            r#"{"field":"player","action":{"action":"Player","args":{"action":"NextVideo"}}}"#,
             r#"{"field":"player","action":{"action":"Unload"}}"#,
             r#"{"field":"link","action":{"action":"Load","args":{"model":"Link"}}}"#,
             r#"{"field":"link","action":{"action":"Link","args":{"action":"ReadData"}}}"#,

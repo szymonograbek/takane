@@ -31,8 +31,33 @@ struct CorePlaybackTracker: PlaybackTracker {
         send(.player(.ended))
     }
 
+    func movedToNext() {
+        send(.player(.nextVideo))
+    }
+
     func stop() {
         send(.unload)
+    }
+
+    /// Core finds the next video once the selection's meta item loads, then asks the selected
+    /// stream's add-on for its streams and picks the one in the same binge group.
+    func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?> {
+        let (results, continuation) = AsyncStream.makeStream(of: UpNext?.self, bufferingPolicy: .bufferingNewest(1))
+        let answers = runtime.observe(.player, as: PlayerState.self) { Self.answer(for: candidate, in: $0) }
+        let task = Task {
+            var isSelected = false
+            for await answer in answers {
+                guard case .selected(let next) = answer else {
+                    // Before the load lands another selection still shows; after, another candidate replaced this one.
+                    if isSelected { break } else { continue }
+                }
+                isSelected = true
+                continuation.yield(next)
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        return results
     }
 
     /// Core saves it once its player model has loaded the title's metadata; a choice made before then
@@ -81,6 +106,43 @@ struct CorePlaybackTracker: PlaybackTracker {
 
     private func send(_ action: CoreAction) {
         runtime.dispatchLogged(action, to: .player)
+    }
+}
+
+private extension CorePlaybackTracker {
+    /// What one state of core's player model says about the episode after a candidate.
+    enum Answer: Equatable, Sendable {
+        case otherSelection
+        case selected(UpNext?)
+    }
+
+    static func answer(for candidate: StreamCandidate, in player: PlayerState) -> Answer {
+        guard let selected = player.selected, let source = candidate.source,
+              selected.stream.source == .url(source.url), selected.streamRequest?.path.id == candidate.item.rawValue
+        else { return .otherSelection }
+        guard let video = player.nextVideo, let id = PlayableID(video.id) else { return .selected(nil) }
+        let show = player.metaItem?.content?.readyContent
+        return .selected(UpNext(
+            video: id,
+            show: show?.name ?? "",
+            title: video.title,
+            thumbnail: video.thumbnail.flatMap(URL.init(string:)),
+            backdrop: show?.background.flatMap(URL.init(string:)),
+            stream: nextCandidate(for: id, in: player)
+        ))
+    }
+
+    /// Core's next stream as a candidate that plays here, tracked against the same meta item.
+    static func nextCandidate(for video: PlayableID, in player: PlayerState) -> StreamCandidate? {
+        guard let stream = player.nextStream, let streams = player.nextStreams,
+              let addon = ManifestURL(streams.request.base),
+              let index = streams.content?.readyContent?.firstIndex(where: { $0.raw == stream.raw })
+        else { return nil }
+        let candidate = CoreStreamResults.candidate(
+            stream, id: StreamCandidate.ID(addon: addon, index: index), item: video,
+            streamRequest: streams.request, metaRequest: player.selected?.metaRequest
+        )
+        return candidate.source == nil ? nil : candidate
     }
 }
 

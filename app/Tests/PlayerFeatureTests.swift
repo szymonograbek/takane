@@ -14,7 +14,7 @@ struct PlayerFeatureTests {
     @Test func openingAPlayableCandidateBeginsPlayback() {
         var state = PlayerFeature.State.idle
         let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .zero)])
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .zero), .watchUpNext(Fixture.candidate())])
         #expect(state.statusLine == "0:00:00 / 0:00:00 · opening")
     }
 
@@ -304,15 +304,17 @@ struct PlayerControlsTests {
         #expect(state.session?.addonSubtitles == [])
     }
 
-    @Test func theSeekStepReadForThisCandidateApplies() {
+    @Test func thePreferencesReadForThisCandidateApply() {
         var state = playing()
-        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(), .thirty)).isEmpty)
+        let upNext = UpNextBehavior(notice: .tenSeconds, autoplay: false)
+        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(), Fixture.preferences(seekStep: .thirty, upNext: upNext))).isEmpty)
         #expect(state.session?.seekStep == .thirty)
+        #expect(state.session?.upNextBehavior == upNext)
     }
 
-    @Test func aSeekStepReadForAnotherCandidateIsDropped() {
+    @Test func preferencesReadForAnotherCandidateAreDropped() {
         var state = playing()
-        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(index: 1), .thirty)).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(index: 1), Fixture.preferences(seekStep: .thirty))).isEmpty)
         #expect(state.session?.seekStep == .ten)
     }
 
@@ -342,7 +344,7 @@ struct PlayerControlsTests {
     @Test func playbackStartsFromTheRequestedPosition() {
         var state = PlayerFeature.State.idle
         let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate(), from: .seconds(600)))
-        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .seconds(600))])
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .seconds(600)), .watchUpNext(Fixture.candidate())])
     }
 }
 

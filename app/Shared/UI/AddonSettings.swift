@@ -89,6 +89,7 @@ struct PlaybackSettings: View {
     var body: some View {
         let preferences = app.preferences.state.preferences
         let seekStep = preferences?.seekStep ?? .defaults
+        let upNext = preferences?.upNext ?? .defaults
         SettingsPage(title: "Playback") {
             SettingsSymbol(name: "play.rectangle")
         } rows: {
@@ -122,6 +123,30 @@ struct PlaybackSettings: View {
                 Text("How far back and forward skip. Quick presses in a row skip further, up to a minute.")
             }
             Section {
+                NavigationLink {
+                    ChoiceList(
+                        title: "Show Up Next", symbol: "forward.end",
+                        choices: UpNextNotice.allCases.map { (name: $0.name, value: $0) }, selection: upNext.notice
+                    ) {
+                        app.preferences.send(.setUpNextNotice($0))
+                    }
+                } label: {
+                    LabeledContent("Show Up Next", value: upNext.notice.name)
+                }
+                .accessibilityIdentifier("playback.upNextNotice")
+                Toggle("Play Next Episode Automatically", isOn: Binding { upNext.autoplay } set: { autoplay in
+                    app.preferences.send(.setAutoplaysNext(autoplay))
+                })
+                .accessibilityIdentifier("playback.autoplayNext")
+            } header: {
+                Text("Up Next")
+            } footer: {
+                Text(
+                    "This long before an episode ends, the player offers the next one. When the episode ends, the next "
+                        + "plays by itself if its add-on has a matching stream, unless you dismissed the offer."
+                )
+            }
+            Section {
                 Toggle("Hide Spoilers", isOn: Binding { preferences?.hidesSpoilers ?? false } set: { hides in
                     app.preferences.send(.setHidesSpoilers(hides))
                 })
@@ -141,6 +166,10 @@ struct PlaybackSettings: View {
 
 private extension SeekStep {
     var name: String { "\(seconds) Seconds" }
+}
+
+private extension UpNextNotice {
+    var name: String { self == .off ? "Off" : "\(rawValue) Seconds" }
 }
 
 /// A language row and, once a language is chosen, a row for the one to fall back on. Choosing

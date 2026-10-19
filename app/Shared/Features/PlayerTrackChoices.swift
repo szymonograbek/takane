@@ -68,6 +68,12 @@ extension PlayerFeature.Session {
         return continueRestore()
     }
 
+    /// Takes what the add-ons offer for this stream, which a remembered add-on file may be waiting on.
+    mutating func receive(_ sources: [SubtitleSource]) -> [Effect] {
+        addonSubtitles = sources
+        return continueRestore()
+    }
+
     /// Applies what the known tracks allow of the remembered choices. An add-on file waits until the
     /// add-ons answer; one none of them offers is dropped.
     mutating func continueRestore() -> [Effect] {

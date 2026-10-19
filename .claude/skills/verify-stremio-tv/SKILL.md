@@ -69,8 +69,9 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
 | `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls |
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
+| `player.upNext.play`, `player.upNext.dismiss` | the up next card's Play Now (Choose Stream when the next episode has no matching stream) and Cancel; the card shows near an episode's end while the controls are hidden, with Play Now focused |
 | `settings.account`, `settings.addons`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows |
-| `playback.audioLanguage`, `playback.secondAudioLanguage`, `playback.seekStep`, `playback.hideSpoilers` | Settings › Playback rows; Second Language shows only when an audio language is set; Skip Interval opens a list of 5, 10, 15 and 30 seconds; Hide Spoilers is a toggle |
+| `playback.audioLanguage`, `playback.secondAudioLanguage`, `playback.seekStep`, `playback.upNextNotice`, `playback.autoplayNext`, `playback.hideSpoilers` | Settings › Playback rows; Second Language shows only when an audio language is set; Skip Interval opens a list of 5, 10, 15 and 30 seconds; Show Up Next opens a list of Off, 10, 20, 35 and 60 seconds; Play Next Episode Automatically and Hide Spoilers are toggles |
 | `subtitles.language`, `subtitles.secondLanguage` | Settings › Subtitles language rows; Second Language shows only when a language is set |
 | `subtitles.size`, `subtitles.font`, `subtitles.bold`, `subtitles.fileStyling`, `subtitles.textColor`, `subtitles.outlineColor`, `subtitles.backgroundColor`, `subtitles.opacity`, `subtitles.position`, `subtitles.reset` | Settings › Subtitles style rows; each but the Bold and Subtitle File Styling toggles and Reset opens a list of choices |
 | `subtitles.preview` | the live preview on Settings › Subtitles and on each style list, where it shows the focused choice |

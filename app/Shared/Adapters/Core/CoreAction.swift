@@ -90,6 +90,8 @@ enum CoreAction: Sendable {
         case seek(timeMs: UInt64, durationMs: UInt64, device: String)
         case pausedChanged(paused: Bool)
         case ended
+        /// Records moving on to the player model's next video. Loading it is a separate `Load`.
+        case nextVideo
         /// What subtitle add-ons match the file by. Core prefers what the stream itself declares.
         case videoParamsChanged(hash: String?, size: UInt64?, filename: String?)
         /// Replaces what core saves for the selected video.
@@ -361,6 +363,8 @@ extension CoreAction.Player: Encodable {
             try action("PausedChanged", PausedChangedArgs(paused: paused)).encode(to: encoder)
         case .ended:
             try action("Ended").encode(to: encoder)
+        case .nextVideo:
+            try action("NextVideo").encode(to: encoder)
         case .videoParamsChanged(let hash, let size, let filename):
             let params = VideoParamsChangedArgs.VideoParams(hash: hash, size: size, filename: filename)
             try action("VideoParamsChanged", VideoParamsChangedArgs(videoParams: params)).encode(to: encoder)
@@ -388,12 +392,5 @@ extension CoreAction.Authentication: Encodable {
         case .login(let email, let password): try Login(email: email, password: password).encode(to: encoder)
         case .loginWithToken(let token): try LoginWithToken(token: token).encode(to: encoder)
         }
-    }
-}
-
-extension CoreAction {
-    /// Carries a password or token, so logs show only its name.
-    var isSensitive: Bool {
-        if case .ctx(.authenticate) = self { true } else { false }
     }
 }

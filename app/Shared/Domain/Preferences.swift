@@ -19,6 +19,32 @@ struct Preferences: Hashable, Sendable {
     var seekStep: SeekStep
     /// Whether a title's unwatched episodes keep their still blurred and their overview hidden.
     var hidesSpoilers: Bool
+    var upNext: UpNextBehavior
+}
+
+/// How the player leads from an episode into the next.
+struct UpNextBehavior: Hashable, Sendable {
+    var notice: UpNextNotice
+    /// Whether the next episode plays by itself when one ends, unless the viewer dismissed its offer.
+    var autoplay: Bool
+
+    static let defaults = UpNextBehavior(notice: .defaults, autoplay: true)
+}
+
+/// How long before an episode ends the player offers the next one.
+enum UpNextNotice: Int, CaseIterable, Hashable, Sendable {
+    case off = 0
+    case tenSeconds = 10
+    case twentySeconds = 20
+    case thirtyFiveSeconds = 35
+    case sixtySeconds = 60
+
+    static let defaults = UpNextNotice.thirtyFiveSeconds
+
+    /// Nil never offers it.
+    var lead: Duration? {
+        self == .off ? nil : .seconds(rawValue)
+    }
 }
 
 /// How far one press of back or forward skips. Each has an SF Symbol, `gobackward.<seconds>`.

@@ -50,6 +50,14 @@ enum PlayableID: Hashable, Sendable, CustomStringConvertible {
     }
 
     var description: String { rawValue }
+
+    /// How the player names it: "Twin Peaks · S1 E3" for an episode of `title`, else `title`.
+    func playerTitle(_ title: String) -> String {
+        switch self {
+        case .movie: title
+        case .episode(_, let season, let episode): "\(title) · S\(season) E\(episode)"
+        }
+    }
 }
 
 /// An add-on's manifest URL. Add-ons are identified by it.

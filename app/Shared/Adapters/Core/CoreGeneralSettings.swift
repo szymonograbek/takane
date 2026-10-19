@@ -1,12 +1,15 @@
 /// Preferences apart from subtitles as core's profile settings hold them: `audioLanguage` and
 /// `secondaryAudioLanguage`, `seekTimeDuration` in milliseconds, and `hideSpoilers`, which reads
-/// as false when missing or not a bool.
-/// A seek time no `SeekStep` matches, set by another Stremio app, reads as the default and is
-/// kept until the user picks another.
+/// as false when missing or not a bool. Up next is `nextVideoNotificationDuration` in milliseconds,
+/// 0 for off, and `bingeWatching`, which reads as core's default, true, when missing or not a bool.
+/// A seek time or notice no `SeekStep` or `UpNextNotice` matches, set by another Stremio app, reads
+/// as the default and is kept until the user picks another.
 enum CoreGeneralSettings {
     static let audioLanguages = CoreLanguageKeys(primary: "audioLanguage", fallback: "secondaryAudioLanguage")
     private static let seekTimeKey = "seekTimeDuration"
     private static let hideSpoilersKey = "hideSpoilers"
+    private static let upNextNoticeKey = "nextVideoNotificationDuration"
+    private static let bingeWatchingKey = "bingeWatching"
 
     static func seekStep(in settings: [String: JSONValue]) -> SeekStep {
         guard case .number(let milliseconds)? = settings[seekTimeKey] else { return .defaults }
@@ -26,6 +29,25 @@ enum CoreGeneralSettings {
 
     static func writeHidesSpoilers(_ hides: Bool, into settings: inout [String: JSONValue]) {
         settings[hideSpoilersKey] = .bool(hides)
+    }
+
+    static func upNext(in settings: [String: JSONValue]) -> UpNextBehavior {
+        var behavior = UpNextBehavior.defaults
+        if case .number(let milliseconds)? = settings[upNextNoticeKey],
+           let notice = UpNextNotice.allCases.first(where: { Double($0.rawValue * 1_000) == milliseconds }) {
+            behavior.notice = notice
+        }
+        if case .bool(let autoplay)? = settings[bingeWatchingKey] {
+            behavior.autoplay = autoplay
+        }
+        return behavior
+    }
+
+    /// Leaves the notice as it is when it already reads as `upNext.notice`.
+    static func write(_ upNext: UpNextBehavior, into settings: inout [String: JSONValue]) {
+        settings[bingeWatchingKey] = .bool(upNext.autoplay)
+        guard self.upNext(in: settings).notice != upNext.notice else { return }
+        settings[upNextNoticeKey] = .number(Double(upNext.notice.rawValue * 1_000))
     }
 }
 

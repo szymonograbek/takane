@@ -18,6 +18,10 @@ enum Fixture {
             tracking: TrackingToken(payload: .null)
         )
     }
+
+    static func preferences(seekStep: SeekStep = .ten, upNext: UpNextBehavior = .defaults) -> Preferences {
+        Preferences(languages: .streamDefaults, subtitleStyle: .defaults, seekStep: seekStep, hidesSpoilers: false, upNext: upNext)
+    }
 }
 
 extension Fixture {

@@ -221,7 +221,23 @@ struct TrackChoices: Hashable, Sendable {
     var speed: PlaybackSpeed?
 }
 
-/// Records what the user watched, so progress, watched state and continue watching follow playback.
+/// The episode after the one playing.
+struct UpNext: Equatable, Sendable {
+    let video: PlayableID
+    /// The series it belongs to, such as "Twin Peaks".
+    let show: String
+    /// The episode's own title. Empty when the add-on gives none.
+    let title: String
+    let thumbnail: URL?
+    /// The series' backdrop.
+    let backdrop: URL?
+    /// A stream for it like the one playing, from the same add-on, that plays here. Nil leaves the
+    /// choice of stream to the viewer.
+    let stream: StreamCandidate?
+}
+
+/// Records what the user watched, so progress, watched state and continue watching follow playback,
+/// and finds what to watch next.
 protocol PlaybackTracker: Sendable {
     func begin(_ candidate: StreamCandidate)
     func progress(_ position: Duration, of duration: Duration)
@@ -229,6 +245,8 @@ protocol PlaybackTracker: Sendable {
     func seek(to position: Duration, of duration: Duration)
     func paused(_ paused: Bool)
     func ended()
+    /// The viewer moved on to the next episode. Call it before beginning that episode.
+    func movedToNext()
     func stop()
     /// Remembers what the viewer chose for the candidate being tracked.
     func remember(_ choices: TrackChoices)
@@ -236,4 +254,7 @@ protocol PlaybackTracker: Sendable {
     /// episode, once known. Call it after `begin(candidate)`. Yields at most once, and finishes once
     /// another candidate replaces it.
     func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices>
+    /// The episode after `candidate`, now and after every change, nil while there is none or it is
+    /// not known yet. Finishes once another candidate replaces it.
+    func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?>
 }

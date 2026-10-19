@@ -6,11 +6,26 @@ struct PlayerState: Decodable, Sendable {
     /// What `CoreAction.Load.player` loaded, as core echoes it back.
     struct Selected: Decodable, Sendable {
         let stream: Stream
+        let streamRequest: ResourceRequest?
+        let metaRequest: ResourceRequest?
         let subtitlesPath: ResourcePath?
+    }
+
+    /// The fields of core's `MetaItem` the up next offer shows.
+    struct Show: Decodable, Sendable {
+        let name: String
+        let background: String?
     }
 
     let selected: Selected?
     let subtitles: [ResourceLoadable<[Subtitles]>]
+    let metaItem: ResourceLoadable<Show>?
+    /// The episode after the selected one, once `metaItem` is ready.
+    let nextVideo: MetaDetailsState.Video?
+    /// The next video's streams from the selected stream's add-on.
+    let nextStreams: ResourceLoadable<[Stream]>?
+    /// The first of `nextStreams` in the selected stream's binge group.
+    let nextStream: Stream?
     /// What was saved for the selected video, or carried over from an earlier one of the same title.
     let streamState: StreamItemState?
 

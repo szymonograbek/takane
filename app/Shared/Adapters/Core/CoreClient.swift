@@ -298,3 +298,10 @@ private extension JSONValue {
         }
     }
 }
+
+extension CoreAction {
+    /// Carries a password or token, so logs show only its name.
+    var isSensitive: Bool {
+        if case .ctx(.authenticate) = self { true } else { false }
+    }
+}

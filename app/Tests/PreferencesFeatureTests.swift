@@ -10,7 +10,9 @@ struct PreferencesFeatureTests {
     }
 
     private var loaded: PreferencesFeature.State {
-        PreferencesFeature.State(preferences: Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false))
+        PreferencesFeature.State(
+            preferences: Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: .defaults)
+        )
     }
 
     @Test func editsBeforeThePreferencesLoadAreIgnored() {
@@ -42,7 +44,8 @@ struct PreferencesFeatureTests {
                 languages: TrackLanguages(audio: polishAudio, subtitles: PreferredLanguages(primary: english, fallback: nil)),
                 subtitleStyle: .defaults,
                 seekStep: .ten,
-                hidesSpoilers: false
+                hidesSpoilers: false,
+                upNext: .defaults
             )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleLanguages(PreferredLanguages(primary: english, fallback: polish))) == [
@@ -50,20 +53,31 @@ struct PreferencesFeatureTests {
                 languages: TrackLanguages(audio: nil, subtitles: PreferredLanguages(primary: english, fallback: polish)),
                 subtitleStyle: .defaults,
                 seekStep: .ten,
-                hidesSpoilers: false
+                hidesSpoilers: false,
+                upNext: .defaults
             )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleLanguages(nil)) == [
-            .update(Preferences(languages: TrackLanguages(audio: nil, subtitles: nil), subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false)),
+            .update(Preferences(
+                languages: TrackLanguages(audio: nil, subtitles: nil), subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: .defaults
+            )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleStyle(bold)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: bold, seekStep: .ten, hidesSpoilers: false)),
+            .update(Preferences(languages: englishSubtitles, subtitleStyle: bold, seekStep: .ten, hidesSpoilers: false, upNext: .defaults)),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSeekStep(.thirty)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false)),
+            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false, upNext: .defaults)),
         ])
         #expect(PreferencesFeature.reduce(&state, .setHidesSpoilers(true)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: true)),
+            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: true, upNext: .defaults)),
+        ])
+        let off = UpNextBehavior(notice: .off, autoplay: true)
+        #expect(PreferencesFeature.reduce(&state, .setUpNextNotice(.off)) == [
+            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: off)),
+        ])
+        let manual = UpNextBehavior(notice: .thirtyFiveSeconds, autoplay: false)
+        #expect(PreferencesFeature.reduce(&state, .setAutoplaysNext(false)) == [
+            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: manual)),
         ])
     }
 
