@@ -66,6 +66,23 @@ struct BrowsingFeatureTests {
         #expect(state.recentSearches?.map(\.rawValue) == ["breaking bad", "Twin Peaks", "dune"])
     }
 
+    @Test func suggestionsAreAFewRecentSearchesThatContinueTheQuery() {
+        var state = SearchFeature.State()
+        let history = ["Breaking Bad", "The Bear", "Better Call Saul", "bones", "Bluey", "Blade Runner"].map { SearchText($0).require() }
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged(history))
+        #expect(state.suggestions.isEmpty)
+
+        _ = SearchFeature.reduce(&state, .queryChanged(SearchText("b")))
+        #expect(state.suggestions == [
+            SearchSuggestion(search: history[0], typed: "B", completion: "reaking Bad"),
+            SearchSuggestion(search: history[2], typed: "B", completion: "etter Call Saul"),
+            SearchSuggestion(search: history[3], typed: "b", completion: "ones"),
+            SearchSuggestion(search: history[4], typed: "B", completion: "luey"),
+        ])
+        _ = SearchFeature.reduce(&state, .queryChanged(SearchText("breaking bad")))
+        #expect(state.suggestions.isEmpty)
+    }
+
     @Test func recentSearchesAreClearedOnlyBeforeAnythingIsTyped() {
         var state = SearchFeature.State()
         _ = SearchFeature.reduce(&state, .recentSearchesChanged([]))

@@ -18,6 +18,12 @@ struct SearchScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.canvas.ignoresSafeArea())
         .searchable(text: $query, prompt: "Movies and series")
+        .searchSuggestions {
+            ForEach(store?.state.suggestions ?? [], id: \.search) { suggestion in
+                Text("\(Text(suggestion.typed).foregroundStyle(Palette.secondary))\(Text(suggestion.completion).bold())")
+                    .searchCompletion(suggestion.search.rawValue)
+            }
+        }
         .onChange(of: query) { _, text in store?.send(.queryChanged(SearchText(text))) }
         .onAppear {
             guard store == nil else { return }

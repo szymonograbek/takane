@@ -1,4 +1,5 @@
-/// Searches the add-ons as the user types. Before anything is typed, offers recent searches.
+/// Searches the add-ons as the user types, suggesting recent searches that continue the query.
+/// Before anything is typed, offers recent searches.
 enum SearchFeature: Feature {
     struct Dependencies: Sendable {
         let catalog: any CatalogService
@@ -98,6 +99,27 @@ enum SearchFeature: Feature {
             if !isStep && !isRepeat { kept.append(search) }
         }
         return kept
+    }
+}
+
+/// A recent search that continues what is typed.
+struct SearchSuggestion: Hashable, Sendable {
+    let search: SearchText
+    /// The start of `search` that matches what was typed, in the search's own letter case.
+    let typed: Substring
+    let completion: Substring
+}
+
+extension SearchFeature.State {
+    /// Up to four recent searches that continue the query, most recent first.
+    var suggestions: [SearchSuggestion] {
+        guard case .searching(let text, _) = query else { return [] }
+        let matches = (recentSearches ?? []).compactMap { search in
+            search.continuation(of: text).map { end in
+                SearchSuggestion(search: search, typed: search.rawValue[..<end], completion: search.rawValue[end...])
+            }
+        }
+        return Array(matches.prefix(4))
     }
 }
 
