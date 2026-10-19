@@ -10,6 +10,8 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 mkdir -p build
 xcodegen generate --quiet
+# Xcode checks that the bridge XCFramework exists before its build phase can create it.
+scripts/build-core.sh Release appletvos
 
 log=build/xcodebuild-ipa.log
 if ! xcodebuild -project StremioTV.xcodeproj -scheme StremioTV-tvOS -configuration Release \
