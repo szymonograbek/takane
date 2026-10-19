@@ -83,6 +83,14 @@ struct SearchText: Hashable, Sendable, CustomStringConvertible {
     }
 
     var description: String { rawValue }
+
+    /// Where `typed` ends in this text, when this text starts with it and goes on, ignoring letter case.
+    func continuation(of typed: SearchText) -> String.Index? {
+        guard let match = rawValue.range(of: typed.rawValue, options: [.caseInsensitive, .anchored]),
+              match.upperBound < rawValue.endIndex
+        else { return nil }
+        return match.upperBound
+    }
 }
 
 enum SearchResults: Equatable, Sendable {
@@ -140,8 +148,14 @@ protocol CatalogService: Sendable {
     func loadMore(_ row: CatalogID)
 
     /// Results now, then after every change. Finishes when a newer `search(_:)` call replaces this
-    /// one: providers may serve one search at a time.
+    /// one: providers may serve one search at a time. Adds `text` to `recentSearches()`.
     func search(_ text: SearchText) -> AsyncStream<SearchResults>
+
+    /// The texts searched, most recent first, now and after every change.
+    func recentSearches() -> AsyncStream<[SearchText]>
+
+    /// Forgets every recent search; `recentSearches()` reports it.
+    func clearRecentSearches()
 
     /// Waits for the first add-on that answers with metadata. Providers may share one selection with
     /// `StreamService`, so this can finish a running `streams(for:)` lookup.

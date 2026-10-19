@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Searches every add-on that can, showing each catalog's answers as a row.
+/// Searches every add-on that can, showing each catalog's answers as a row. Before anything is
+/// typed, offers recent searches.
 struct SearchScreen: View {
     @Environment(AppContext.self) private var app
     @State private var store: FeatureStore<SearchFeature>?
@@ -9,7 +10,7 @@ struct SearchScreen: View {
     var body: some View {
         ScrollView {
             if let store {
-                SearchResultsView(state: store.state)
+                SearchResultsView(store: store) { query = $0.rawValue }
             }
         }
         .scrollClipDisabled()
@@ -20,21 +21,34 @@ struct SearchScreen: View {
         .onChange(of: query) { _, text in store?.send(.queryChanged(SearchText(text))) }
         .onAppear {
             guard store == nil else { return }
-            store = FeatureStore(.empty, dependencies: SearchFeature.Dependencies(catalog: app.services.catalog))
+            store = FeatureStore(
+                SearchFeature.State(), dependencies: SearchFeature.Dependencies(catalog: app.services.catalog),
+                start: [.observeRecentSearches]
+            )
         }
     }
 }
 
 private struct SearchResultsView: View {
-    let state: SearchFeature.State
+    let store: FeatureStore<SearchFeature>
+    /// Puts a search in the search field, which runs it.
+    let search: (SearchText) -> Void
 
     var body: some View {
-        switch state {
+        switch store.state.query {
         case .empty:
-            ContentUnavailableView(
-                "Search Your Add-ons", systemImage: "magnifyingglass",
-                description: Text("Find movies and series across every add-on that can search.")
-            )
+            switch store.state.recentSearches {
+            case nil:
+                EmptyView()
+            case let searches? where searches.isEmpty:
+                ContentUnavailableView(
+                    "Search Your Add-ons", systemImage: "magnifyingglass",
+                    description: Text("Find movies and series across every add-on that can search.")
+                )
+            case let searches?:
+                RecentSearchesShelf(searches: searches, search: search) { store.send(.clearRecentSearches) }
+                    .padding(.vertical, Metrics.sectionSpacing)
+            }
         case .searching(_, results: nil), .searching(_, results: .searching?):
             ProgressView().padding(80)
         case .searching(_, results: .noSearchAddons?):
@@ -61,6 +75,28 @@ private struct SearchResultsView: View {
                 }
                 .padding(.vertical, Metrics.sectionSpacing)
             }
+        }
+    }
+}
+
+/// The last few searches, each a button that runs it again, then one that forgets them all.
+private struct RecentSearchesShelf: View {
+    let searches: [SearchText]
+    let search: (SearchText) -> Void
+    let clear: () -> Void
+    @State private var isConfirmingClear = false
+
+    var body: some View {
+        Shelf(title: "Recent Searches") {
+            ForEach(searches.prefix(6), id: \.self) { text in
+                Button(text.rawValue) { search(text) }
+                    .accessibilityIdentifier("search.recent")
+            }
+            Button("Clear", systemImage: "xmark.circle") { isConfirmingClear = true }
+                .accessibilityIdentifier("search.clearRecent")
+        }
+        .confirmationDialog("Clear recent searches?", isPresented: $isConfirmingClear) {
+            Button("Clear Recent Searches", action: clear)
         }
     }
 }

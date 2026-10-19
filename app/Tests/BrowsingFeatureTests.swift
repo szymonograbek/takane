@@ -48,15 +48,33 @@ struct BrowsingFeatureTests {
     }
 
     @Test func searchDropsResultsForAnOlderQuery() {
-        var state = SearchFeature.State.empty
+        var state = SearchFeature.State()
         #expect(SearchFeature.reduce(&state, .queryChanged(text)) == [.search(text)])
         _ = SearchFeature.reduce(&state, .resultsChanged(.rows(SearchText("twin").require(), [])))
-        #expect(state == .searching(text, results: nil))
+        #expect(state.query == .searching(text, results: nil))
         _ = SearchFeature.reduce(&state, .resultsChanged(.rows(text, [])))
-        #expect(state == .searching(text, results: .rows(text, [])))
+        #expect(state.query == .searching(text, results: .rows(text, [])))
         #expect(SearchFeature.reduce(&state, .queryChanged(text)).isEmpty)
         _ = SearchFeature.reduce(&state, .queryChanged(nil))
-        #expect(state == .empty)
+        #expect(state.query == .empty)
+    }
+
+    @Test func recentSearchesLeaveOutTheStepsOfTypingAnotherAndRepeats() {
+        var state = SearchFeature.State()
+        let history = ["breaking ba", "breaking bad", "Twin Peaks", "bre", "twin peaks", "dune"].map { SearchText($0).require() }
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged(history))
+        #expect(state.recentSearches?.map(\.rawValue) == ["breaking bad", "Twin Peaks", "dune"])
+    }
+
+    @Test func recentSearchesAreClearedOnlyBeforeAnythingIsTyped() {
+        var state = SearchFeature.State()
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged([]))
+        #expect(SearchFeature.reduce(&state, .clearRecentSearches).isEmpty)
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged([text]))
+        #expect(SearchFeature.reduce(&state, .clearRecentSearches) == [.clearRecentSearches])
+        _ = SearchFeature.reduce(&state, .queryChanged(text))
+        #expect(SearchFeature.reduce(&state, .clearRecentSearches).isEmpty)
+        #expect(state.recentSearches == [text])
     }
 
     @Test func onlyRemovableAddonsAreRemoved() {

@@ -220,6 +220,7 @@ mod tests {
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullUserFromAPI","args":{}}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullAddonsFromAPI"}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"SyncLibraryWithAPI"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"ClearSearchHistory"}}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);

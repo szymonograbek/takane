@@ -63,6 +63,7 @@ enum CoreAction: Sendable {
         case pullAddonsFromAPI
         /// Pulls library items changed elsewhere and pushes the ones changed here.
         case syncLibraryWithAPI
+        case clearSearchHistory
     }
 
     /// Watched marks on the title the `meta_details` model holds, through its library item.
@@ -295,6 +296,7 @@ extension CoreAction.Ctx: Encodable {
         case .pullUserFromAPI: try action("PullUserFromAPI", NoArgs()).encode(to: encoder)
         case .pullAddonsFromAPI: try action("PullAddonsFromAPI").encode(to: encoder)
         case .syncLibraryWithAPI: try action("SyncLibraryWithAPI").encode(to: encoder)
+        case .clearSearchHistory: try action("ClearSearchHistory").encode(to: encoder)
         }
     }
 

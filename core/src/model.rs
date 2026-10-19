@@ -110,7 +110,7 @@ impl AppModel {
 
     pub fn state_json(&self, field: &AppModelField) -> serde_json::Result<Vec<u8>> {
         match field {
-            AppModelField::Ctx => serde_json::to_vec(&self.ctx),
+            AppModelField::Ctx => serde_json::to_vec(&CtxState::new(&self.ctx)),
             AppModelField::ContinueWatchingPreview => serde_json::to_vec(&self.continue_watching_preview),
             AppModelField::AddonDetails => serde_json::to_vec(&self.addon_details),
             AppModelField::Board => serde_json::to_vec(&self.board),
@@ -120,6 +120,30 @@ impl AppModel {
             AppModelField::Link => serde_json::to_vec(&self.link),
         }
     }
+}
+
+/// Core's `Ctx` plus the queries searched, which core keeps out of its serialized state.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CtxState<'a> {
+    #[serde(flatten)]
+    ctx: &'a Ctx,
+    search_history: Vec<&'a str>,
+}
+
+impl<'a> CtxState<'a> {
+    fn new(ctx: &'a Ctx) -> Self {
+        CtxState { ctx, search_history: recent_searches(&ctx.search_history) }
+    }
+}
+
+/// Queries most recent first. The query breaks ties, so the order is stable.
+fn recent_searches(history: &SearchHistoryBucket) -> Vec<&str> {
+    let mut searches: Vec<_> = history.items.iter().collect();
+    searches.sort_by(|(query, searched), (other_query, other_searched)| {
+        other_searched.cmp(searched).then_with(|| query.cmp(other_query))
+    });
+    searches.into_iter().map(|(query, _)| query.as_str()).collect()
 }
 
 /// Core's `MetaDetails` plus the ids of the shown title's videos the user has watched, which
@@ -157,6 +181,22 @@ mod tests {
     use super::*;
     use stremio_core::models::common::ResourceLoadable;
     use stremio_watched_bitfield::WatchedBitField;
+
+    #[test]
+    fn recent_searches_are_most_recent_first() {
+        let history: SearchHistoryBucket = serde_json::from_value(serde_json::json!({
+            "uid": null,
+            "items": {
+                "twin peaks": "2026-10-01T10:00:00Z",
+                "breaking bad": "2026-10-03T10:00:00Z",
+                "dune": "2026-10-02T10:00:00Z",
+                "alien": "2026-10-02T10:00:00Z",
+            },
+        }))
+        .unwrap();
+
+        assert_eq!(recent_searches(&history), ["breaking bad", "alien", "dune", "twin peaks"]);
+    }
 
     #[test]
     fn meta_details_state_lists_the_watched_videos() {

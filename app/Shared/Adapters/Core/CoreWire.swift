@@ -39,6 +39,8 @@ struct ResourceLoadable<Content: Decodable & Sendable>: Decodable, Sendable {
 
 struct CtxState: Decodable, Sendable {
     let profile: Profile
+    /// Queries most recent first. The bridge adds it, since core leaves its search history out of the state.
+    let searchHistory: [String]
 }
 
 struct Profile: Decodable, Sendable {

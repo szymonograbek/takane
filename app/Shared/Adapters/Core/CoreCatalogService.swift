@@ -1,7 +1,7 @@
 import Foundation
 
 /// Catalogs and metadata from the user's add-ons through core's `board`, `search` and
-/// `meta_details` models.
+/// `meta_details` models, and recent searches from its search history.
 ///
 /// Core holds one selection per model. A new search replaces the previous one and finishes its
 /// stream. `details` shares `meta_details` with `CoreStreamService`: it replaces a running stream
@@ -32,6 +32,15 @@ struct CoreCatalogService: CatalogService {
         load(.search(text), into: .search, pending: SearchResults.searching(text)) { state, addons in
             state.catalogs.isEmpty ? .noSearchAddons : .rows(text, Self.rows(state, addons: addons, paging: false))
         }
+    }
+
+    func recentSearches() -> AsyncStream<[SearchText]> {
+        // Core records every search the `search` model loads.
+        runtime.observe(.ctx, as: CtxState.self) { $0.searchHistory.compactMap(SearchText.init) }
+    }
+
+    func clearRecentSearches() {
+        runtime.dispatchLogged(.ctx(.clearSearchHistory))
     }
 
     func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails {
