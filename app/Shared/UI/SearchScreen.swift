@@ -14,6 +14,8 @@ struct SearchScreen: View {
             }
         }
         .scrollClipDisabled()
+        // Shelves draw their own margins.
+        .ignoresSafeArea(edges: .horizontal)
         // The search container proposes no width, so the scroll view would hug its content.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.canvas.ignoresSafeArea())
