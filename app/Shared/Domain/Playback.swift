@@ -152,6 +152,8 @@ enum PlaybackEvent: Equatable, Sendable {
     case stopped
     case failed(reason: String)
     case position(Duration)
+    /// A seek started toward this position, before the position moves there.
+    case seeking(to: Duration)
     case duration(Duration)
     case paused(Bool)
     case buffering(Bool)
@@ -199,6 +201,8 @@ protocol PlaybackEngine: AnyObject, Sendable {
 protocol PlaybackTracker: Sendable {
     func begin(_ candidate: StreamCandidate)
     func progress(_ position: Duration, of duration: Duration)
+    /// The viewer moved to `position` without watching the time in between.
+    func seek(to position: Duration, of duration: Duration)
     func paused(_ paused: Bool)
     func ended()
     func stop()

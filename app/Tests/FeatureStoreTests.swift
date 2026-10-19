@@ -33,6 +33,7 @@ private final class FakeTracker: PlaybackTracker {
 
     func begin(_ candidate: StreamCandidate) { reports.continuation.yield("begin \(candidate.filename ?? "")") }
     func progress(_ position: Duration, of duration: Duration) { reports.continuation.yield("progress \(position)") }
+    func seek(to position: Duration, of duration: Duration) { reports.continuation.yield("seek \(position)") }
     func paused(_ paused: Bool) { reports.continuation.yield("paused \(paused)") }
     func ended() { reports.continuation.yield("ended") }
     func stop() { reports.continuation.yield("stop") }

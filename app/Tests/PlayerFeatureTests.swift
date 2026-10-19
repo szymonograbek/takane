@@ -40,6 +40,20 @@ struct PlayerFeatureTests {
         #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(1)))) == [.report(.progress(.seconds(1), of: .seconds(60)))])
     }
 
+    @Test func aSeekIsReportedAsASeekAndNotAgainAsProgress() {
+        var state = playing(position: .seconds(12.2), reportedSecond: 12)
+        #expect(PlayerFeature.reduce(&state, .engine(.seeking(to: .seconds(72.5)))) == [.report(.seek(to: .seconds(72.5), of: .seconds(100)))])
+        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(72.5)))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(73)))) == [.report(.progress(.seconds(73), of: .seconds(100)))])
+    }
+
+    @Test func aSeekBeforeTheDurationIsNotReported() {
+        var state = PlayerFeature.State.idle
+        _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
+        #expect(PlayerFeature.reduce(&state, .engine(.seeking(to: .seconds(30)))).isEmpty)
+        #expect(state.session?.reportedSecond == nil)
+    }
+
     @Test func negativePositionsClampToZero() {
         var state = playing()
         _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(-0.04))))

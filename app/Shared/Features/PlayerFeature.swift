@@ -74,6 +74,7 @@ enum PlayerFeature: Feature {
 
     enum Report: Equatable, Sendable {
         case progress(Duration, of: Duration)
+        case seek(to: Duration, of: Duration)
         case paused(Bool)
         case ended
     }
@@ -230,6 +231,11 @@ enum PlayerFeature: Feature {
             guard second != session.reportedSecond, session.duration > .zero else { return [] }
             session.reportedSecond = second
             return [.report(.progress(position, of: session.duration))]
+        case .seeking(let target):
+            guard session.duration > .zero else { return [] }
+            // The position that follows lands on the target, which this report already covers.
+            session.reportedSecond = target.components.seconds
+            return [.report(.seek(to: target, of: session.duration))]
         case .duration(let duration):
             session.duration = duration
             guard session.segments == nil, duration > .zero else { return [] }
@@ -308,6 +314,8 @@ extension PlayerFeature {
             tracker.stop()
         case .report(.progress(let position, let duration)):
             tracker.progress(position, of: duration)
+        case .report(.seek(let position, let duration)):
+            tracker.seek(to: position, of: duration)
         case .report(.paused(let paused)):
             tracker.paused(paused)
         case .report(.ended):
