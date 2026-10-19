@@ -1,8 +1,8 @@
 <img src="assets/logo.png" width="64" alt="">
 
-# Takane
+# Developing Takane
 
-Custom macOS and tvOS client for Stremio, built on [stremio-core](https://github.com/Stremio/stremio-core) and [AetherEngine](https://github.com/superuser404notfound/AetherEngine). Design notes live in [docs/](docs/README.md).
+Takane is a custom macOS and tvOS client for Stremio, built on [stremio-core](https://github.com/Stremio/stremio-core) and [AetherEngine](https://github.com/superuser404notfound/AetherEngine). Design notes live in [docs/](docs/README.md).
 
 ## Requirements
 
@@ -23,7 +23,11 @@ scripts/install-tvos.sh                   # tvOS device: pick a paired Apple TV,
 
 Or `xcodegen generate`, open `StremioTV.xcodeproj` in Xcode and run the `StremioTV-macOS` or `StremioTV-tvOS` scheme. The `StremioBridge_*` targets rebuild the Rust bridge before every app build. Signing uses the personal team (`F43U35GPD2`) with the `Apple Development: szymon@ograbek.com` identity.
 
-The app is Takane. First launch asks to sign in with Stremio (a link code confirmed on another device, or email and password) or continue without an account. Then three tabs: Home (a featured title, Continue Watching, every add-on catalog), Settings (Account, Add-ons, Playback, About) and Search. A title opens Details, Play lists the add-ons' playable streams, and the player shows only the video until the remote asks for controls: progress, ±10 s, play/pause, subtitles, audio, speed and Skip Intro.
+The app is Takane. First launch asks to sign in with Stremio (a link code confirmed on another device, or email and password) or continue without an account. Then five tabs: Home (a featured title, Continue Watching, every add-on catalog), Library, Calendar, Search and Settings (Account, Add-ons, Playback, Subtitles, About). A title opens Details, Play lists the add-ons' playable streams, and the player shows only the video until the remote asks for controls: progress, ±10 s, play/pause, subtitles, audio, speed and Skip Intro.
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org) and come from the [Conventional Commits](https://www.conventionalcommits.org/) on `main`. [release-please](https://github.com/googleapis/release-please) runs on every push to `main` (`.github/workflows/release.yml`) and keeps a release PR open. The PR bumps the version in `project.yml` (`CFBundleShortVersionString`) and `version.txt` and adds the commits to `CHANGELOG.md`: `fix` bumps the patch, `feat` the minor, and `!` the major. Merging it tags `vX.Y.Z`, publishes the GitHub release and attaches `Takane.ipa`, built by `scripts/package-ipa.sh` (Release, unsigned). Run the script locally to get the same `.ipa` in `build/`.
 
 ## Logs
 
@@ -37,8 +41,8 @@ The add-on URL contains debrid credentials, so it is read from `STREMIO_SMOKE_AD
 
 ```sh
 echo 'STREMIO_SMOKE_ADDON_URL=https://…/manifest.json' > .env.smoke
-scripts/smoke.sh                       # movie/tt0111161
-scripts/smoke.sh series/tt0944947:1:1
+scripts/smoke.sh                       # movie/tt0063350, Night of the Living Dead (1968, public domain)
+scripts/smoke.sh series/tt1748166:1:1  # Pioneer One (Creative Commons)
 scripts/smoke.sh --tvos
 ```
 
