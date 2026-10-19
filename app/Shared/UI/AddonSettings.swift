@@ -7,14 +7,15 @@ struct AddonSettings: View {
 
     var body: some View {
         let state = app.addons.state
+        let note = if case .failed(_, let error) = state.removal { error.message } else { Self.removeHint }
         SettingsPage(title: "Add-ons") {
             SettingsSymbol(name: "puzzlepiece.extension")
         } rows: {
-            Section {
-                NavigationLink("Install Add-on…") { InstallAddonScreen() }
+            SettingsSection {
+                NavigationLink("Install Add-on") { InstallAddonScreen() }
                     .accessibilityIdentifier("addons.install")
             }
-            Section {
+            SettingsSection(title: "Installed", note: note) {
                 ForEach(state.installed) { addon in
                     ValueRow(title: addon.name, value: addon.version)
                         .accessibilityIdentifier("addons.row")
@@ -23,12 +24,6 @@ struct AddonSettings: View {
                                 Button("Remove", systemImage: "trash", role: .destructive) { removing = addon }
                             }
                         }
-                }
-            } header: {
-                Text("Installed")
-            } footer: {
-                if case .failed(_, let error) = state.removal {
-                    Text(error.message)
                 }
             }
         }
@@ -39,6 +34,12 @@ struct AddonSettings: View {
             Button("Remove", role: .destructive) { app.addons.send(.uninstall(addon.manifestURL)) }
         }
     }
+
+    #if os(tvOS)
+    private static let removeHint = "To remove an add-on, press and hold it."
+    #else
+    private static let removeHint = "To remove an add-on, Control-click it."
+    #endif
 }
 
 /// Typing or pasting a manifest URL, such as a debrid add-on's.
@@ -93,19 +94,15 @@ struct PlaybackSettings: View {
         SettingsPage(title: "Playback") {
             SettingsSymbol(name: "play.rectangle")
         } rows: {
-            Section {
+            SettingsSection(title: "Audio", note: "Used when a stream has it. You can switch during playback.") {
                 PreferredLanguagesPicker(
                     title: "Language", none: "Stream Default", selection: preferences?.languages.audio,
                     ids: (primary: "playback.audioLanguage", fallback: "playback.secondAudioLanguage")
                 ) {
                     app.preferences.send(.setAudioLanguages($0))
                 }
-            } header: {
-                Text("Audio")
-            } footer: {
-                Text("Streams start with audio in this language when they have it, else in the second. You can switch during playback.")
             }
-            Section {
+            SettingsSection(title: "Player", note: "Quick presses in a row skip further, up to a minute.") {
                 NavigationLink {
                     ChoiceList(
                         title: "Skip Interval", symbol: "goforward",
@@ -117,48 +114,32 @@ struct PlaybackSettings: View {
                     LabeledContent("Skip Interval", value: seekStep.name)
                 }
                 .accessibilityIdentifier("playback.seekStep")
-            } header: {
-                Text("Player")
-            } footer: {
-                Text("How far back and forward skip. Quick presses in a row skip further, up to a minute.")
             }
-            Section {
+            SettingsSection(title: "Next Episode", note: "Autoplay needs a matching stream from the same add-on.") {
                 NavigationLink {
                     ChoiceList(
-                        title: "Show Up Next", symbol: "forward.end",
+                        title: "Up Next Card", symbol: "forward.end",
                         choices: UpNextNotice.allCases.map { (name: $0.name, value: $0) }, selection: upNext.notice
                     ) {
                         app.preferences.send(.setUpNextNotice($0))
                     }
                 } label: {
-                    LabeledContent("Show Up Next", value: upNext.notice.name)
+                    LabeledContent("Up Next Card", value: upNext.notice.name)
                 }
                 .accessibilityIdentifier("playback.upNextNotice")
-                Toggle("Play Next Episode Automatically", isOn: Binding { upNext.autoplay } set: { autoplay in
+                Toggle("Autoplay Next Episode", isOn: Binding { upNext.autoplay } set: { autoplay in
                     app.preferences.send(.setAutoplaysNext(autoplay))
                 })
                 .accessibilityIdentifier("playback.autoplayNext")
-            } header: {
-                Text("Up Next")
-            } footer: {
-                Text(
-                    "This long before an episode ends, the player offers the next one. When the episode ends, the next "
-                        + "plays by itself if its add-on has a matching stream, unless you dismissed the offer."
-                )
             }
-            Section {
+            SettingsSection(
+                title: "Episodes",
+                note: app.preferences.state.failure?.message ?? "Blurs stills and hides summaries of episodes you haven't watched."
+            ) {
                 Toggle("Hide Spoilers", isOn: Binding { preferences?.hidesSpoilers ?? false } set: { hides in
                     app.preferences.send(.setHidesSpoilers(hides))
                 })
                 .accessibilityIdentifier("playback.hideSpoilers")
-            } header: {
-                Text("Episodes")
-            } footer: {
-                if case .rejected(let reason)? = app.preferences.state.failure {
-                    Text("Couldn't save the change (\(reason)).")
-                } else {
-                    Text("Episodes you haven't watched blur their picture and leave out their summary.")
-                }
             }
         }
     }
@@ -169,7 +150,7 @@ private extension SeekStep {
 }
 
 private extension UpNextNotice {
-    var name: String { self == .off ? "Off" : "\(rawValue) Seconds" }
+    var name: String { self == .off ? "Off" : "\(rawValue) Seconds Before End" }
 }
 
 /// A language row and, once a language is chosen, a row for the one to fall back on. Choosing

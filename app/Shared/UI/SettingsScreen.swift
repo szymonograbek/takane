@@ -48,6 +48,9 @@ struct SettingsPage<Emblem: View, Rows: View>: View {
                 .frame(maxWidth: .infinity)
             List {
                 rows()
+                    #if os(tvOS)
+                    .listRowInsets(EdgeInsets(top: 0, leading: Metrics.rowPadding, bottom: 0, trailing: Metrics.rowPadding))
+                    #endif
             }
             .contentMargins(.top, Metrics.sectionSpacing, for: .scrollContent)
             // Room for a focused row's lift, which the mask below would otherwise cut.
@@ -59,6 +62,36 @@ struct SettingsPage<Emblem: View, Rows: View>: View {
         .padding(.horizontal, Metrics.screenPadding)
         .navigationTitle(title)
         .background(Palette.canvas.ignoresSafeArea())
+    }
+}
+
+/// A group of rows in a `SettingsPage`, with an optional title above and a short note below.
+/// The note sits in the secondary color, so it reads as a hint rather than another row. A title sits
+/// closer to its own rows than to the section before.
+struct SettingsSection<Rows: View>: View {
+    var title: String?
+    var note: String?
+    @ViewBuilder let rows: () -> Rows
+
+    var body: some View {
+        Section {
+            rows()
+        } header: {
+            if let title {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Palette.secondary)
+                    .padding(.top, Metrics.sectionSpacing)
+                    // Clears the first row's lift under focus, which would otherwise cover the title.
+                    .padding(.bottom, Metrics.rowLift)
+            }
+        } footer: {
+            if let note {
+                Text(note)
+                    .font(.callout)
+                    .foregroundStyle(Palette.secondary)
+            }
+        }
     }
 }
 
@@ -98,14 +131,12 @@ private struct AccountSettings: View {
         } rows: {
             switch app.account.state.account {
             case .anonymous:
-                Section {
+                SettingsSection(
+                    note: "Sync add-ons, library and watch progress with your Stremio account. "
+                        + "Watch progress on this device is replaced by your account's."
+                ) {
                     NavigationLink("Sign In with Stremio") { SignInScreen() }
                         .accessibilityIdentifier("account.signIn")
-                } footer: {
-                    Text(
-                        "Signing in syncs add-ons, library and watch progress with Stremio. Add-ons installed here stay installed; "
-                            + "watch progress on this device is replaced by your account's."
-                    )
                 }
             case .signedIn(let email):
                 ValueRow(title: "Email", value: email)
@@ -126,12 +157,18 @@ private struct AboutSettings: View {
         SettingsPage(title: "About") {
             AppLogo(size: Metrics.emblemSize)
         } rows: {
-            ValueRow(title: "Version", value: Bundle.main.version)
-            Section {
-                EmptyView()
-            } footer: {
-                Text("Takane plays streams from your Stremio add-ons. Built on stremio-core and AetherEngine.")
+            SettingsSection(note: "Takane plays streams from your Stremio add-ons. Built on stremio-core and AetherEngine.") {
+                ValueRow(title: "Version", value: Bundle.main.version)
             }
+        }
+    }
+}
+
+extension PreferencesError {
+    /// Shown in place of a settings page's last note.
+    var message: String {
+        switch self {
+        case .rejected(let reason): "Couldn't save the change (\(reason))."
         }
     }
 }

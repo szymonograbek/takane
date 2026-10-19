@@ -11,29 +11,15 @@ struct SubtitleSettings: View {
         SettingsPage(title: "Subtitles") {
             SubtitlePreview(style: style)
         } rows: {
-            Section {
+            SettingsSection(note: "Used when a stream has them.") {
                 PreferredLanguagesPicker(
                     title: "Language", none: "Off", selection: languages,
                     ids: (primary: "subtitles.language", fallback: "subtitles.secondLanguage")
                 ) {
                     app.preferences.send(.setSubtitleLanguages($0))
                 }
-            } header: {
-                Text("Language")
-            } footer: {
-                Text("Streams start with subtitles in this language when they have them, else in the second.")
             }
-            Section {
-                styleRows(style)
-            } header: {
-                Text("Style")
-            } footer: {
-                if case .rejected(let reason)? = app.preferences.state.failure {
-                    Text("Couldn't save the change (\(reason)).")
-                } else {
-                    Text("Applies to text subtitles; picture-based ones keep their look. File styling keeps a subtitle file's colors, fonts and positions.")
-                }
-            }
+            styleSections(style)
         }
         .confirmationDialog("Reset the subtitle style?", isPresented: $confirmingReset) {
             Button("Reset Style", role: .destructive) { app.preferences.send(.setSubtitleStyle(.defaults)) }
@@ -43,30 +29,38 @@ struct SubtitleSettings: View {
     }
 
     @ViewBuilder
-    private func styleRows(_ style: SubtitleStyle) -> some View {
+    private func styleSections(_ style: SubtitleStyle) -> some View {
         let save = { (edited: SubtitleStyle) in app.preferences.send(.setSubtitleStyle(edited)) }
-        StylePicker(setting: .size, style: style, choose: save)
-        StylePicker(setting: .font, style: style, choose: save)
-        Toggle("Bold", isOn: Binding { style.isBold } set: { isBold in
-            var bold = style
-            bold.isBold = isBold
-            save(bold)
-        })
-        .accessibilityIdentifier("subtitles.bold")
-        Toggle("Subtitle File Styling", isOn: Binding { style.usesFileStyling } set: { usesFileStyling in
-            var styled = style
-            styled.usesFileStyling = usesFileStyling
-            save(styled)
-        })
-        .accessibilityIdentifier("subtitles.fileStyling")
-        StylePicker(setting: .textColor, style: style, choose: save)
-        StylePicker(setting: .outlineColor, style: style, choose: save)
-        StylePicker(setting: .backgroundColor, style: style, choose: save)
-        StylePicker(setting: .opacity, style: style, choose: save)
-        StylePicker(setting: .position, style: style, choose: save)
-        Button("Reset Style", role: .destructive) { confirmingReset = true }
-            .disabled(style == .defaults)
-            .accessibilityIdentifier("subtitles.reset")
+        SettingsSection(title: "Text") {
+            StylePicker(setting: .font, style: style, choose: save)
+            StylePicker(setting: .size, style: style, choose: save)
+            Toggle("Bold", isOn: Binding { style.isBold } set: { isBold in
+                var bold = style
+                bold.isBold = isBold
+                save(bold)
+            })
+            .accessibilityIdentifier("subtitles.bold")
+            StylePicker(setting: .position, style: style, choose: save)
+        }
+        SettingsSection(title: "Colors") {
+            StylePicker(setting: .textColor, style: style, choose: save)
+            StylePicker(setting: .outlineColor, style: style, choose: save)
+            StylePicker(setting: .backgroundColor, style: style, choose: save)
+            StylePicker(setting: .opacity, style: style, choose: save)
+        }
+        SettingsSection(note: "Keeps a subtitle file's own colors, fonts and positions. Picture-based subtitles always keep their look.") {
+            Toggle("Use File Styling", isOn: Binding { style.usesFileStyling } set: { usesFileStyling in
+                var styled = style
+                styled.usesFileStyling = usesFileStyling
+                save(styled)
+            })
+            .accessibilityIdentifier("subtitles.fileStyling")
+        }
+        SettingsSection(note: app.preferences.state.failure?.message) {
+            Button("Reset Style", role: .destructive) { confirmingReset = true }
+                .disabled(style == .defaults)
+                .accessibilityIdentifier("subtitles.reset")
+        }
     }
 }
 
@@ -203,7 +197,7 @@ extension StyleSetting<SubtitleFont> {
 
 extension StyleSetting<SubtitleColor> {
     static var textColor: Self {
-        colors("Text Color", id: "subtitles.textColor", path: \.textColor, [
+        colors("Text", id: "subtitles.textColor", path: \.textColor, [
             ("White", .white),
             ("Yellow", SubtitleColor(red: 255, green: 230, blue: 0)),
             ("Cyan", SubtitleColor(red: 0, green: 230, blue: 255)),
@@ -213,13 +207,13 @@ extension StyleSetting<SubtitleColor> {
     }
 
     static var outlineColor: Self {
-        colors("Outline Color", id: "subtitles.outlineColor", path: \.outlineColor, [
+        colors("Outline", id: "subtitles.outlineColor", path: \.outlineColor, [
             ("None", .transparent), ("Black", .black), ("Gray", SubtitleColor(red: 128, green: 128, blue: 128)), ("White", .white),
         ])
     }
 
     static var backgroundColor: Self {
-        colors("Background Color", id: "subtitles.backgroundColor", path: \.backgroundColor, [
+        colors("Background", id: "subtitles.backgroundColor", path: \.backgroundColor, [
             ("None", .transparent), ("Translucent Black", SubtitleColor(red: 0, green: 0, blue: 0, alpha: 128)), ("Black", .black),
         ])
     }
