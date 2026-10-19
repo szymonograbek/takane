@@ -25,53 +25,61 @@ struct LibraryScreen: View {
     }
 }
 
+/// The filters and the grid scroll together in one scroll view at the screen's root. tvOS shows the
+/// tab bar again from that scroll view's position; one only around the grid would leave the bar
+/// hidden after a pushed screen, such as a long series' details, scrolled it away.
 private struct LibraryContent: View {
     let store: FeatureStore<LibraryFeature>
     @State private var openFilter: LibraryFilters.Kind?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // In every state, so the screen always has something to focus.
-            LibraryFilters(filter: store.state.filter, types: types, open: $openFilter) { store.send(.select($0)) }
-            Group {
-                switch store.state {
-                case .loading:
-                    ProgressView()
-                case .loaded(let contents) where contents.titles.isEmpty:
-                    if let type = contents.filter.type {
-                        ContentUnavailableView {
-                            Label("No \(type.pluralName) in Your Library", systemImage: "books.vertical")
-                        } actions: {
-                            Button("Show All") { store.send(.select(LibraryFilter(type: nil, sort: contents.filter.sort))) }
-                        }
-                    } else {
-                        ContentUnavailableView(
-                            "Your Library Is Empty", systemImage: "books.vertical",
-                            description: Text("Add movies and series from their page with Add to Library.")
-                        )
-                    }
-                case .loaded(let contents):
-                    PosterGrid(titles: contents.titles) { preview in
-                        PosterCard(preview: preview)
-                            .contextMenu {
-                                Button("Remove from Library", systemImage: "minus.circle", role: .destructive) {
-                                    store.send(.remove(preview.media))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // In every state, so the screen always has something to focus.
+                LibraryFilters(filter: store.state.filter, types: types, open: $openFilter) { store.send(.select($0)) }
+                Group {
+                    switch store.state {
+                    case .loading:
+                        ProgressView()
+                            .containerRelativeFrame(.vertical)
+                    case .loaded(let contents) where contents.titles.isEmpty:
+                        Group {
+                            if let type = contents.filter.type {
+                                ContentUnavailableView {
+                                    Label("No \(type.pluralName) in Your Library", systemImage: "books.vertical")
+                                } actions: {
+                                    Button("Show All") { store.send(.select(LibraryFilter(type: nil, sort: contents.filter.sort))) }
                                 }
+                            } else {
+                                ContentUnavailableView(
+                                    "Your Library Is Empty", systemImage: "books.vertical",
+                                    description: Text("Add movies and series from their page with Add to Library.")
+                                )
                             }
-                            .onAppear {
-                                if preview == contents.titles.last { store.send(.loadMore) }
-                            }
+                        }
+                        .containerRelativeFrame(.vertical)
+                    case .loaded(let contents):
+                        PosterRows(titles: contents.titles) { preview in
+                            PosterCard(preview: preview)
+                                .contextMenu {
+                                    Button("Remove from Library", systemImage: "minus.circle", role: .destructive) {
+                                        store.send(.remove(preview.media))
+                                    }
+                                }
+                                .onAppear {
+                                    if preview == contents.titles.last { store.send(.loadMore) }
+                                }
+                        }
+                        .padding(.vertical, Metrics.screenPadding)
                     }
                 }
+                .frame(maxWidth: .infinity)
+                // Keeps focus in an open filter's choices.
+                .disabled(openFilter != nil)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // Keeps focus in an open filter's choices.
-            .disabled(openFilter != nil)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .posterGridMargins()
         .choiceMenus()
-        // The grid and the filters draw their own margins.
-        .ignoresSafeArea(edges: .horizontal)
         // Without it the screen's identifier would replace its controls' own.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("library.screen")
@@ -111,7 +119,6 @@ private struct LibraryFilters: View {
             .disabled(open == .type)
             .accessibilityIdentifier("library.sort")
         }
-        .padding(.horizontal, Metrics.screenPadding)
         #if os(tvOS)
         .focusSection()
         #endif
