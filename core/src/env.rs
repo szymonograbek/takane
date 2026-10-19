@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
-use futures::{future, FutureExt};
+use futures::future;
 use http::{Method, Request};
 use serde::{Deserialize, Serialize};
 use stremio_core::models::ctx::Ctx;
@@ -130,13 +130,48 @@ impl Env for AppleEnv {
     }
 }
 
+/// Runs `work` on the blocking pool once the returned future is first polled, not when it is
+/// built: core builds storage effects ahead of time and relies on `exec_sequential` to order them.
 fn blocking<T, F>(work: F) -> TryEnvFuture<T>
 where
     T: Send + 'static,
     F: FnOnce() -> Result<T, EnvError> + Send + 'static,
 {
-    executor::runtime()
-        .spawn_blocking(work)
-        .map(|joined| joined.unwrap_or_else(|error| Err(EnvError::Other(error.to_string()))))
-        .boxed_env()
+    async move {
+        executor::runtime()
+            .spawn_blocking(work)
+            .await
+            .unwrap_or_else(|error| Err(EnvError::Other(error.to_string())))
+    }
+    .boxed_env()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sequential_writes_of_one_key_persist_in_order() {
+        let directory = tempfile::tempdir().unwrap();
+        storage::install(directory.path().to_owned()).unwrap();
+        let padding = "x".repeat(1 << 10);
+        let writes = 1000;
+        let values: Vec<String> = (0..writes).map(|index| format!("{index}{padding}")).collect();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        for value in &values {
+            let write = AppleEnv::set_storage("library_recent", Some(value));
+            let sender = sender.clone();
+            AppleEnv::exec_sequential(async move {
+                sender.send(write.await).unwrap();
+            });
+        }
+        for _ in 0..writes {
+            receiver.recv().unwrap().unwrap();
+        }
+        let persisted: String =
+            futures::executor::block_on(AppleEnv::get_storage("library_recent"))
+                .unwrap()
+                .unwrap();
+        assert_eq!(persisted, format!("{}{padding}", writes - 1));
+    }
 }

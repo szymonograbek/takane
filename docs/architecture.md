@@ -34,7 +34,7 @@ Core's `Env` trait (`src/runtime/env.rs`) is what the host must provide:
 | Method | Implementation |
 |---|---|
 | `fetch` | Call back into Swift; `URLSession` performs the request and answers with `sb_fetch_resolve` / `sb_fetch_reject`. |
-| `get_storage` / `set_storage` | In Rust: one JSON file per key in the directory Swift passes to `sb_initialize` (Application Support on macOS, Caches on tvOS). |
+| `get_storage` / `set_storage` | In Rust: one JSON file per key in the directory Swift passes to `sb_initialize` (Application Support on macOS, Caches on tvOS). A read or write starts when its future is first polled, so `exec_sequential` orders writes to one key. |
 | `exec_concurrent` / `exec_sequential` | Tokio runtime owned by the bridge; sequential futures run in order on one queue. |
 | `now` | `chrono::Utc::now()`. |
 | `log` | `tracing`, forwarded with all bridge logs to the Swift logger. |
