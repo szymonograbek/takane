@@ -78,34 +78,31 @@ private struct LibraryContent: View {
     }
 }
 
-/// The type and sort above the grid, each a button that opens its list of choices.
+/// The type and sort above the grid, each a row of its choices.
 private struct LibraryFilters: View {
+    @Environment(\.textLayout) private var textLayout
     let filter: LibraryFilter
     /// The types the library holds.
     let types: [ContentType]
     let select: (LibraryFilter) -> Void
 
     var body: some View {
-        HStack(spacing: 24) {
-            NavigationLink {
-                ChoiceList(
-                    title: "Type", symbol: "line.3.horizontal.decrease",
-                    choices: [(name: "All Types", value: nil)] + choices.map { (name: $0.pluralName, value: Optional($0)) },
-                    selection: filter.type
-                ) { select(LibraryFilter(type: $0, sort: filter.sort)) }
-            } label: {
-                Label(filter.type?.pluralName ?? "All Types", systemImage: "line.3.horizontal.decrease")
-            }
+        // At large text sizes the sort goes below the type, so both fit the width.
+        let layout = textLayout == .large
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Metrics.headerSpacing))
+            : AnyLayout(HStackLayout(spacing: Metrics.sectionSpacing))
+        layout {
+            ChoiceRow(
+                title: "Type",
+                choices: [(name: "All Types", value: nil)] + choices.map { (name: $0.pluralName, value: Optional($0)) },
+                selection: filter.type
+            ) { select(LibraryFilter(type: $0, sort: filter.sort)) }
             .accessibilityIdentifier("library.type")
-            NavigationLink {
-                ChoiceList(
-                    title: "Sort", symbol: "arrow.up.arrow.down",
-                    choices: LibrarySort.allCases.map { (name: $0.name, value: $0) },
-                    selection: filter.sort
-                ) { select(LibraryFilter(type: filter.type, sort: $0)) }
-            } label: {
-                Label(filter.sort.name, systemImage: "arrow.up.arrow.down")
-            }
+            ChoiceRow(
+                title: "Sort",
+                choices: LibrarySort.allCases.map { (name: $0.name, value: $0) },
+                selection: filter.sort
+            ) { select(LibraryFilter(type: filter.type, sort: $0)) }
             .accessibilityIdentifier("library.sort")
         }
         .padding(.horizontal, Metrics.screenPadding)
