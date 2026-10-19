@@ -7,7 +7,8 @@ Settings › Playback sets the audio language streams start with. Settings › S
 - `languages` shows Audio on Playback, and Language on Subtitles, with the current choice.
 - `choose` opens a list with a checkmark on the current language and returns after a choice.
 - `style` opens a style setting's choices; the preview shows the focused choice, and choosing one saves it and returns.
-- `persist` writes `audioLanguage`, `subtitlesLanguage` / `secondarySubtitlesLanguage` and the `subtitles*` style keys into the profile.
+- `fileStyling` toggles Subtitle File Styling; the preview's second line turns from the text color to cyan.
+- `persist` writes `audioLanguage`, `subtitlesLanguage` / `secondarySubtitlesLanguage`, the `subtitles*` style keys and `assSubtitlesStyling` into the profile.
 
 ## How to get to it (user POV)
 
@@ -23,7 +24,8 @@ Preconditions:
 - **Open Subtitles.** From Settings, `$T focus settings.subtitles down`, `$T select`. The rows read `Language English`, `Second Language None`, `Size 100%`, `Text Color White`.
 - **Choose.** `$T focus subtitles.language down`, `$T select`, press down 7 times (Polish), `$T select`. The row reads `Language Polish`.
 - **Style.** `$T focus subtitles.textColor down`, `$T select`, press down once (Yellow): `$T evidence` shows yellow text in `subtitles.preview` before selecting. `$T select`; the row reads `Text Color Yellow`.
-- **Persisted.** `grep -o '"subtitlesLanguage":"[a-z]*"' "$storage/profile.json"` prints `pol`; `grep -o '"subtitlesTextColor":"[^"]*"' "$storage/profile.json"` prints `#FFE600FF`.
+- **File styling.** `$T focus subtitles.fileStyling down`, `$T select`: `$T evidence` shows the preview's second line in cyan; the toggle reads on.
+- **Persisted.** `grep -o '"subtitlesLanguage":"[a-z]*"' "$storage/profile.json"` prints `pol`; `grep -o '"subtitlesTextColor":"[^"]*"' "$storage/profile.json"` prints `#FFE600FF`; `grep -o '"assSubtitlesStyling":[a-z]*' "$storage/profile.json"` prints `true`.
 
 ## Gotchas
 
