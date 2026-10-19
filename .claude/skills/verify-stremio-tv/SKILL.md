@@ -62,8 +62,11 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `hero.play`, `hero.details` | hero buttons (Play only for movies) |
 | `continueWatching.item` | each Continue Watching card; label `<name>, <time left>`, or `<name>, New episode` for a show with new episodes |
 | `poster.<imdb id>` | each poster in Home rows and search results |
-| `details.resume`, `details.play`, `episode.<id>` | Details actions |
-| `streams.row` | each playable stream (unplayable ones are not listed) |
+| `details.resume`, `details.play`, `episode.<id>` | Details actions; focus lands on Resume, else Play, on open and when the details load |
+| `details.description`, `details.descriptionDone` | the description, cut to four lines; selecting it opens the full text, which Done or Back closes |
+| `details.back` | Go Back on a series whose add-ons list no episodes |
+| `loading.cancel` | Cancel under the spinner while Details or Streams loads; it goes back |
+| `streams.row` | each playable stream (unplayable ones are not listed); focus lands on the first once one arrives |
 | `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · <decoder>`, such as `libavcodec H264 (SW)` |
 | `player.subtitle` | the text subtitle on screen; its label is the cue's text. Bitmap subtitles have no element |
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
