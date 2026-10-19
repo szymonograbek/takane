@@ -5,3 +5,5 @@
 /DerivedData/
 xcuserdata/
 .env.smoke
+/Signing.local.xcconfig
+/.audit/

@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 ///
 /// Enabled by `LaunchOptions` (see scripts/smoke.sh):
 /// - `STREMIO_SMOKE_ADDON_URL`: addon manifest URL (required to run)
-/// - `STREMIO_SMOKE_ITEM`: `type/id`, default `movie/tt0111161`
+/// - `STREMIO_SMOKE_ITEM`: `type/id`, default `movie/tt0063350`
 /// - `STREMIO_SMOKE_SUBTITLES_ADDON_URL`: a subtitles add-on to install; the journey then waits for its
 ///   files for the stream playing and plays the first one
 /// - `STREMIO_SMOKE_EXIT=1`: quit when done, exit code 0 on pass
@@ -28,7 +28,7 @@ struct SmokeTest {
 
         init?(options: [String: String]) {
             guard let addon = options["STREMIO_SMOKE_ADDON_URL"], let manifest = ManifestURL(addon) else { return nil }
-            let parts = (options["STREMIO_SMOKE_ITEM"] ?? "movie/tt0111161").split(separator: "/", maxSplits: 1)
+            let parts = (options["STREMIO_SMOKE_ITEM"] ?? "movie/tt0063350").split(separator: "/", maxSplits: 1)
             guard parts.count == 2, let item = PlayableID(String(parts[1])), item.coreType == parts[0] else { return nil }
             self.manifest = manifest
             self.subtitlesManifest = options["STREMIO_SMOKE_SUBTITLES_ADDON_URL"].flatMap { ManifestURL($0) }
@@ -276,9 +276,9 @@ extension SmokeTest {
 
     private func searchAndDetailsSteps(_ result: inout CatalogResult) async throws(Failure) {
         let catalog = app.services.catalog
-        let query = try Self.parsed(SearchText("shawshank"))
-        let searched = try Self.parsed(MediaID("tt0111161"))
-        let show = try Self.parsed(MediaID("tt0944947"))
+        let query = try Self.parsed(SearchText("night of the living dead"))
+        let searched = try Self.parsed(MediaID("tt0063350"))
+        let show = try Self.parsed(MediaID("tt1748166"))
         let episode = PlayableID.episode(show, season: 1, episode: 1)
 
         let (searchRows, hit) = try await Self.until(catalog.search(query), timeout: .seconds(45), "search \(query)") { results in
@@ -305,7 +305,7 @@ extension SmokeTest {
         }
         result.details = details.preview.name
         result.detailsVideos = details.videos.count
-        guard details.preview.name == "Game of Thrones", details.videos.contains(where: { $0.playable == episode }) else {
+        guard details.preview.name == "Pioneer One", details.videos.contains(where: { $0.playable == episode }) else {
             throw .catalog("details of \(show): \(details.preview.name) with \(details.videos.count) videos, no \(episode)")
         }
         Log.smoke.info("SMOKE catalog 4/4 details: \(details.preview.name), \(details.videos.count) videos incl. \(episode)")
@@ -313,8 +313,8 @@ extension SmokeTest {
 
     private func noAddonSteps(_ result: inout CatalogResult) async throws(Failure) {
         let catalog = app.services.catalog
-        let query = try Self.parsed(SearchText("shawshank"))
-        let show = try Self.parsed(MediaID("tt0944947"))
+        let query = try Self.parsed(SearchText("night of the living dead"))
+        let show = try Self.parsed(MediaID("tt1748166"))
 
         result.board = try await Self.until(catalog.board(), timeout: .seconds(15), "empty board") { board in
             switch board {
