@@ -247,7 +247,7 @@ private struct EpisodeCard: View {
                 if video.isWatched {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.secondary).accessibilityLabel("Watched")
                 }
-                Text("\(video.episode.map { "\($0). " } ?? "")\(video.name)").bold().lineLimit(1)
+                Text("\(video.episode.map { "\($0). " } ?? "")\(video.name)").bold().labelLineLimit()
             }
             .font(.caption)
             if let overview = video.overview, !hidesSpoilers {

@@ -47,6 +47,8 @@ struct SignInScreen: View {
 
 private struct LinkCodeView: View {
     let code: LinkCode
+    /// Larger than any text style on the Mac, and still growing with the text size.
+    @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 64
 
     var body: some View {
         HStack(spacing: 60) {
@@ -57,7 +59,7 @@ private struct LinkCodeView: View {
                 Text(code.link.host() ?? code.link.absoluteString).font(.headline)
                 Text("and enter").foregroundStyle(Palette.secondary)
                 Text(code.code)
-                    .font(.system(size: 64, weight: .semibold, design: .monospaced))
+                    .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
                     .kerning(12)
                     .accessibilityIdentifier("signIn.code")
                 Label("Waiting for you to confirm…", systemImage: "hourglass")

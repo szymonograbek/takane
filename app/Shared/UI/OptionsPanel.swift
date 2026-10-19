@@ -156,9 +156,9 @@ private struct CheckedLabel: View {
     let isChecked: Bool
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
             Image(systemName: "checkmark").opacity(isChecked ? 1 : 0)
-            Text(title).lineLimit(1)
+            Text(title).labelLineLimit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityAddTraits(isChecked ? .isSelected : [])

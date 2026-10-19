@@ -55,7 +55,7 @@ struct PosterCard: View {
         Text(preview.name)
             .font(.caption)
             .foregroundStyle(Palette.secondary)
-            .lineLimit(1)
+            .labelLineLimit()
             .lockupFrame(.poster)
     }
 }
@@ -100,7 +100,7 @@ struct ContinueCard: View {
             .accessibilityLabel("\(item.name), \(item.caption)")
             .accessibilityIdentifier("continueWatching.item")
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(.caption).bold().lineLimit(1)
+                Text(item.name).font(.caption).bold().labelLineLimit()
                 Text(item.caption).font(.caption2).foregroundStyle(Palette.secondary)
             }
         }
@@ -138,7 +138,18 @@ struct Shelf<Content: View>: View {
 extension View {
     /// Sizes a lockup to one column of the shelf it sits in.
     func lockupFrame(_ lockup: Lockup) -> some View {
-        containerRelativeFrame(.horizontal, count: lockup.columns, spacing: Metrics.shelfSpacing, alignment: .leading)
+        modifier(LockupFrame(lockup: lockup))
+    }
+}
+
+private struct LockupFrame: ViewModifier {
+    @Environment(\.textLayout) private var textLayout
+    let lockup: Lockup
+
+    func body(content: Content) -> some View {
+        content.containerRelativeFrame(
+            .horizontal, count: lockup.columns(textLayout), spacing: Metrics.shelfSpacing, alignment: .leading
+        )
     }
 }
 

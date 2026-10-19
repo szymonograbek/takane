@@ -6,12 +6,17 @@ import SwiftUI
 struct StreamsScreen: View {
     @Environment(AppContext.self) private var app
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.textLayout) private var textLayout
     let request: StreamsRequest
 
     var body: some View {
         let state = app.streams.state
         let sections = state.sections(for: request.video)
-        HStack(alignment: .top, spacing: 60) {
+        // At large text sizes the title stacks above the list, which then gets the full width.
+        let columns = textLayout == .large
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Metrics.sectionSpacing))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 60))
+        columns {
             VStack(alignment: .leading, spacing: 12) {
                 Text(request.title).font(.title2).bold().lineLimit(2)
                 if case .episode(_, let season, let episode) = request.video {
@@ -21,9 +26,8 @@ struct StreamsScreen: View {
                     Label("Resumes at \(resume.clock)", systemImage: "clock.arrow.circlepath")
                         .font(.caption).foregroundStyle(Palette.secondary)
                 }
-                Spacer()
             }
-            .frame(width: 520, alignment: .leading)
+            .frame(width: textLayout == .large ? nil : Metrics.streamsInfoWidth, alignment: .leading)
             Group {
                 if sections.firstCandidate == nil {
                     if state.isLookingUp(request.video) {
@@ -47,6 +51,7 @@ struct StreamsScreen: View {
             }
             .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Metrics.screenPadding)
         .background {
             Artwork(url: request.backdrop, title: nil)

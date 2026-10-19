@@ -111,6 +111,9 @@ enum Metrics {
     static let spoilerBlurRadius: CGFloat = 16
     #endif
 
+    /// The title column beside the stream list.
+    static let streamsInfoWidth: CGFloat = 520
+
     // Subtitles scale with the picture rather than the screen, so the preview in Settings is the
     // player's overlay in miniature.
     /// Text size at 100 %, as a fraction of the picture's height.
@@ -122,18 +125,52 @@ enum Metrics {
     static let subtitleOutline: CGFloat = 0.06
 }
 
+/// How the text size shapes layouts. At accessibility sizes (Large Text on tvOS, the largest
+/// Dynamic Type sizes on macOS) screens trade density for room: shelves hold fewer lockups, labels
+/// wrap and side-by-side columns stack.
+enum TextLayout {
+    case regular
+    case large
+}
+
+extension EnvironmentValues {
+    var textLayout: TextLayout {
+        dynamicTypeSize.isAccessibilitySize ? .large : .regular
+    }
+}
+
+extension View {
+    /// One line for a label at regular text sizes, so rows stay even; as many as it needs at large ones.
+    func labelLineLimit() -> some View {
+        modifier(LabelLineLimit())
+    }
+}
+
+private struct LabelLineLimit: ViewModifier {
+    @Environment(\.textLayout) private var textLayout
+
+    func body(content: Content) -> some View {
+        switch textLayout {
+        case .regular: content.lineLimit(1)
+        case .large: content.lineLimit(nil)
+        }
+    }
+}
+
 /// The kinds of lockup a shelf holds. Each is as wide as a column of Apple's tvOS grid, so a
 /// shelf's first and last lockups line up with the screen's margins.
 enum Lockup {
-    /// Posters: 260 pt on the TV.
+    /// Posters: 260 pt on the TV, 410 pt at large text sizes.
     case poster
-    /// 16:9 artwork: 410 pt on the TV.
+    /// 16:9 artwork: 410 pt on the TV, 560 pt at large text sizes.
     case wide
 
-    var columns: Int {
-        switch self {
-        case .poster: 6
-        case .wide: 4
+    func columns(_ textLayout: TextLayout) -> Int {
+        switch (self, textLayout) {
+        case (.poster, .regular): 6
+        case (.poster, .large): 4
+        case (.wide, .regular): 4
+        case (.wide, .large): 3
         }
     }
 }
