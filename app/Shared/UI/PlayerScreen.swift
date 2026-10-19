@@ -9,7 +9,7 @@ import SwiftUI
 /// are hidden, the next episode's card takes focus near the end, ahead of a skip button.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
-    @State private var controlsVisible = true
+    @State private var controlsVisible = false
     /// Bumped on every interaction; the controls hide 5 s after the last one.
     @State private var interactions = 0
     @FocusState private var focus: PlayerFocus?
@@ -33,7 +33,7 @@ struct PlayerScreen: View {
             case .failed(_, let error):
                 PlaybackFailure(error: error) { player.send(.stop) }
             case .active(let session) where session.phase == .opening || session.isBuffering:
-                ProgressView().controlSize(.large)
+                LoadingSpinner()
             case .idle, .active:
                 EmptyView()
             }
@@ -219,6 +219,22 @@ private struct PlaybackFailure: View {
         } actions: {
             Button("Choose Another Stream", action: close)
         }
+    }
+}
+
+/// The spinner for opening or buffering, held back for the first 2 s so a short wait shows only black.
+/// Each wait gets a fresh view, so the delay restarts with it.
+private struct LoadingSpinner: View {
+    @State private var isShown = false
+
+    var body: some View {
+        ProgressView()
+            .controlSize(.large)
+            .opacity(isShown ? 1 : 0)
+            .task {
+                guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                isShown = true
+            }
     }
 }
 
