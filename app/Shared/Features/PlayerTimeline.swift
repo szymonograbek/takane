@@ -40,16 +40,17 @@ extension PlayerFeature {
         var slower: Self? { Self(rawValue: rawValue / 2) }
     }
 
-    /// Taps in one direction close together jump further.
+    /// Taps in one direction close together, and how far they have jumped in all, which the
+    /// player shows beside the picture.
     struct StepStreak: Equatable, Sendable {
         let direction: Direction
-        let count: Int
+        let distance: Duration
         let lastTap: ContinuousClock.Instant
     }
 
     static let scanTickInterval = Duration.milliseconds(250)
-    fileprivate static let longestStep = Duration.seconds(60)
-    fileprivate static let streakWindow = Duration.seconds(1)
+    /// How soon a tap must follow the last to join its streak.
+    static let streakWindow = Duration.seconds(1)
 }
 
 extension PlayerFeature.Session {
@@ -86,16 +87,16 @@ extension PlayerFeature.Session {
         return [.setPaused(false)]
     }
 
-    /// Each tap in the same direction within `streakWindow` of the last jumps one `seekStep`
-    /// further, up to `longestStep`.
+    /// Each tap jumps one `seekStep`, as the system player does. A tap in the same direction within
+    /// `streakWindow` of the last adds its step to the streak.
     private mutating func step(_ direction: PlayerFeature.Direction, at instant: ContinuousClock.Instant) -> [Effect] {
         guard phase == .playing || phase == .paused else { return [] }
-        var count = 1
+        var distance = seekStep.duration
         if let streak, streak.direction == direction, instant - streak.lastTap <= PlayerFeature.streakWindow {
-            count = streak.count + 1
+            distance += streak.distance
         }
-        streak = PlayerFeature.StepStreak(direction: direction, count: count, lastTap: instant)
-        return [.seek(by: min(seekStep.duration * count, PlayerFeature.longestStep) * direction.sign)]
+        streak = PlayerFeature.StepStreak(direction: direction, distance: distance, lastTap: instant)
+        return [.seek(by: seekStep.duration * direction.sign)]
     }
 
     /// Scanning needs the duration, which bounds it.
