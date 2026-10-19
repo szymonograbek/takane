@@ -20,6 +20,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private var reported = Reported()
     /// Subtitle files added to the current load, by the engine's id for the track.
     private var externalFiles: [Int: URL] = [:]
+    /// The seek in flight, from its `.began` until it ends. Meanwhile the clock can still read the
+    /// pre-seek position: before the engine's host takes the clock over, and after AVPlayer misses its
+    /// landing deadline. Core would count that as watched, so only the target gets through.
+    private var seeking: SeekEvent?
     private var observations: Set<AnyCancellable> = []
 
     init() throws(PlaybackError) {
@@ -139,14 +143,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
             .sink { [weak self] phase in self?.phaseChanged(phase) }
             .store(in: &observations)
         player.clock.$currentTime.removeDuplicates()
-            .sink { [weak self] seconds in self?.continuation.yield(.position(.seconds(seconds))) }
+            .sink { [weak self] seconds in self?.positionChanged(seconds) }
             .store(in: &observations)
-        // A seek begins before the clock moves to its target, so the jump never reads as watched time.
         player.seekEvents
-            .sink { [weak self] seek in
-                guard seek.outcome == .began else { return }
-                self?.continuation.yield(.seeking(to: .seconds(seek.target)))
-            }
+            .sink { [weak self] seek in self?.seekChanged(seek) }
             .store(in: &observations)
         player.$duration
             .sink { [weak self] seconds in self?.send(.duration(.seconds(seconds)), on: \.duration) }
@@ -203,6 +203,28 @@ final class AetherPlaybackEngine: PlaybackEngine {
         case .error(let message):
             Log.player.error("playback failed (\(player.errorInfo?.kind.rawValue ?? "unclassified")): \(message)")
             continuation.yield(.failed(reason: message))
+        }
+    }
+
+    private func positionChanged(_ seconds: Double) {
+        if let seeking, seconds != seeking.target { return }
+        continuation.yield(.position(.seconds(seconds)))
+    }
+
+    /// A seek begins before the clock moves to its target, so the jump never reads as watched time.
+    private func seekChanged(_ seek: SeekEvent) {
+        switch seek.outcome {
+        case .began:
+            seeking = seek
+            continuation.yield(.seeking(to: .seconds(seek.target)))
+        case .landed, .stalled:
+            guard seek.id == seeking?.id else { return }
+            seeking = nil
+            // Where it landed, or the target a stalled seek holds the clock at.
+            continuation.yield(.position(.seconds(player.clock.currentTime)))
+        case .superseded, .rejected:
+            // A newer seek's `.began` follows, or the seek ended without moving the clock.
+            if seek.id == seeking?.id { seeking = nil }
         }
     }
 

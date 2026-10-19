@@ -152,7 +152,8 @@ enum PlaybackEvent: Equatable, Sendable {
     case stopped
     case failed(reason: String)
     case position(Duration)
-    /// A seek started toward this position, before the position moves there.
+    /// A seek started toward this position, before the position moves there. Until the seek ends,
+    /// positions are its target, never the one it left.
     case seeking(to: Duration)
     case duration(Duration)
     case paused(Bool)
