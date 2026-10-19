@@ -37,7 +37,7 @@ targetTemplates:
     info:
       properties:
         CFBundleDisplayName: Takane
-        CFBundleShortVersionString: "1.0.0" # x-release-please-version
+        CFBundleShortVersionString: "1.1.0" # x-release-please-version
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.entertainment
     settings:

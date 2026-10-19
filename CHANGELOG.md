@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.0](https://github.com/szymonograbek/takane/compare/v1.0.0...v1.1.0) (2026-10-19)
+
+
+### Features
+
+* **features:** jump one seek step per tap and add up the streak ([1317a44](https://github.com/szymonograbek/takane/commit/1317a44a483ceee5f25fecc9e4a10020a2f6988d))
+* **ui:** offer choices as system list rows ([1dd3100](https://github.com/szymonograbek/takane/commit/1dd31003a094216c0d7c045cf1c1cc8284072397))
+* **ui:** open library filters in a popup below their button ([3f4ce30](https://github.com/szymonograbek/takane/commit/3f4ce308f77f4f84ee03ca61baa58a12a511a149))
+* **ui:** pick library filters in place ([73cacbe](https://github.com/szymonograbek/takane/commit/73cacbef08c36349d85988875bbd32702b0d7e21))
+* **ui:** show the controls and the jump total while seeking ([6dc486f](https://github.com/szymonograbek/takane/commit/6dc486fd56f419f00b884ce15c9e7045028f664c))
+
+
+### Bug Fixes
+
+* **ci:** build the ipa on a clean runner ([7683a72](https://github.com/szymonograbek/takane/commit/7683a72a0de6e5457350e10ac0a886d426e4421c))
+* **scripts:** build the bridge before packaging the ipa ([1ecac9c](https://github.com/szymonograbek/takane/commit/1ecac9cf2461a98529347930cccd2874ccbbde10))
+* **ui:** draw screen titles in the content ([2fa0a18](https://github.com/szymonograbek/takane/commit/2fa0a1843a3acbc855b44095168c55bce0f78b8a))
+* **ui:** return to the search field on menu from results ([25ebd2f](https://github.com/szymonograbek/takane/commit/25ebd2f53fc1ec92edefe1407da0cef70be45c86))
+* **ui:** tvOS seeking, choice pickers, screen titles and search focus ([54d5a33](https://github.com/szymonograbek/takane/commit/54d5a33aad841df21e579288349f37846e7207f7))
+
 ## 1.0.0 (2026-10-19)
 
 
