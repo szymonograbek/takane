@@ -103,7 +103,9 @@ Swift 6 with complete concurrency checking, `ExistentialAny` and warnings as err
 
 ## Streams
 
-Before display, filter `meta_details` streams to supported sources:
+`CoreStreamResults` maps `meta_details` to one source per add-on. It holds the streams the add-on embeds in its metadata for the video (`metaStreams`) first, then its answer to the stream request. Each candidate's player selection carries the stream's request and the metadata request of the first meta add-on that answered, or of the first one while none has. Core's `player` model loads the metadata from it and records progress against it, so a stream picked before the metadata arrives is still tracked. The mapping is tested in `StremioTVAdapterTests`.
+
+Before display, filter the streams to supported sources:
 
 | Source | Handling |
 |---|---|

@@ -207,6 +207,9 @@ struct MetaDetailsState: Decodable, Sendable {
 
     let selected: Selected?
     let metaItems: [ResourceLoadable<MetaItem>]
+    /// Streams the first ready meta item embeds in the selected video, always ready, requested as
+    /// the stream resource from the meta add-on.
+    let metaStreams: [ResourceLoadable<[Stream]>]
     let streams: [ResourceLoadable<[Stream]>]
     /// Ids of the first ready meta item's videos the user has watched. The bridge adds it, since
     /// core leaves its watched bitfield out of the state.

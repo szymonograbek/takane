@@ -34,7 +34,7 @@ struct CoreStreamService: StreamService {
                     if isSelected { break } else { continue }
                 }
                 isSelected = true
-                let current = Self.results(for: item, from: details, addonNames: runtime.addonNames())
+                let current = CoreStreamResults.results(for: item, from: details, addonNames: runtime.addonNames())
                 continuation.yield(current)
                 if current.isComplete {
                     Log.core.info("\(current.sources.count) addon responses for \(item) in \(ContinuousClock.now - started)")
@@ -45,69 +45,5 @@ struct CoreStreamService: StreamService {
         }
         continuation.onTermination = { _ in task.cancel() }
         return results
-    }
-
-    private static func results(for item: PlayableID, from details: MetaDetailsState, addonNames: [URL: String]) -> StreamResults {
-        // Core's player model needs the item's metadata request to record progress against it.
-        let metaRequest = details.metaItems.first { $0.content?.readyContent != nil }?.request
-        let sources = details.streams.compactMap { loadable -> StreamSource? in
-            guard let addon = ManifestURL(loadable.request.base) else { return nil }
-            let candidates: Remote<[StreamCandidate], StreamSourceError>
-            switch loadable.content {
-            case .none, .loading:
-                candidates = .loading
-            case .ready(let streams):
-                candidates = .loaded(streams.enumerated().map { index, stream in
-                    candidate(stream, id: StreamCandidate.ID(addon: addon, index: index), item: item,
-                              streamRequest: loadable.request, metaRequest: metaRequest)
-                })
-            case .failed(let error):
-                candidates = .failed(.addonFailed(reason: error.compactDescription))
-            }
-            let name = addonNames[addon.url] ?? addon.url.host() ?? "?"
-            return StreamSource(addon: addon, addonName: name, candidates: candidates)
-        }
-        let isComplete = sources.allSatisfy(\.candidates.isSettled)
-            && details.metaItems.allSatisfy { $0.content?.isSettled ?? false }
-        return StreamResults(item: item, sources: sources, isComplete: isComplete)
-    }
-
-    private static func candidate(
-        _ stream: Stream,
-        id: StreamCandidate.ID,
-        item: PlayableID,
-        streamRequest: ResourceRequest,
-        metaRequest: ResourceRequest?
-    ) -> StreamCandidate {
-        let playability: Playability = switch stream.source {
-        case .url(let url): .playable(PlaybackSource(url: url, headers: stream.requestHeaders))
-        case .unsupported(let kind): .unsupported(kind: kind)
-        }
-        // The subtitles path makes core's player model ask subtitle add-ons for this item.
-        var selection: [String: JSONValue] = [
-            "stream": stream.raw,
-            "streamRequest": streamRequest.json,
-            "subtitlesPath": ResourcePath.subtitles(type: item.coreType, id: item.rawValue).json,
-        ]
-        selection["metaRequest"] = metaRequest?.json
-        return StreamCandidate(
-            id: id,
-            item: item,
-            name: stream.name,
-            description: stream.description,
-            filename: stream.filename,
-            playability: playability,
-            tracking: TrackingToken(payload: .object(selection))
-        )
-    }
-}
-
-extension PlayableID {
-    /// Core's resource type for the item.
-    var coreType: String {
-        switch self {
-        case .movie: "movie"
-        case .episode: "series"
-        }
     }
 }
