@@ -1,18 +1,24 @@
 import SwiftUI
 
-/// Takane's colors. Burgundy is the brand; focus and text stay light, as tvOS draws them.
+/// Takane's colors. Burgundy is the brand; focus and text stay light, as tvOS draws them. Colors
+/// that carry text or set a surface apart from the canvas get stronger under Increase Contrast.
 enum Palette {
     /// Screen backgrounds.
     static let canvas = Color(red: 0.043, green: 0.024, blue: 0.024)
     /// Rows, menus and cards resting on the canvas.
-    static let surface = Color(red: 0.165, green: 0.024, blue: 0.024)
+    static let surface = Color(
+        Color(red: 0.165, green: 0.024, blue: 0.024),
+        increasedContrast: Color(red: 0.271, green: 0.047, blue: 0.047)
+    )
     /// The brand: the logo and the wash behind full-screen moments.
     static let burgundy = Color(red: 0.361, green: 0.039, blue: 0.071)
     /// Tint for controls and progress.
     static let red = Color(red: 0.702, green: 0.090, blue: 0.102)
-    static let text = Color(red: 0.937, green: 0.910, blue: 0.871)
+    static let text = Color(cream, increasedContrast: .white)
     /// Metadata and labels: the text color, dimmed.
-    static let secondary = text.opacity(0.6)
+    static let secondary = Color(cream.opacity(0.6), increasedContrast: .white.opacity(0.85))
+
+    private static let cream = Color(red: 0.937, green: 0.910, blue: 0.871)
 
     /// Burgundy fading into the canvas from the top, behind sign-in and empty screens.
     static let wash = RadialGradient(
@@ -27,6 +33,25 @@ enum Palette {
         ],
         startPoint: .leading, endPoint: .trailing
     )
+}
+
+private extension Color {
+    /// `regular`, or `increased` while the viewer has Increase Contrast on.
+    init(_ regular: Color, increasedContrast increased: Color) {
+        #if os(tvOS)
+        let regular = UIColor(regular), increased = UIColor(increased)
+        self.init(uiColor: UIColor { traits in
+            traits.accessibilityContrast == .high ? increased : regular
+        })
+        #else
+        let regular = NSColor(regular), increased = NSColor(increased)
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            let highContrast: [NSAppearance.Name] = [.accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua]
+            guard let match = appearance.bestMatch(from: [.aqua, .darkAqua] + highContrast) else { return regular }
+            return highContrast.contains(match) ? increased : regular
+        })
+        #endif
+    }
 }
 
 /// Sizes that differ between the 10-foot tvOS screen and a macOS window.
