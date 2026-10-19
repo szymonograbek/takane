@@ -13,7 +13,7 @@ struct GenreScreen: View {
                 GenreContent(store: store)
             }
         }
-        .navigationTitle(filter.title)
+        .screenTitle(filter.title)
         .onAppear {
             guard store == nil else { return }
             store = FeatureStore(
@@ -32,8 +32,8 @@ private struct GenreContent: View {
     var body: some View {
         Group {
             switch store.state {
-            case .loading:
-                CancellableProgress("Loading…")
+            case .loading(let filter):
+                CancellableProgress("Loading…").titled(filter.title)
             case .loaded(let filter, let titles) where titles.isEmpty:
                 ContentUnavailableView {
                     Label("Nothing in \(filter.genre.rawValue)", systemImage: "film.stack")
@@ -42,8 +42,9 @@ private struct GenreContent: View {
                 } actions: {
                     Button("Try Again") { store.send(.retry) }
                 }
-            case .loaded(_, let titles):
-                PosterGrid(titles: titles) { preview in
+                .titled(filter.title)
+            case .loaded(let filter, let titles):
+                PosterGrid(title: filter.title, titles: titles) { preview in
                     PosterCard(preview: preview).focused($focused, equals: preview.media)
                 }
             case .failed(let filter, let error):
@@ -54,6 +55,7 @@ private struct GenreContent: View {
                 } actions: {
                     Button("Try Again") { store.send(.retry) }
                 }
+                .titled(filter.title)
             }
         }
         .accessibilityIdentifier("genre.screen")
@@ -64,6 +66,16 @@ private struct GenreContent: View {
 
     private var firstTitle: MediaID? {
         if case .loaded(_, let titles) = store.state { titles.first?.media } else { nil }
+    }
+}
+
+private extension View {
+    /// A state other than the grid, below the screen's title.
+    func titled(_ title: String) -> some View {
+        VStack(spacing: 0) {
+            ScreenTitle(title).frame(maxWidth: .infinity, alignment: .leading)
+            frame(maxHeight: .infinity)
+        }
     }
 }
 

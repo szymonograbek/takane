@@ -12,10 +12,7 @@ struct CalendarScreen: View {
                 CalendarContent(store: store)
             }
         }
-        .navigationTitle("Calendar")
-        #if os(tvOS)
-        .toolbar(.hidden, for: .navigationBar)
-        #endif
+        .screenTitle("Calendar")
         .onAppear {
             if store == nil {
                 store = FeatureStore(.loading, dependencies: CalendarFeature.Dependencies(library: app.services.library))

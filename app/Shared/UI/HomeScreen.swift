@@ -23,10 +23,7 @@ struct HomeScreen: View {
         .ignoresSafeArea(edges: [.top, .horizontal])
         .accessibilityIdentifier("home.screen")
         .background(Palette.canvas.ignoresSafeArea())
-        .navigationTitle("Home")
-        #if os(tvOS)
-        .toolbar(.hidden, for: .navigationBar)
-        #endif
+        .screenTitle("Home")
     }
 }
 

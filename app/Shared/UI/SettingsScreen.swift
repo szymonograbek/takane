@@ -43,24 +43,28 @@ struct SettingsPage<Emblem: View, Rows: View>: View {
     @ViewBuilder let rows: () -> Rows
 
     var body: some View {
-        HStack(spacing: Metrics.screenPadding) {
-            emblem()
+        VStack(spacing: 0) {
+            // Above the list rather than in the navigation bar, so the list starts below it and
+            // scrolling to a focused row never leaves the row under the title.
+            ScreenTitle(title)
+                .padding(.bottom, Metrics.headerSpacing)
+            HStack(spacing: Metrics.screenPadding) {
+                emblem()
+                    .frame(maxWidth: .infinity)
+                List {
+                    rows()
+                        #if os(tvOS)
+                        .listRowInsets(EdgeInsets(top: 0, leading: Metrics.rowPadding, bottom: 0, trailing: Metrics.rowPadding))
+                        #endif
+                }
+                .contentMargins(.top, Metrics.sectionSpacing, for: .scrollContent)
+                // Room for a focused row's lift.
+                .safeAreaPadding(.horizontal, Metrics.rowLift)
                 .frame(maxWidth: .infinity)
-            List {
-                rows()
-                    #if os(tvOS)
-                    .listRowInsets(EdgeInsets(top: 0, leading: Metrics.rowPadding, bottom: 0, trailing: Metrics.rowPadding))
-                    #endif
             }
-            .contentMargins(.top, Metrics.sectionSpacing, for: .scrollContent)
-            // Room for a focused row's lift, which the mask below would otherwise cut.
-            .safeAreaPadding(.horizontal, Metrics.rowLift)
-            // Rows scroll out of sight below the navigation title rather than under it, and off the bottom edge.
-            .mask { Rectangle().ignoresSafeArea(edges: .bottom) }
-            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, Metrics.screenPadding)
-        .navigationTitle(title)
+        .screenTitle(title)
         .background(Palette.canvas.ignoresSafeArea())
     }
 }

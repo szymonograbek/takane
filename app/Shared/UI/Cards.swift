@@ -64,11 +64,17 @@ struct PosterCard: View {
 /// usually as a `PosterCard`.
 struct PosterGrid<Card: View>: View {
     @Environment(\.textLayout) private var textLayout
+    /// The screen's title, above the first row and scrolling with the grid.
+    var title: String?
     let titles: [MetaPreview]
     @ViewBuilder let card: (MetaPreview) -> Card
 
     var body: some View {
         ScrollView {
+            if let title {
+                ScreenTitle(title)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             LazyVGrid(
                 columns: Array(
                     repeating: GridItem(.flexible(), spacing: Metrics.shelfSpacing, alignment: .top),
@@ -78,7 +84,8 @@ struct PosterGrid<Card: View>: View {
             ) {
                 ForEach(titles, content: card)
             }
-            .padding(.vertical, Metrics.screenPadding)
+            .padding(.top, title == nil ? Metrics.screenPadding : Metrics.sectionSpacing)
+            .padding(.bottom, Metrics.screenPadding)
             #if os(tvOS)
             .focusSection()
             #endif
@@ -147,6 +154,7 @@ struct Shelf<Content: View>: View {
         VStack(alignment: .leading, spacing: 18) {
             Text(title)
                 .font(.title3).bold()
+                .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, Metrics.screenPadding)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: Metrics.shelfSpacing) {

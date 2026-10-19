@@ -13,10 +13,7 @@ struct LibraryScreen: View {
                 LibraryContent(store: store)
             }
         }
-        .navigationTitle("Library")
-        #if os(tvOS)
-        .toolbar(.hidden, for: .navigationBar)
-        #endif
+        .screenTitle("Library")
         .onAppear {
             guard store == nil else { return }
             let filter = LibraryFeature.defaultFilter
