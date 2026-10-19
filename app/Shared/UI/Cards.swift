@@ -24,7 +24,7 @@ struct PosterCard: View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: Route.details(preview)) {
                 Artwork(url: preview.poster, title: preview.name)
-                    .frame(width: Metrics.posterWidth, height: Metrics.posterWidth * preview.posterShape.heightRatio)
+                    .aspectRatio(preview.posterShape.aspectRatio, contentMode: .fit)
                     .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             }
             .cardButtonStyle()
@@ -34,8 +34,8 @@ struct PosterCard: View {
                 .font(.caption)
                 .foregroundStyle(Palette.secondary)
                 .lineLimit(1)
-                .frame(width: Metrics.posterWidth, alignment: .leading)
         }
+        .lockupFrame(.poster)
     }
 }
 
@@ -44,8 +44,9 @@ struct PosterPlaceholders: View {
     var body: some View {
         ForEach(0..<6, id: \.self) { _ in
             Palette.surface
-                .frame(width: Metrics.posterWidth, height: Metrics.posterWidth * PosterShape.poster.heightRatio)
+                .aspectRatio(PosterShape.poster.aspectRatio, contentMode: .fit)
                 .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+                .lockupFrame(.poster)
         }
     }
 }
@@ -60,7 +61,7 @@ struct ContinueCard: View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: item.route) {
                 Artwork(url: item.background ?? item.poster, title: item.name)
-                    .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardWidth * 9 / 16)
+                    .aspectRatio(16 / 9, contentMode: .fit)
                     .overlay(alignment: .bottom) {
                         if let fraction = item.fraction {
                             ProgressLine(fraction: fraction).padding(14)
@@ -81,8 +82,8 @@ struct ContinueCard: View {
                 Text(item.name).font(.caption).bold().lineLimit(1)
                 Text(item.caption).font(.caption2).foregroundStyle(Palette.secondary)
             }
-            .frame(width: Metrics.wideCardWidth, alignment: .leading)
         }
+        .lockupFrame(.wide)
     }
 }
 
@@ -100,8 +101,9 @@ struct Shelf<Content: View>: View {
                 LazyHStack(alignment: .top, spacing: Metrics.shelfSpacing) {
                     content()
                 }
-                .padding(.horizontal, Metrics.screenPadding)
             }
+            // As safe area rather than padding, so `lockupFrame` divides only the width between the margins.
+            .safeAreaPadding(.horizontal, Metrics.screenPadding)
             .scrollIndicators(.hidden)
             // Focused cards grow past the row's bounds.
             .scrollClipDisabled()
@@ -112,11 +114,19 @@ struct Shelf<Content: View>: View {
     }
 }
 
+extension View {
+    /// Sizes a lockup to one column of the shelf it sits in.
+    func lockupFrame(_ lockup: Lockup) -> some View {
+        containerRelativeFrame(.horizontal, count: lockup.columns, spacing: Metrics.shelfSpacing, alignment: .leading)
+    }
+}
+
 extension PosterShape {
-    var heightRatio: CGFloat {
+    /// Width over height.
+    var aspectRatio: CGFloat {
         switch self {
-        case .poster: 1.5
-        case .landscape: 9.0 / 16.0
+        case .poster: 2.0 / 3.0
+        case .landscape: 16.0 / 9.0
         case .square: 1
         }
     }

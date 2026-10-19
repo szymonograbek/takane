@@ -57,7 +57,7 @@ private extension Color {
 /// Sizes that differ between the 10-foot tvOS screen and a macOS window.
 enum Metrics {
     #if os(tvOS)
-    static let posterWidth: CGFloat = 200
+    /// A wide card outside a shelf, such as Up Next in the player.
     static let wideCardWidth: CGFloat = 420
     static let shelfSpacing: CGFloat = 40
     static let sectionSpacing: CGFloat = 50
@@ -90,7 +90,6 @@ enum Metrics {
     /// How strongly an unwatched episode's still blurs while spoilers are hidden.
     static let spoilerBlurRadius: CGFloat = 24
     #else
-    static let posterWidth: CGFloat = 140
     static let wideCardWidth: CGFloat = 280
     static let shelfSpacing: CGFloat = 16
     static let sectionSpacing: CGFloat = 28
@@ -121,6 +120,22 @@ enum Metrics {
     static let subtitlePadding: CGFloat = 0.32
     /// Outline thickness, as a fraction of the text size.
     static let subtitleOutline: CGFloat = 0.06
+}
+
+/// The kinds of lockup a shelf holds. Each is as wide as a column of Apple's tvOS grid, so a
+/// shelf's first and last lockups line up with the screen's margins.
+enum Lockup {
+    /// Posters: 260 pt on the TV.
+    case poster
+    /// 16:9 artwork: 410 pt on the TV.
+    case wide
+
+    var columns: Int {
+        switch self {
+        case .poster: 6
+        case .wide: 4
+        }
+    }
 }
 
 /// Takane's logo, a mountain with a play button, `size` points wide. Generated with

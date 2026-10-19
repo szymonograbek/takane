@@ -231,7 +231,7 @@ private struct EpisodeCard: View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: Route.streams(StreamsRequest(preview: show, video: video.playable))) {
                 Artwork(url: video.thumbnail ?? show.background, title: video.name)
-                    .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardWidth * 9 / 16)
+                    .aspectRatio(16 / 9, contentMode: .fit)
                     .blur(radius: hidesSpoilers ? Metrics.spoilerBlurRadius : 0, opaque: true)
                     .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             }
@@ -254,7 +254,7 @@ private struct EpisodeCard: View {
                 Text(overview).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2)
             }
         }
-        .frame(width: Metrics.wideCardWidth, alignment: .leading)
+        .lockupFrame(.wide)
     }
 }
 
