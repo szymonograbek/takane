@@ -61,15 +61,16 @@ struct PlayerControls: View {
     }
 
     private var transportButtons: some View {
-        HStack(spacing: 20) {
-            control("Back 10 Seconds", systemImage: "gobackward.10") { app.player.send(.seek(by: .seconds(-10))) }
+        let seconds = session.seekStep.seconds
+        return HStack(spacing: 20) {
+            control("Back \(seconds) Seconds", systemImage: "gobackward.\(seconds)") { app.player.send(.jump(.backward)) }
                 .focused(focus, equals: .back)
             control(session.phase == .paused ? "Play" : "Pause", systemImage: session.phase == .paused ? "play.fill" : "pause.fill") {
                 app.player.send(.togglePause)
             }
             .focused(focus, equals: .playPause)
             .accessibilityIdentifier("player.playPause")
-            control("Forward 10 Seconds", systemImage: "goforward.10") { app.player.send(.seek(by: .seconds(10))) }
+            control("Forward \(seconds) Seconds", systemImage: "goforward.\(seconds)") { app.player.send(.jump(.forward)) }
                 .focused(focus, equals: .forward)
         }
     }
@@ -158,7 +159,7 @@ struct PlayerControls: View {
                 groups.append((file.language, [file]))
             }
         }
-        let preferred = app.preferences.state.playback?.languages.subtitles.inPreferenceOrder ?? []
+        let preferred = app.preferences.state.preferences?.languages.subtitles?.inPreferenceOrder ?? []
         for language in preferred.reversed() {
             if let index = groups.firstIndex(where: { Language($0.language) == language }) {
                 groups.insert(groups.remove(at: index), at: 0)

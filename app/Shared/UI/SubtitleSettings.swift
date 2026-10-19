@@ -6,21 +6,17 @@ struct SubtitleSettings: View {
     @State private var confirmingReset = false
 
     var body: some View {
-        let languages = app.preferences.state.playback?.languages.subtitles ?? .off
-        let style = app.preferences.state.playback?.subtitleStyle ?? .defaults
+        let languages = app.preferences.state.preferences?.languages.subtitles
+        let style = app.preferences.state.preferences?.subtitleStyle ?? .defaults
         SettingsPage(title: "Subtitles") {
             SubtitlePreview(style: style)
         } rows: {
             Section {
-                LanguagePicker(title: "Language", selection: languages.primary, none: "Off") { primary in
-                    app.preferences.send(.setSubtitleLanguages(Self.languages(primary: primary, keepingFallbackOf: languages)))
-                }
-                .accessibilityIdentifier("subtitles.language")
-                if case .preferred(let primary, let fallback) = languages {
-                    LanguagePicker(title: "Second Language", selection: fallback, none: "None") {
-                        app.preferences.send(.setSubtitleLanguages(.preferred(primary, fallback: $0)))
-                    }
-                    .accessibilityIdentifier("subtitles.secondLanguage")
+                PreferredLanguagesPicker(
+                    title: "Language", none: "Off", selection: languages,
+                    ids: (primary: "subtitles.language", fallback: "subtitles.secondLanguage")
+                ) {
+                    app.preferences.send(.setSubtitleLanguages($0))
                 }
             } header: {
                 Text("Language")
@@ -71,15 +67,6 @@ struct SubtitleSettings: View {
         Button("Reset Style", role: .destructive) { confirmingReset = true }
             .disabled(style == .defaults)
             .accessibilityIdentifier("subtitles.reset")
-    }
-
-    /// `primary`, with the second language already chosen; off when `primary` is nil.
-    private static func languages(primary: Language?, keepingFallbackOf current: SubtitleLanguages) -> SubtitleLanguages {
-        guard let primary else { return .off }
-        switch current {
-        case .off: return .preferred(primary, fallback: nil)
-        case .preferred(_, let fallback): return .preferred(primary, fallback: fallback)
-        }
     }
 }
 

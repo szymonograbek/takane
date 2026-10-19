@@ -23,7 +23,7 @@ struct PlayerScreen: View {
             if let session = state.session {
                 SubtitleOverlay(
                     cues: session.subtitles, videoSize: session.videoSize,
-                    style: app.preferences.state.playback?.subtitleStyle ?? .defaults
+                    style: app.preferences.state.preferences?.subtitleStyle ?? .defaults
                 )
             }
             switch state {
@@ -122,7 +122,7 @@ struct PlayerScreen: View {
     }
 }
 
-/// The bare video while the controls are hidden: left and right skip 10 s, anything else shows the controls.
+/// The bare video while the controls are hidden: left and right skip one seek step, anything else shows the controls.
 private struct RemoteSurface: View {
     @Environment(AppContext.self) private var app
     var focus: FocusState<PlayerFocus?>.Binding
@@ -136,8 +136,8 @@ private struct RemoteSurface: View {
             .onTapGesture(perform: interacted)
             .onMoveCommand { direction in
                 switch direction {
-                case .left: app.player.send(.seek(by: .seconds(-10)))
-                case .right: app.player.send(.seek(by: .seconds(10)))
+                case .left: app.player.send(.jump(.backward))
+                case .right: app.player.send(.jump(.forward))
                 case .up, .down: interacted()
                 @unknown default: break
                 }

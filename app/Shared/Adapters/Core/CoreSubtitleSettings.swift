@@ -1,14 +1,15 @@
 import Foundation
 
 /// Subtitle preferences as core's profile settings hold them: `subtitlesLanguage` and
-/// `secondarySubtitlesLanguage`, then the style keys (`subtitlesSize`, `subtitlesTextColor`…) and
+/// `secondarySubtitlesLanguage`, which apply only while `subtitlesAutoSelect` is on, so a stream
+/// starts without subtitles when it is off or no language is set; then the style keys (`subtitlesSize`, `subtitlesTextColor`…) and
 /// `assSubtitlesStyling`, which keeps a file's own styling.
 /// Colors are CSS hex, `#RRGGBB` or `#RRGGBBAA`; sizes, opacity and offset are whole percents.
 /// A key that is missing or unreadable reads as its default.
 enum CoreSubtitleSettings {
-    static func languages(in settings: [String: JSONValue]) -> SubtitleLanguages {
-        guard let primary = language(settings[Key.language]) else { return .off }
-        return .preferred(primary, fallback: language(settings[Key.secondaryLanguage]))
+    static func languages(in settings: [String: JSONValue]) -> PreferredLanguages? {
+        guard flag(settings[Key.autoSelect], or: true) else { return nil }
+        return languageKeys.read(settings)
     }
 
     static func style(in settings: [String: JSONValue]) -> SubtitleStyle {
@@ -26,15 +27,12 @@ enum CoreSubtitleSettings {
         )
     }
 
-    static func write(_ languages: SubtitleLanguages, into settings: inout [String: JSONValue]) {
-        switch languages {
-        case .off:
-            settings[Key.language] = .null
-            settings[Key.secondaryLanguage] = .null
-        case .preferred(let primary, let fallback):
-            settings[Key.language] = .string(primary.code)
-            settings[Key.secondaryLanguage] = fallback.map { .string($0.code) } ?? .null
-        }
+    /// Nil turns auto-select off. Settings that already read as `languages` stay as they are, so
+    /// languages another Stremio app keeps while auto-select is off survive unrelated edits.
+    static func write(_ languages: PreferredLanguages?, into settings: inout [String: JSONValue]) {
+        guard self.languages(in: settings) != languages else { return }
+        languageKeys.write(languages, into: &settings)
+        settings[Key.autoSelect] = .bool(languages != nil)
     }
 
     static func write(_ style: SubtitleStyle, into settings: inout [String: JSONValue]) {
@@ -52,9 +50,10 @@ enum CoreSubtitleSettings {
         settings[Key.offset] = .number(Double(style.bottomOffset.value))
     }
 
+    private static let languageKeys = CoreLanguageKeys(primary: "subtitlesLanguage", fallback: "secondarySubtitlesLanguage")
+
     private enum Key {
-        static let language = "subtitlesLanguage"
-        static let secondaryLanguage = "secondarySubtitlesLanguage"
+        static let autoSelect = "subtitlesAutoSelect"
         static let size = "subtitlesSize"
         static let font = "subtitlesFont"
         static let bold = "subtitlesBold"
@@ -64,11 +63,6 @@ enum CoreSubtitleSettings {
         static let backgroundColor = "subtitlesBackgroundColor"
         static let outlineColor = "subtitlesOutlineColor"
         static let opacity = "subtitlesOpacity"
-    }
-
-    private static func language(_ value: JSONValue?) -> Language? {
-        guard case .string(let code)? = value else { return nil }
-        return Language(code)
     }
 
     private static func flag(_ value: JSONValue?, or fallback: Bool) -> Bool {

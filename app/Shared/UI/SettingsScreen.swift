@@ -26,7 +26,7 @@ struct SettingsScreen: View {
                 NavigationLink {
                     SubtitleSettings()
                 } label: {
-                    LabeledContent("Subtitles", value: app.preferences.state.playback?.languages.subtitles.primary?.displayName ?? "Off")
+                    LabeledContent("Subtitles", value: app.preferences.state.preferences?.languages.subtitles?.primary.displayName ?? "Off")
                 }
                 .accessibilityIdentifier("settings.subtitles")
                 NavigationLink("About") { AboutSettings() }

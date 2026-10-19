@@ -18,7 +18,7 @@ struct BrowsingFeatureTests {
         let videos = ["tt1:0:1", "tt1:2:1", "tt1:1:2", "tt1:1:1"].map { id in
             let playable = PlayableID(id).require()
             guard case .episode(_, let season, let episode) = playable else { fatalError("fixture is an episode") }
-            return Video(playable: playable, name: id, season: season, episode: episode, released: nil, thumbnail: nil, overview: nil)
+            return Video(playable: playable, name: id, season: season, episode: episode, released: nil, thumbnail: nil, overview: nil, isWatched: false)
         }
         let details = TitleDetails(preview: Fixture.preview("tt1", type: .series), genres: [], runtime: nil, imdbRating: nil, videos: videos)
         #expect(details.seasons == [1, 2, 0])

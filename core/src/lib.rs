@@ -199,6 +199,7 @@ mod tests {
             r#"{"field":"board","action":{"action":"CatalogsWithExtra","args":{"action":"LoadNextPage","args":3}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"Login","email":"a@b.c","password":"x","facebook":false}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"TimeChanged","args":{"time":1000,"duration":60000,"device":"macos"}}}}"#,
+            r#"{"field":"player","action":{"action":"Player","args":{"action":"Seek","args":{"time":30000,"duration":60000,"device":"tvos"}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"VideoParamsChanged","args":{"videoParams":{"hash":"8e245d9679d31e12","size":12909756,"filename":"movie.mkv"}}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"VideoParamsChanged","args":{"videoParams":{"filename":"movie.mkv"}}}}}"#,
             r#"{"field":"player","action":{"action":"Unload"}}"#,

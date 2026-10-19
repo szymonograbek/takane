@@ -45,31 +45,21 @@ enum PlaybackSpeed: Double, CaseIterable, Hashable, Sendable {
 /// Languages to pick tracks in when a stream starts, as ISO 639-2 codes.
 struct TrackLanguages: Hashable, Sendable {
     /// Nil leaves it to the stream.
-    var audio: Language?
-    var subtitles: SubtitleLanguages
+    var audio: PreferredLanguages?
+    /// Nil starts streams without subtitles.
+    var subtitles: PreferredLanguages?
 
-    static let streamDefaults = TrackLanguages(audio: nil, subtitles: .off)
+    static let streamDefaults = TrackLanguages(audio: nil, subtitles: nil)
 }
 
-/// Whether a stream starts with subtitles, and in which language.
-enum SubtitleLanguages: Hashable, Sendable {
-    case off
-    /// A track in the first language, else one in `fallback`.
-    case preferred(Language, fallback: Language?)
+/// A language to prefer, and one to fall back on when a stream has none in it.
+struct PreferredLanguages: Hashable, Sendable {
+    var primary: Language
+    var fallback: Language?
 
-    var primary: Language? {
-        switch self {
-        case .off: nil
-        case .preferred(let language, _): language
-        }
-    }
-
-    /// Most preferred first; empty when off.
+    /// Most preferred first.
     var inPreferenceOrder: [Language] {
-        switch self {
-        case .off: []
-        case .preferred(let language, let fallback): [language] + (fallback.map { [$0] } ?? [])
-        }
+        [primary] + (fallback.map { [$0] } ?? [])
     }
 }
 
@@ -162,6 +152,8 @@ enum PlaybackEvent: Equatable, Sendable {
     case stopped
     case failed(reason: String)
     case position(Duration)
+    /// A seek started toward this position, before the position moves there.
+    case seeking(to: Duration)
     case duration(Duration)
     case paused(Bool)
     case buffering(Bool)
@@ -209,6 +201,8 @@ protocol PlaybackEngine: AnyObject, Sendable {
 protocol PlaybackTracker: Sendable {
     func begin(_ candidate: StreamCandidate)
     func progress(_ position: Duration, of duration: Duration)
+    /// The viewer moved to `position` without watching the time in between.
+    func seek(to position: Duration, of duration: Duration)
     func paused(_ paused: Bool)
     func ended()
     func stop()

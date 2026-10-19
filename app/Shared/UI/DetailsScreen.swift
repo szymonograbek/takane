@@ -122,21 +122,26 @@ private struct PlayButtons: View {
     }
 }
 
+/// An episode's still, number, name and overview. With spoilers hidden, an unwatched episode
+/// blurs its still and leaves out its overview.
 private struct EpisodeCard: View {
+    @Environment(AppContext.self) private var app
     let video: Video
     let show: MetaPreview
 
     var body: some View {
+        let hidesSpoilers = !video.isWatched && (app.preferences.state.preferences?.hidesSpoilers ?? false)
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: Route.streams(StreamsRequest(preview: show, video: video.playable))) {
                 Artwork(url: video.thumbnail ?? show.background, title: video.name)
                     .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardWidth * 9 / 16)
+                    .blur(radius: hidesSpoilers ? Metrics.spoilerBlurRadius : 0, opaque: true)
                     .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             }
             .cardButtonStyle()
             .accessibilityIdentifier("episode.\(video.playable.rawValue)")
             Text("\(video.episode.map { "\($0). " } ?? "")\(video.name)").font(.caption).bold().lineLimit(1)
-            if let overview = video.overview {
+            if let overview = video.overview, !hidesSpoilers {
                 Text(overview).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2)
             }
         }

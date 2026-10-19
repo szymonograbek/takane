@@ -48,7 +48,6 @@ extension PlayerFeature {
     }
 
     static let scanTickInterval = Duration.milliseconds(250)
-    fileprivate static let stepLength = Duration.seconds(10)
     fileprivate static let longestStep = Duration.seconds(60)
     fileprivate static let streakWindow = Duration.seconds(1)
 }
@@ -87,7 +86,7 @@ extension PlayerFeature.Session {
         return [.setPaused(false)]
     }
 
-    /// Each tap in the same direction within `streakWindow` of the last jumps one `stepLength`
+    /// Each tap in the same direction within `streakWindow` of the last jumps one `seekStep`
     /// further, up to `longestStep`.
     private mutating func step(_ direction: PlayerFeature.Direction, at instant: ContinuousClock.Instant) -> [Effect] {
         guard phase == .playing || phase == .paused else { return [] }
@@ -96,7 +95,7 @@ extension PlayerFeature.Session {
             count = streak.count + 1
         }
         streak = PlayerFeature.StepStreak(direction: direction, count: count, lastTap: instant)
-        return [.seek(by: min(PlayerFeature.stepLength * count, PlayerFeature.longestStep) * direction.sign)]
+        return [.seek(by: min(seekStep.duration * count, PlayerFeature.longestStep) * direction.sign)]
     }
 
     /// Scanning needs the duration, which bounds it.

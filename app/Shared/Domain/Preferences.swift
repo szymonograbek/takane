@@ -13,9 +13,25 @@ struct Language: Hashable, Sendable, CustomStringConvertible {
     var description: String { code }
 }
 
-struct PlaybackPreferences: Hashable, Sendable {
+struct Preferences: Hashable, Sendable {
     var languages: TrackLanguages
     var subtitleStyle: SubtitleStyle
+    var seekStep: SeekStep
+    /// Whether a title's unwatched episodes keep their still blurred and their overview hidden.
+    var hidesSpoilers: Bool
+}
+
+/// How far one press of back or forward skips. Each has an SF Symbol, `gobackward.<seconds>`.
+enum SeekStep: Int, CaseIterable, Hashable, Sendable {
+    case five = 5
+    case ten = 10
+    case fifteen = 15
+    case thirty = 30
+
+    static let defaults = SeekStep.ten
+
+    var seconds: Int { rawValue }
+    var duration: Duration { .seconds(rawValue) }
 }
 
 enum PreferencesError: Error, Equatable, Sendable {
@@ -24,8 +40,8 @@ enum PreferencesError: Error, Equatable, Sendable {
 
 /// The user's settings, synced with the account when signed in.
 protocol PreferencesService: Sendable {
-    /// The playback preferences now, then after every change.
-    func playback() -> AsyncStream<PlaybackPreferences>
+    /// The preferences now, then after every change.
+    func preferences() -> AsyncStream<Preferences>
 
-    func update(_ preferences: PlaybackPreferences) throws(PreferencesError)
+    func update(_ preferences: Preferences) throws(PreferencesError)
 }

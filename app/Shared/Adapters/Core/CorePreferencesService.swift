@@ -1,25 +1,31 @@
-/// Playback preferences as core's profile settings hold them: `audioLanguage`, and the subtitle
-/// keys `CoreSubtitleSettings` reads.
+/// The preferences as core's profile settings hold them, in the keys `CoreGeneralSettings`
+/// and `CoreSubtitleSettings` read.
 struct CorePreferencesService: PreferencesService {
     let runtime: CoreRuntime
 
-    func playback() -> AsyncStream<PlaybackPreferences> {
+    func preferences() -> AsyncStream<Preferences> {
         runtime.observe(.ctx, as: CtxState.self) { ctx in
             guard case .object(let settings) = ctx.profile.settings else {
-                return PlaybackPreferences(languages: .streamDefaults, subtitleStyle: .defaults)
+                return Preferences(languages: .streamDefaults, subtitleStyle: .defaults, seekStep: .defaults, hidesSpoilers: false)
             }
-            let audio: Language? = if case .string(let code)? = settings["audioLanguage"] { Language(code) } else { nil }
-            return PlaybackPreferences(
-                languages: TrackLanguages(audio: audio, subtitles: CoreSubtitleSettings.languages(in: settings)),
-                subtitleStyle: CoreSubtitleSettings.style(in: settings)
+            return Preferences(
+                languages: TrackLanguages(
+                    audio: CoreGeneralSettings.audioLanguages.read(settings),
+                    subtitles: CoreSubtitleSettings.languages(in: settings)
+                ),
+                subtitleStyle: CoreSubtitleSettings.style(in: settings),
+                seekStep: CoreGeneralSettings.seekStep(in: settings),
+                hidesSpoilers: CoreGeneralSettings.hidesSpoilers(in: settings)
             )
         }
     }
 
-    func update(_ preferences: PlaybackPreferences) throws(PreferencesError) {
+    func update(_ preferences: Preferences) throws(PreferencesError) {
         // core takes the whole settings object, so every other key goes back as it was.
         var settings = try currentSettings()
-        settings["audioLanguage"] = preferences.languages.audio.map { .string($0.code) } ?? .null
+        CoreGeneralSettings.audioLanguages.write(preferences.languages.audio, into: &settings)
+        CoreGeneralSettings.write(preferences.seekStep, into: &settings)
+        CoreGeneralSettings.writeHidesSpoilers(preferences.hidesSpoilers, into: &settings)
         CoreSubtitleSettings.write(preferences.languages.subtitles, into: &settings)
         CoreSubtitleSettings.write(preferences.subtitleStyle, into: &settings)
         do {

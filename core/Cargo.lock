@@ -1306,6 +1306,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "stremio-core",
+ "stremio-watched-bitfield",
  "tempfile",
  "tokio",
  "tracing",

@@ -81,25 +81,88 @@ private struct InstallAddonScreen: View {
     }
 }
 
-/// The language to pick audio tracks in.
+/// The languages to pick audio tracks in, how far back and forward skip, and whether unwatched
+/// episodes hide spoilers.
 struct PlaybackSettings: View {
     @Environment(AppContext.self) private var app
 
     var body: some View {
+        let preferences = app.preferences.state.preferences
+        let seekStep = preferences?.seekStep ?? .defaults
         SettingsPage(title: "Playback") {
             SettingsSymbol(name: "play.rectangle")
         } rows: {
             Section {
-                LanguagePicker(title: "Audio", selection: app.preferences.state.playback?.languages.audio, none: "Stream Default") {
-                    app.preferences.send(.setAudioLanguage($0))
+                PreferredLanguagesPicker(
+                    title: "Language", none: "Stream Default", selection: preferences?.languages.audio,
+                    ids: (primary: "playback.audioLanguage", fallback: "playback.secondAudioLanguage")
+                ) {
+                    app.preferences.send(.setAudioLanguages($0))
                 }
+            } header: {
+                Text("Audio")
+            } footer: {
+                Text("Streams start with audio in this language when they have it, else in the second. You can switch during playback.")
+            }
+            Section {
+                NavigationLink {
+                    ChoiceList(
+                        title: "Skip Interval", symbol: "goforward",
+                        choices: SeekStep.allCases.map { (name: $0.name, value: $0) }, selection: seekStep
+                    ) {
+                        app.preferences.send(.setSeekStep($0))
+                    }
+                } label: {
+                    LabeledContent("Skip Interval", value: seekStep.name)
+                }
+                .accessibilityIdentifier("playback.seekStep")
+            } header: {
+                Text("Player")
+            } footer: {
+                Text("How far back and forward skip. Quick presses in a row skip further, up to a minute.")
+            }
+            Section {
+                Toggle("Hide Spoilers", isOn: Binding { preferences?.hidesSpoilers ?? false } set: { hides in
+                    app.preferences.send(.setHidesSpoilers(hides))
+                })
+                .accessibilityIdentifier("playback.hideSpoilers")
+            } header: {
+                Text("Episodes")
             } footer: {
                 if case .rejected(let reason)? = app.preferences.state.failure {
                     Text("Couldn't save the change (\(reason)).")
                 } else {
-                    Text("Streams start with audio in this language when they have it. You can switch during playback.")
+                    Text("Episodes you haven't watched blur their picture and leave out their summary.")
                 }
             }
+        }
+    }
+}
+
+private extension SeekStep {
+    var name: String { "\(seconds) Seconds" }
+}
+
+/// A language row and, once a language is chosen, a row for the one to fall back on. Choosing
+/// another first language keeps the second.
+struct PreferredLanguagesPicker: View {
+    let title: String
+    /// What the first row reads with no language chosen.
+    let none: String
+    let selection: PreferredLanguages?
+    let ids: (primary: String, fallback: String)
+    let choose: (PreferredLanguages?) -> Void
+
+    var body: some View {
+        LanguagePicker(title: title, selection: selection?.primary, none: none) {
+            choose($0.map { PreferredLanguages(primary: $0, fallback: selection?.fallback) })
+        }
+        .accessibilityIdentifier(ids.primary)
+        if let selection {
+            LanguagePicker(title: "Second Language", selection: selection.fallback, none: "None") {
+                choose(PreferredLanguages(primary: selection.primary, fallback: $0))
+            }
+            .accessibilityIdentifier(ids.fallback)
         }
     }
 }
@@ -113,38 +176,41 @@ struct LanguagePicker: View {
 
     var body: some View {
         NavigationLink {
-            LanguageChoices(title: title, selection: selection, none: none, choose: choose)
+            ChoiceList(
+                title: title, symbol: "globe",
+                choices: [(name: none, value: nil)] + Language.common.map { (name: $0.displayName, value: $0) },
+                selection: selection, choose: choose
+            )
         } label: {
             LabeledContent(title, value: selection?.displayName ?? none)
         }
     }
 }
 
-private struct LanguageChoices: View {
+/// A pushed list of choices with a checkmark on the current one. Choosing one goes back.
+private struct ChoiceList<Value: Hashable>: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
-    let selection: Language?
-    let none: String
-    let choose: (Language?) -> Void
+    let symbol: String
+    let choices: [(name: String, value: Value)]
+    let selection: Value
+    let choose: (Value) -> Void
 
     var body: some View {
         SettingsPage(title: title) {
-            SettingsSymbol(name: "globe")
+            SettingsSymbol(name: symbol)
         } rows: {
-            choice(none, language: nil)
-            ForEach(Language.common, id: \.self) { choice($0.displayName, language: $0) }
-        }
-    }
-
-    private func choice(_ name: String, language: Language?) -> some View {
-        Button {
-            choose(language)
-            dismiss()
-        } label: {
-            HStack {
-                Text(name)
-                Spacer()
-                if language == selection { Image(systemName: "checkmark") }
+            ForEach(choices, id: \.value) { choice in
+                Button {
+                    choose(choice.value)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(choice.name)
+                        Spacer()
+                        if choice.value == selection { Image(systemName: "checkmark") }
+                    }
+                }
             }
         }
     }

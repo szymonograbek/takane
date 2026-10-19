@@ -48,8 +48,8 @@ final class AetherPlaybackEngine: PlaybackEngine {
         let startPosition = start > .zero ? start / .seconds(1) : nil
         let options = LoadOptions(
             httpHeaders: source.headers,
-            preferredAudioLanguages: languages.audio.map { [$0.code] } ?? [],
-            preferredSubtitleLanguages: languages.subtitles.inPreferenceOrder.map(\.code)
+            preferredAudioLanguages: languages.audio?.inPreferenceOrder.map(\.code) ?? [],
+            preferredSubtitleLanguages: languages.subtitles?.inPreferenceOrder.map(\.code) ?? []
         )
         Log.player.info("load \(url.absoluteString) from \(startPosition ?? 0)s headers=\(source.headers.keys.sorted())")
         loading = Task { [player] in
@@ -140,6 +140,13 @@ final class AetherPlaybackEngine: PlaybackEngine {
             .store(in: &observations)
         player.clock.$currentTime.removeDuplicates()
             .sink { [weak self] seconds in self?.continuation.yield(.position(.seconds(seconds))) }
+            .store(in: &observations)
+        // A seek begins before the clock moves to its target, so the jump never reads as watched time.
+        player.seekEvents
+            .sink { [weak self] seek in
+                guard seek.outcome == .began else { return }
+                self?.continuation.yield(.seeking(to: .seconds(seek.target)))
+            }
             .store(in: &observations)
         player.$duration
             .sink { [weak self] seconds in self?.send(.duration(.seconds(seconds)), on: \.duration) }

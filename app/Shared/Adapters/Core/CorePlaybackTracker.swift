@@ -17,6 +17,10 @@ struct CorePlaybackTracker: PlaybackTracker {
         send(.player(.timeChanged(timeMs: position.milliseconds, durationMs: duration.milliseconds, device: Self.device)))
     }
 
+    func seek(to position: Duration, of duration: Duration) {
+        send(.player(.seek(timeMs: position.milliseconds, durationMs: duration.milliseconds, device: Self.device)))
+    }
+
     func paused(_ paused: Bool) {
         send(.player(.pausedChanged(paused: paused)))
     }

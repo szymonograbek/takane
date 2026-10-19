@@ -65,6 +65,8 @@ enum CoreAction: Sendable {
 
     enum Player: Sendable {
         case timeChanged(timeMs: UInt64, durationMs: UInt64, device: String)
+        /// Moves core's position without counting the skipped time as watched, which `timeChanged` would.
+        case seek(timeMs: UInt64, durationMs: UInt64, device: String)
         case pausedChanged(paused: Bool)
         case ended
         /// What subtitle add-ons match the file by. Core prefers what the stream itself declares.
@@ -263,7 +265,7 @@ extension CoreAction.Ctx: Encodable {
 }
 
 extension CoreAction.Player: Encodable {
-    private struct TimeChangedArgs: Encodable { let time: UInt64; let duration: UInt64; let device: String }
+    private struct TimeArgs: Encodable { let time: UInt64; let duration: UInt64; let device: String }
     private struct PausedChangedArgs: Encodable { let paused: Bool }
     private struct VideoParamsChangedArgs: Encodable {
         struct VideoParams: Encodable {
@@ -278,7 +280,9 @@ extension CoreAction.Player: Encodable {
     func encode(to encoder: any Encoder) throws {
         switch self {
         case .timeChanged(let time, let duration, let device):
-            try action("TimeChanged", TimeChangedArgs(time: time, duration: duration, device: device)).encode(to: encoder)
+            try action("TimeChanged", TimeArgs(time: time, duration: duration, device: device)).encode(to: encoder)
+        case .seek(let time, let duration, let device):
+            try action("Seek", TimeArgs(time: time, duration: duration, device: device)).encode(to: encoder)
         case .pausedChanged(let paused):
             try action("PausedChanged", PausedChangedArgs(paused: paused)).encode(to: encoder)
         case .ended:
