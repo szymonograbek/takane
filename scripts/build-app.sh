@@ -20,8 +20,9 @@ esac
 cd "$root"
 mkdir -p build
 xcodegen generate --quiet
-# The first build needs every XCFramework slice to exist before Xcode plans the build.
-[[ -f build/StremioBridge.xcframework/Info.plist ]] || scripts/build-core.sh Debug all >/dev/null
+# The first build needs every XCFramework slice to exist before Xcode plans the build. The headers sit
+# in a StremioBridge folder, since another package's library also ships include/module.modulemap.
+[[ -f build/StremioBridge.xcframework/macos-arm64/Headers/StremioBridge/module.modulemap ]] || scripts/build-core.sh Debug all >/dev/null
 
 log="build/xcodebuild-$platform.log"
 if ! xcodebuild -project StremioTV.xcodeproj -scheme "$scheme" -configuration Debug \

@@ -21,7 +21,7 @@ Package the bridge for macOS, tvOS device and tvOS simulator. Generate Swift pro
 
 ## 3. macOS app
 
-Home (continue watching + catalog rows), discover, search, detail with filtered stream list, MPVKit playback with progress reporting.
+Home (continue watching + catalog rows), discover, search, detail with filtered stream list, playback with progress reporting.
 
 **Verify:** run locally; play a debrid stream, switch audio and subtitle tracks, confirm progress appears in continue watching on another Stremio client.
 
@@ -33,7 +33,7 @@ Focus navigation, TV layout, code / QR login via `link`.
 
 ## 5. Settings
 
-Settings screen bound to core profile settings; applied to mpv on playback start.
+Settings screen bound to core profile settings; applied to the player on playback start.
 
 **Verify:** change subtitle language and style, start playback, confirm the selected track and styling; confirm settings sync to another Stremio client.
 

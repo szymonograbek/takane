@@ -68,6 +68,6 @@ else
     library="$(build "$platform")"
     # Copy only on change so Xcode relinks only when the library actually changed.
     rsync --checksum "$library" "$output/$(slice_dir "$platform")/libstremio_bridge.a"
-    rsync --checksum "$root/core/include/" "$output/$(slice_dir "$platform")/Headers/"
+    rsync --checksum --recursive --delete "$root/core/include/" "$output/$(slice_dir "$platform")/Headers/"
     echo "updated $platform slice of $output ($configuration)"
 fi

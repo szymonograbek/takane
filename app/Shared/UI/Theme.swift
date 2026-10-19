@@ -13,6 +13,9 @@ enum Palette {
     static let text = Color(red: 0.937, green: 0.910, blue: 0.871)
     /// Metadata and labels: the text color, dimmed.
     static let secondary = text.opacity(0.6)
+    /// Subtitle text, pure white for contrast on any picture, over a dark translucent backing.
+    static let subtitle = Color.white
+    static let subtitleBacking = Color.black.opacity(0.6)
 
     /// Burgundy fading into the canvas from the top, behind sign-in and empty screens.
     static let wash = RadialGradient(
@@ -46,6 +49,11 @@ enum Metrics {
     static let progressHeight: CGFloat = 5
     /// The player's progress bar while it has focus.
     static let focusedProgressHeight: CGFloat = 14
+    static let subtitleStyle = Font.TextStyle.title2
+    /// Space between the subtitles and the bottom of the picture.
+    static let subtitleInset: CGFloat = 60
+    /// Horizontal room inside the subtitle backing; a third of it above and below.
+    static let subtitlePadding: CGFloat = 18
     #else
     static let posterWidth: CGFloat = 140
     static let wideCardWidth: CGFloat = 280
@@ -64,6 +72,9 @@ enum Metrics {
     static let welcomeLogoSize: CGFloat = 160
     static let progressHeight: CGFloat = 5
     static let focusedProgressHeight: CGFloat = 9
+    static let subtitleStyle = Font.TextStyle.largeTitle
+    static let subtitleInset: CGFloat = 28
+    static let subtitlePadding: CGFloat = 10
     #endif
 }
 

@@ -31,13 +31,15 @@ enum PlayerFeature: Feature {
         var duration = Duration.zero
         var isBuffering = false
         var videoSize: VideoSize?
-        var hardwareDecoder: String?
+        var decoder: String?
         /// The whole second last reported to the tracker.
         var reportedSecond: Int64?
         var tracks: [MediaTrack] = []
         /// What each add-on offers for this stream, apart from the stream's own tracks.
         var addonSubtitles: [SubtitleSource] = []
         var speed = PlaybackSpeed.normal
+        /// The subtitles visible now.
+        var subtitles: [SubtitleCue] = []
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
         var scan: Scan?
@@ -228,16 +230,20 @@ enum PlayerFeature: Feature {
             session.isBuffering = buffering
         case .videoSize(let size):
             session.videoSize = size
-        case .hardwareDecoder(let name):
-            session.hardwareDecoder = name
+        case .decoder(let name):
+            session.decoder = name
         case .tracks(let tracks):
             session.tracks = tracks
         case .speed(let speed):
             session.speed = speed
+        case .subtitles(let cues):
+            session.subtitles = cues
         }
         return []
     }
+}
 
+extension PlayerFeature {
     @MainActor
     static func run(_ effect: Effect, _ dependencies: Dependencies, _ send: @escaping @MainActor (Event) -> Void) async {
         let engine = dependencies.engine
@@ -253,7 +259,6 @@ enum PlayerFeature: Feature {
             let languages = await preferences.next()?.languages ?? .streamDefaults
             tracker.begin(candidate)
             engine.load(source, from: start, languages: languages)
-            engine.setPaused(false)
             for await sources in dependencies.subtitles.subtitles(for: candidate, playing: source) {
                 send(.subtitlesFound(candidate, sources))
             }
@@ -346,12 +351,13 @@ extension PlayerFeature.State {
 }
 
 extension PlayerFeature.State {
-    /// Position, duration, phase, video size and decoder, such as `0:00:10 / 2:22:32 · playing · 1920×1080 · hwdec no`.
+    /// Position, duration, phase, video size and decoder, such as
+    /// `0:00:10 / 2:22:32 · playing · 1920×1080 · VideoToolbox HEVC (HW)`.
     var statusLine: String {
         let session = session
         var parts = [phaseName]
         if let size = session?.videoSize { parts.append("\(size.width)×\(size.height)") }
-        if let decoder = session?.hardwareDecoder { parts.append("hwdec \(decoder)") }
+        if let decoder = session?.decoder { parts.append(decoder) }
         let time = "\(Self.clock(session?.position ?? .zero)) / \(Self.clock(session?.duration ?? .zero))"
         return ([time] + parts).joined(separator: " · ")
     }

@@ -8,10 +8,10 @@
 ├───────────────────────────────────────────────────────────┤
 │ Domain: values, branded ids, ports (protocols) + errors   │
 ├─────────────────────────────┬─────────────────────────────┤
-│ Adapters/Core               │ Adapters/MPV                │
-│  CoreRuntime, Core*Service  │  MPVEngine: PlaybackEngine  │
-│  CoreClient (only FFI user) │                             │
-├──────── FFI (C ABI) ────────┤        MPVKit / libmpv      │
+│ Adapters/Core               │ Adapters/Aether             │
+│  CoreRuntime, Core*Service  │  AetherPlaybackEngine:      │
+│  CoreClient (only FFI user) │   PlaybackEngine            │
+├──────── FFI (C ABI) ────────┤  AetherEngine (SwiftPM)     │
 │ Rust bridge crate (core/)   │                             │
 │ stremio-core (pinned rev)   │                             │
 └─────────────────────────────┴─────────────────────────────┘
@@ -22,7 +22,7 @@
 `core/` depends on `stremio-core` with the `derive` and `env-future-send` features, pinned to a commit in `core/Cargo.toml`.
 
 - **Wire format.** JSON in stremio-core's own serde shapes, the same contract `stremio-core-web` uses. Actions are core's `Action` enum; state is a serialized core model; events are core's `RuntimeEvent`. There is no schema to keep in sync by hand. `stremio-core-kotlin`'s protobuf layer was the alternative and costs about 6k lines of mapping.
-- **FFI surface.** `core/include/stremio_bridge.h`. `sb_initialize` (host callbacks + storage directory), `sb_dispatch`, `sb_get_state`, `sb_fetch_resolve` / `sb_fetch_reject`, `sb_bytes_free`. Bytes in, bytes out.
+- **FFI surface.** `core/include/StremioBridge/stremio_bridge.h`. `sb_initialize` (host callbacks + storage directory), `sb_dispatch`, `sb_get_state`, `sb_fetch_resolve` / `sb_fetch_reject`, `sb_bytes_free`. Bytes in, bytes out.
 - **Models.** `AppModel` in `core/src/model.rs` lists the core models the app runs: `ctx`, `continue_watching_preview`, `addon_details`, `board` and `search` (two `CatalogsWithExtra`, as in `stremio-core-web`), `meta_details`, `player`. Adding a field there and to `CoreField` in Swift exposes another model.
 - **Packaging.** `build/StremioBridge.xcframework` with `macos-arm64`, `tvos-arm64` and `tvos-arm64-simulator` slices. `scripts/build-core.sh` builds it. The Xcode targets `StremioBridge_macOS` / `StremioBridge_tvOS` run that script before the app links and refresh only the slice of the platform being built. The simulator slice is arm64 only, so the tvOS target excludes x86_64 for the simulator.
 - **Toolchain.** Nightly, pinned in `rust-toolchain.toml`. tvOS targets are tier 3 and build `std` from source (`-Zbuild-std`), which needs the `rust-src` component.
@@ -79,7 +79,7 @@ Features today: `PlayerFeature` (idle, active session with phase opening/playing
 - **Core.** `CoreClient` is the only code that touches the FFI. `CoreRuntime` turns core's protocol (dispatch an action, later receive `NewState` naming the changed fields) into async APIs: `states`/`observe` stream a field's state (current first), and `request` subscribes, dispatches and waits until a probe accepts a state. No polling. Because the current state is probed first, every probe checks that the state answers its own request (transport URL, selected stream path). `CoreAddonService`, `CoreCatalogService`, `CoreStreamService`, `CoreLibraryService`, `CorePlaybackTracker` and `CoreSubtitleService` implement the ports. `CoreAction.swift` encodes actions; `CoreWire.swift` decodes only the fields the adapters read. Core keeps one `meta_details` selection, so a new stream lookup replaces the previous one and finishes its stream.
 - **Core catalogs.** `CoreCatalogService` loads `board` with every catalog without a required extra and `search` with every catalog that accepts the `search` extra. These are core's rules, and the adapter does not repeat them. Once core holds the selection, an empty `catalogs` list means no add-on offers one. Core lists catalogs without fetching them, on load and again when the profile's add-ons change, so the adapter asks for them with `LoadRange`. That is how an install shows up on the board without another load. `details` loads `meta_details` with no stream path. A stream lookup for the same title, such as an episode of that show, reuses the metadata it loaded. A details call replaces a running stream lookup. `scripts/smoke.sh --no-addons` starts core without its default add-ons (`EMPTY_OFFICIAL_ADDONS=1`) and checks the empty states, then installs Cinemeta and checks that the open board stream fills.
 - **SkipDB.** `SkipDBSkipSegmentService` conforms to `SkipSegmentService` over the open SkipDB API (skipdb.tv, no key): recap, intro, outro and preview ranges for an IMDb id, fitted to the stream's duration and clamped to it. It shares `URLSession.json` (`Adapters/HTTP`) for requests, logging and the `HTTPFailure` it maps to `SkipSegmentError`. The `StremioTVAdapterTests` target tests it against recorded responses through a `URLProtocol` stub; set `TEST_RUNNER_STREMIO_LIVE_TESTS=1` to run its live tests too.
-- **MPV.** `MPVEngine` conforms to `PlaybackEngine`: it translates mpv events into `PlaybackEvent` on its event queue, renders into a `CAMetalLayer`, and runs commands on the main actor.
+- **Aether.** `AetherPlaybackEngine` conforms to `PlaybackEngine` over [AetherEngine](https://github.com/superuser404notfound/AetherEngine). Everything runs on the main actor. It turns the engine's published state into `PlaybackEvent`s, each once per change, and owns the load task. The engine draws into its own view, so the port has no surface: the composition root hands `AetherPlayerSurface` to the UI as `Services.videoSurface`.
 
 ### Adding a provider
 
@@ -87,19 +87,19 @@ A provider is a folder under `app/Shared/Adapters/` with types that conform to p
 
 ### Strictness
 
-Swift 6 with complete concurrency checking, `ExistentialAny` and warnings as errors. SwiftLint runs as a build tool plugin on every app and test build in strict mode (`.swiftlint.yml`). Force unwraps, force casts, `try!`, `@unchecked Sendable`, `nonisolated(unsafe)` and `assumeIsolated` fail the build unless disabled on the line with a reason. The `StremioTVTests` target compiles Domain and Features without the bridge or mpv, so those layers cannot import an adapter.
+Swift 6 with complete concurrency checking, `ExistentialAny` and warnings as errors. SwiftLint runs as a build tool plugin on every app and test build in strict mode (`.swiftlint.yml`). Force unwraps, force casts, `try!`, `@unchecked Sendable`, `nonisolated(unsafe)` and `assumeIsolated` fail the build unless disabled on the line with a reason. The `StremioTVTests` target compiles Domain and Features without the bridge or AetherEngine, so those layers cannot import an adapter.
 
 ### Platforms
 
-`app/Shared` is compiled into both apps, including the screens in `app/Shared/UI`. They differ by platform only where input differs (`#if os(tvOS)` for focus sections, card buttons and the remote's commands). `VideoSurfaceView` exists per platform (`app/macOS`, `app/tvOS`) for `NSView` versus `UIView` hosting of the engine's layer. Views parse text input into domain types before sending events.
+`app/Shared` is compiled into both apps, including the screens in `app/Shared/UI`. They differ by platform only where input differs (`#if os(tvOS)` for focus sections, card buttons and the remote's commands). The platform folders hold only assets. Views parse text input into domain types before sending events.
 
 ### UI
 
-`Theme.swift` holds the colors (`Palette`: canvas, surface, burgundy, red, text, secondary) and the sizes that differ between the TV and a window (`Metrics`). Nothing else names a color value. The shared pieces are `AppLogo`, `Artwork` (an add-on image with a placeholder), `ProgressLine`, `PosterCard`, `ContinueCard`, `Shelf` (a titled sideways row), `SettingsPage` (an emblem beside a list), `ValueRow` (a settings row that shows a value and still takes focus) and the player's `PlayerControls`, whose subtitles, audio and speed choices open in an `OptionsPanel` rather than a system `Menu`, which on tvOS leaves nothing focused for over a second after it closes. Icons are SF Symbols; empty and error states use `ContentUnavailableView`. The logo (`AppLogo`, asset `Logo`) and the macOS and tvOS app icons, including the tvOS layered icon and Top Shelf images, are generated from `assets/logo.png` by `swift scripts/make-icons.swift assets/logo.png`; rerun it when the logo changes. Navigation is three tabs (Home, Search, Settings), each a `NavigationStack` driven by `Route` (`details`, `streams`).
+`Theme.swift` holds the colors (`Palette`: canvas, surface, burgundy, red, text, secondary) and the sizes that differ between the TV and a window (`Metrics`). Nothing else names a color value. The shared pieces are `AppLogo`, `Artwork` (an add-on image with a placeholder), `ProgressLine`, `PosterCard`, `ContinueCard`, `Shelf` (a titled sideways row), `SettingsPage` (an emblem beside a list), `ValueRow` (a settings row that shows a value and still takes focus) and the player's `PlayerControls`, whose subtitles, audio and speed choices open in an `OptionsPanel` rather than a system `Menu`, which on tvOS leaves nothing focused for over a second after it closes, and `SubtitleOverlay`. The overlay draws the session's visible `SubtitleCue`s above the video and below the controls: text in a system text style, white on a dark translucent backing, centered above the picture's bottom edge; bitmaps scaled to the fitted picture where the stream places them. Icons are SF Symbols; empty and error states use `ContentUnavailableView`. The logo (`AppLogo`, asset `Logo`) and the macOS and tvOS app icons, including the tvOS layered icon and Top Shelf images, are generated from `assets/logo.png` by `swift scripts/make-icons.swift assets/logo.png`; rerun it when the logo changes. Navigation is three tabs (Home, Search, Settings), each a `NavigationStack` driven by `Route` (`details`, `streams`).
 
 ## Logging
 
-`Log` (`app/Shared/Logging/Log.swift`) writes every line to the unified log (subsystem `com.ograbek.stremio-tv`, one category per area) and to `app.log`: `~/Library/Logs/com.ograbek.stremio-tv/` on macOS, `Library/Caches/Logs/` in the app container on tvOS. Long tokens (debrid keys, add-on configs) are masked. The previous session is kept as `app.previous.log`. Debug builds also echo to stderr. Rust `tracing` output and panics arrive as category `rust:<module>`; mpv's own log arrives under `player`. Set `STREMIO_LOG_LEVEL` (`trace`, `debug`, `info`, `warning`, `error`) to change the threshold; the default is `debug`.
+`Log` (`app/Shared/Logging/Log.swift`) writes every line to the unified log (subsystem `com.ograbek.stremio-tv`, one category per area) and to `app.log`: `~/Library/Logs/com.ograbek.stremio-tv/` on macOS, `Library/Caches/Logs/` in the app container on tvOS. Long tokens (debrid keys, add-on configs) are masked. The previous session is kept as `app.previous.log`. Debug builds also echo to stderr. Rust `tracing` output and panics arrive as category `rust:<module>`; AetherEngine's own log (`EngineLog.handler`) arrives under `player` at debug level. Set `STREMIO_LOG_LEVEL` (`trace`, `debug`, `info`, `warning`, `error`) to change the threshold; the default is `debug`.
 
 ## Streams
 
@@ -107,31 +107,31 @@ Before display, filter `meta_details` streams to supported sources:
 
 | Source | Handling |
 |---|---|
-| `Url` | Play. If `proxyHeaders.request` is set, pass headers to mpv. |
+| `Url` | Play. If `proxyHeaders.request` is set, pass the headers to the engine (`LoadOptions.httpHeaders`). |
 | `YouTube` | Out of scope for now. |
 | `Torrent`, archives, `Nzb` | Hidden. |
 | `External`, `PlayerFrame` | Hidden. |
 
 ## Player
 
-MPVKit renders video with `vo=gpu-next` through MoltenVK into a `CAMetalLayer` (`app/Shared/Adapters/MPV/MPVEngine.swift`), the same path MPVKit's macOS and tvOS demos use. Hardware decoding uses VideoToolbox; the tvOS simulator falls back to software decoding. Reading frames back from mpv (`snapshot`) crashes the simulator's Metal driver, so it is disabled in simulators. Core's `player` model owns playback state (progress, watched, next episode); `PlayerFeature` reports time (once per second), pause and end to it through `CorePlaybackTracker`. Core copies progress into the library (and so continue watching) on pause, unload and every 180 s, not on every time update.
+AetherEngine demuxes each stream with FFmpeg and remuxes it into fMP4 for AVPlayer (route `loopback`), so VideoToolbox decodes, HDR and Dolby Vision reach the display, and Atmos passes through. Codecs fMP4 cannot carry are bridged (DTS and TrueHD to E-AC-3 or FLAC). What AVPlayer cannot play, and anything in the tvOS simulator, decodes in software (route `software`). Only the package's default traits are on. Core's `player` model owns playback state (progress, watched, next episode); `PlayerFeature` reports time (once per second), pause and end to it through `CorePlaybackTracker`. Core copies progress into the library (and so continue watching) on pause, unload and every 180 s, not on every time update.
 
 The progress bar takes focus. A tap of left or right jumps 10 s, and quick taps in one direction jump 10 s further each, up to 60 s. Holding one scans at 2×: `PlayerFeature` pauses the engine and moves its own playhead (`Scan`, in `PlayerTimeline.swift`) every 0.25 s with an absolute seek, until select, play/pause or slowing below 2× resumes playback. Each press in the scan's direction doubles its rate up to 32× and each press against it halves it. The UI only tells a tap from a hold (0.5 s); on tvOS a UIKit view reads the arrows' press and release, which SwiftUI does not report for the Siri Remote.
 
-Settings map to mpv options:
+`AetherPlaybackEngine` (`app/Shared/Adapters/Aether/`) maps the port onto the engine:
 
-| Core setting | mpv |
+| Port | AetherEngine |
 |---|---|
-| `subtitles_language` / `secondary_subtitles_language` | `slang` |
-| `audio_language` / `secondary_audio_language` | `alang` |
-| `subtitles_size` | `sub-scale` |
-| `subtitles_font` | `sub-font` |
-| `subtitles_bold` | `sub-bold` |
-| `subtitles_offset` | `sub-pos` |
-| `subtitles_text_color` | `sub-color` |
-| `subtitles_background_color` | `sub-back-color` (with `sub-border-style`) |
-| `subtitles_outline_color` | `sub-border-color` |
-| `ass_subtitles_styling` | `sub-ass-override` |
-| `hardware_decoding` | `hwdec` |
+| `load` | `load(url:startPosition:options:)` in a task the adapter owns; a newer load or `stop` cancels it. `LoadOptions` carries the request headers and the preferred audio and subtitle languages. A cancelled load is not a failure; a failed one is reported once, from `state` |
+| `setPaused`, `seek`, `setSpeed`, `stop` | `play`/`pause`, `seek(to:)` (relative seeks start from a seek still landing), `setRate`, `stop` |
+| `select`, `turnOffSubtitles`, `addSubtitles` | `selectAudioTrack(index:)`, `selectSubtitleTrack(index:)`, `clearSubtitle()`, `addExternalSubtitleTrack`; `MediaTrack.ID.number` is the engine's track id |
+| `loaded`, `paused`, `buffering`, `ended`, `stopped`, `failed` | `$playbackPhase` |
+| `position`, `subtitles` | `clock.$currentTime`; cues from `$subtitleCues` whose PTS range holds `clock.$sourceTime` |
+| `duration`, `videoSize`, `decoder`, `tracks` | `$duration`, the probed size times its pixel aspect, `$activeVideoDecoder`, the track lists and active indices |
+| `diagnostics`, `snapshot` | route, decoders, audio delivery and `diagnostics.liveTelemetry`; `scrubThumbnail`, which decodes from the session's cache so a single-connection debrid link is not asked twice |
 
-Subtitles come from two places, kept apart in the player's subtitles panel: the stream's own tracks ("Built-in") and the files the user's subtitle add-ons offer, one page per add-on grouped by language. Add-on subtitles are add-on driven only; the app calls no subtitle provider itself. A candidate's player selection carries a `subtitlesPath`, so core's `player` model asks every add-on with the `subtitles` resource. Core adds the file's `filename`, `videoSize` and `videoHash` from the stream's hints or from `VideoParamsChanged`, which `CoreSubtitleService` sends once it has fingerprinted the stream: the OpenSubtitles hash of the first and last 64 KiB, read with two range requests to the stream's host (`URLSession.fingerprint`). Add-ons that time subtitles to the file, such as Subtitle Sync, need these to tell this copy apart. A chosen file is added with mpv's `sub-add` (asynchronous, since mpv downloads it) and then selected as the track whose `external-filename` is its URL. Embedded audio and subtitle tracks come from mpv's `track-list` (`MPVTrackList`) and are chosen with `aid` and `sid`. Speed is mpv's `speed`. A load sets `start` (the saved position), `alang` and `slang` (the preferred languages from `PreferencesService`) before `loadfile`.
+Subtitles come from two places, kept apart in the player's subtitles panel: the stream's own tracks ("Built-in") and the files the user's subtitle add-ons offer, one page per add-on grouped by language. Add-on subtitles are add-on driven only; the app calls no subtitle provider itself. A candidate's player selection carries a `subtitlesPath`, so core's `player` model asks every add-on with the `subtitles` resource. Core adds the file's `filename`, `videoSize` and `videoHash` from the stream's hints or from `VideoParamsChanged`, which `CoreSubtitleService` sends once it has fingerprinted the stream: the OpenSubtitles hash of the first and last 64 KiB, read with two range requests to the stream's host (`URLSession.fingerprint`). Add-ons that time subtitles to the file, such as Subtitle Sync, need these to tell this copy apart. A chosen file is registered with `addExternalSubtitleTrack` and selected; the adapter remembers which track id came from which URL, since the engine's track list does not say, and reports it as `MediaTrack.externalFile`.
+
+Subtitles are drawn by the app. Text cues flatten styled runs to their characters and ignore ASS placement; bitmap cues (PGS) keep their position.
+
+Wired from core's settings: `audio_language` and `subtitles_language` (as `TrackLanguages`). Not wired yet: the subtitle style settings (`subtitles_size`, `subtitles_font`, `subtitles_bold`, `subtitles_offset`, the colors, `ass_subtitles_styling`), `hardware_decoding` (the engine picks the route itself) and secondary languages.

@@ -2,7 +2,7 @@
 
 # Takane
 
-Custom macOS and tvOS client for Stremio, built on [stremio-core](https://github.com/Stremio/stremio-core) and [MPVKit](https://github.com/mpvkit/MPVKit). Design notes live in [docs/](docs/README.md).
+Custom macOS and tvOS client for Stremio, built on [stremio-core](https://github.com/Stremio/stremio-core) and [AetherEngine](https://github.com/superuser404notfound/AetherEngine). Design notes live in [docs/](docs/README.md).
 
 ## Requirements
 
@@ -27,11 +27,11 @@ The app is Takane. First launch asks to sign in with Stremio (a link code confir
 
 ## Logs
 
-macOS: `~/Library/Logs/com.ograbek.stremio-tv/app.log` (previous run: `app.previous.log`). tvOS simulator: `Library/Caches/Logs/app.log` inside the app's data container (`xcrun simctl get_app_container booted com.ograbek.stremio-tv data`). Also in Console.app under subsystem `com.ograbek.stremio-tv`. Swift, Rust and mpv logs share the file, tagged by category. `STREMIO_LOG_LEVEL=trace|debug|info|warning|error` sets the threshold.
+macOS: `~/Library/Logs/com.ograbek.stremio-tv/app.log` (previous run: `app.previous.log`). tvOS simulator: `Library/Caches/Logs/app.log` inside the app's data container (`xcrun simctl get_app_container booted com.ograbek.stremio-tv data`). Also in Console.app under subsystem `com.ograbek.stremio-tv`. Swift, Rust and AetherEngine logs share the file, tagged by category. `STREMIO_LOG_LEVEL=trace|debug|info|warning|error` sets the threshold.
 
 ## Smoke test
 
-`scripts/smoke.sh [--tvos] [type/id]` builds the app, launches it against a fresh core profile, installs an add-on through core, resolves streams, plays the first playable one for 10 s, pauses, and checks the item appears in continue watching with the right progress. It exits 0 on pass and writes `smoke-result.json` next to the log, plus `smoke-frame.png` (mpv frame, macOS) or `smoke-screen.png` (simulator screenshot, tvOS). `--tvos` runs on a "Stremio Apple TV" simulator, created on first use.
+`scripts/smoke.sh [--tvos] [type/id]` builds the app, launches it against a fresh core profile, installs an add-on through core, resolves streams, plays the first playable one for 10 s, pauses, and checks the item appears in continue watching with the right progress. It exits 0 on pass and writes `smoke-result.json` next to the log, plus `smoke-frame.png` (the engine's frame at the playhead, when its cache holds one) and, on tvOS, `smoke-screen.png` (simulator screenshot). `--tvos` runs on a "Stremio Apple TV" simulator, created on first use.
 
 The add-on URL contains debrid credentials, so it is read from `STREMIO_SMOKE_ADDON_URL` or a git-ignored `.env.smoke`:
 

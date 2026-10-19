@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import QuartzCore
 
 struct VideoSize: Hashable, Sendable {
     let width: Int
@@ -51,6 +50,15 @@ struct TrackLanguages: Hashable, Sendable {
     static let streamDefaults = TrackLanguages(audio: nil, subtitles: nil)
 }
 
+/// A subtitle on screen. Styled text arrives flattened to its characters.
+enum SubtitleCue: Equatable, Sendable {
+    /// Drawn centered at the bottom of the picture. Lines are separated by newlines.
+    case text(String)
+    /// A rendered bitmap, such as a Blu-ray subtitle. `frame` places it as a fraction of the
+    /// video frame, origin at the top left.
+    case image(CGImage, frame: CGRect)
+}
+
 /// What a playback engine reports, in the order it happened.
 enum PlaybackEvent: Equatable, Sendable {
     case loaded
@@ -64,11 +72,14 @@ enum PlaybackEvent: Equatable, Sendable {
     case paused(Bool)
     case buffering(Bool)
     case videoSize(VideoSize?)
-    case hardwareDecoder(String)
+    /// The decoder of the video, such as `VideoToolbox HEVC (HW)`.
+    case decoder(String)
     /// Every audio and subtitle track, after any change to the list or the selection.
     case tracks([MediaTrack])
     /// A rate the engine reports that is not one of `PlaybackSpeed` is left out.
     case speed(PlaybackSpeed)
+    /// The subtitles to show now, replacing the previous ones. Empty when none is visible.
+    case subtitles([SubtitleCue])
 }
 
 enum PlaybackError: Error, Equatable, Sendable {
@@ -76,15 +87,14 @@ enum PlaybackError: Error, Equatable, Sendable {
     case failed(reason: String)
 }
 
-/// Decodes and renders streams.
+/// Decodes and renders streams. The view video renders into belongs to the provider, so the
+/// composition root hands it to the UI (`Services.videoSurface`).
 @MainActor
 protocol PlaybackEngine: AnyObject, Sendable {
-    /// The layer video renders into.
-    var surface: CAMetalLayer { get }
     /// Every event for the engine's lifetime. Iterate it from one place only.
     var events: AsyncStream<PlaybackEvent> { get }
 
-    /// Starts `source` at `start`, picking tracks in `languages` when the stream has them.
+    /// Plays `source` from `start`, picking tracks in `languages` when the stream has them.
     func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages)
     func setPaused(_ paused: Bool)
     func seek(by offset: Duration)
@@ -95,7 +105,7 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func addSubtitles(_ file: URL, title: String, language: String)
     func setSpeed(_ speed: PlaybackSpeed)
     func stop()
-    /// Output health by engine property name, for logs and the smoke test.
+    /// Output health by name (route, decoders, audio delivery, frame counters), for logs and the smoke test.
     func diagnostics() -> [String: String]
     /// The current frame, when the platform supports reading it back.
     func snapshot() async -> CGImage?
