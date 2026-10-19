@@ -1,9 +1,11 @@
 import SwiftUI
 
 /// The streams the add-ons offer for one movie or episode. Choosing one starts playback, from the
-/// saved position when continue watching has one.
+/// saved position when continue watching has one. Once it plays, this screen closes under the player,
+/// so leaving the player lands on the title's details; a stream that fails returns here.
 struct StreamsScreen: View {
     @Environment(AppContext.self) private var app
+    @Environment(\.dismiss) private var dismiss
     let request: StreamsRequest
 
     var body: some View {
@@ -52,6 +54,16 @@ struct StreamsScreen: View {
                 .ignoresSafeArea()
         }
         .onAppear { app.streams.send(.lookUp(request.video)) }
+        .onChange(of: isPlayingRequest) { _, playing in
+            if playing { dismiss() }
+        }
+    }
+}
+
+extension StreamsScreen {
+    /// A stream for this video got past opening.
+    private var isPlayingRequest: Bool {
+        app.player.state.session.map { $0.candidate.item == request.video && $0.phase != .opening } ?? false
     }
 }
 
