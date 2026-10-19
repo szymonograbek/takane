@@ -7,9 +7,12 @@
 # or from the git-ignored .env.smoke file, never from the repo. STREMIO_SMOKE_SUBTITLES_ADDON_URL,
 # optional and read the same way, adds a subtitles add-on and plays one of its files.
 #
+# The default titles are free to share: Night of the Living Dead (1968) is in the public domain and
+# Pioneer One is released under Creative Commons, so a run never streams copyrighted work.
+#
 # Usage: scripts/smoke.sh [--tvos] [--no-addons] [type/id]
-#   scripts/smoke.sh                          macOS, movie/tt0111161
-#   scripts/smoke.sh --tvos series/tt0944947:1:1
+#   scripts/smoke.sh                          macOS, movie/tt0063350
+#   scripts/smoke.sh --tvos series/tt1748166:1:1
 #   scripts/smoke.sh --no-addons              core starts without its default add-ons; checks that
 #                                             board, search and details report none installed, then
 #                                             that installing Cinemeta fills the board
@@ -28,7 +31,7 @@ if [[ "${1:-}" == "--no-addons" ]]; then
     no_addons=1
     shift
 fi
-item="${1:-movie/tt0111161}"
+item="${1:-movie/tt0063350}"
 bundle_id=com.ograbek.stremio-tv
 
 if [[ -z "${STREMIO_SMOKE_ADDON_URL:-}" && -f "$root/.env.smoke" ]]; then
