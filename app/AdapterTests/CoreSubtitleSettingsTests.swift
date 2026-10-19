@@ -6,6 +6,7 @@ struct CoreSubtitleSettingsTests {
     private static let coreDefaults: [String: JSONValue] = [
         "subtitlesLanguage": .string("eng"),
         "secondarySubtitlesLanguage": .null,
+        "subtitlesAutoSelect": .bool(true),
         "subtitlesSize": .number(100),
         "subtitlesFont": .string("Roboto"),
         "subtitlesBold": .bool(false),
@@ -22,7 +23,7 @@ struct CoreSubtitleSettingsTests {
 
     @Test func coreDefaultsReadAsTheDefaultStyle() {
         #expect(CoreSubtitleSettings.style(in: Self.coreDefaults) == .defaults)
-        #expect(CoreSubtitleSettings.languages(in: Self.coreDefaults) == .preferred(english, fallback: nil))
+        #expect(CoreSubtitleSettings.languages(in: Self.coreDefaults) == PreferredLanguages(primary: english, fallback: nil))
     }
 
     @Test func colorsReadWithAndWithoutAlpha() {
@@ -103,17 +104,35 @@ struct CoreSubtitleSettingsTests {
         var settings = Self.coreDefaults
         settings["subtitlesLanguage"] = .null
         settings["secondarySubtitlesLanguage"] = .string("pol")
-        #expect(CoreSubtitleSettings.languages(in: settings) == .off)
+        #expect(CoreSubtitleSettings.languages(in: settings) == nil)
     }
 
-    @Test func languagesWriteBothKeys() {
+    @Test func autoSelectOffReadsAsNoSubtitles() {
         var settings = Self.coreDefaults
-        CoreSubtitleSettings.write(.preferred(polish, fallback: english), into: &settings)
+        settings["subtitlesAutoSelect"] = .bool(false)
+        #expect(CoreSubtitleSettings.languages(in: settings) == nil)
+        settings["subtitlesAutoSelect"] = nil
+        #expect(CoreSubtitleSettings.languages(in: settings) == PreferredLanguages(primary: english, fallback: nil))
+    }
+
+    @Test func languagesWriteBothKeysAndAutoSelect() {
+        var settings = Self.coreDefaults
+        CoreSubtitleSettings.write(PreferredLanguages(primary: polish, fallback: english), into: &settings)
         #expect(settings["subtitlesLanguage"] == .string("pol"))
         #expect(settings["secondarySubtitlesLanguage"] == .string("eng"))
-        #expect(CoreSubtitleSettings.languages(in: settings) == .preferred(polish, fallback: english))
-        CoreSubtitleSettings.write(.off, into: &settings)
+        #expect(settings["subtitlesAutoSelect"] == .bool(true))
+        #expect(CoreSubtitleSettings.languages(in: settings) == PreferredLanguages(primary: polish, fallback: english))
+        CoreSubtitleSettings.write(nil, into: &settings)
         #expect(settings["subtitlesLanguage"] == .null)
         #expect(settings["secondarySubtitlesLanguage"] == .null)
+        #expect(settings["subtitlesAutoSelect"] == .bool(false))
+    }
+
+    @Test func languagesKeptWhileAutoSelectIsOffSurviveAnUnchangedWrite() {
+        var settings = Self.coreDefaults
+        settings["subtitlesAutoSelect"] = .bool(false)
+        CoreSubtitleSettings.write(nil, into: &settings)
+        #expect(settings["subtitlesLanguage"] == .string("eng"))
+        #expect(settings["subtitlesAutoSelect"] == .bool(false))
     }
 }

@@ -12,9 +12,10 @@ enum PreferencesFeature: Feature {
 
     enum Event: Sendable {
         case playbackChanged(PlaybackPreferences)
-        case setAudioLanguage(Language?)
-        case setSubtitleLanguages(SubtitleLanguages)
+        case setAudioLanguages(PreferredLanguages?)
+        case setSubtitleLanguages(PreferredLanguages?)
         case setSubtitleStyle(SubtitleStyle)
+        case setSeekStep(SeekStep)
         case updateFailed(PreferencesError)
     }
 
@@ -30,12 +31,14 @@ enum PreferencesFeature: Feature {
             state.playback = preferences
             state.failure = nil
             return []
-        case .setAudioLanguage(let language):
-            return change(state) { $0.languages.audio = language }
+        case .setAudioLanguages(let languages):
+            return change(state) { $0.languages.audio = languages }
         case .setSubtitleLanguages(let languages):
             return change(state) { $0.languages.subtitles = languages }
         case .setSubtitleStyle(let style):
             return change(state) { $0.subtitleStyle = style }
+        case .setSeekStep(let step):
+            return change(state) { $0.seekStep = step }
         case .updateFailed(let error):
             state.failure = error
             return []

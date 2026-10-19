@@ -127,6 +127,7 @@ targets:
       - path: app/Shared/Adapters/HTTP
       - path: app/Shared/Adapters/SkipDB
       - path: app/Shared/Adapters/Core/CoreSubtitleSettings.swift
+      - path: app/Shared/Adapters/Core/CorePlaybackSettings.swift
       - path: app/Tests/Fixtures.swift
       - path: app/AdapterTests
     buildToolPlugins:

@@ -14,7 +14,7 @@ private final class FakeEngine: PlaybackEngine {
     }
 
     func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) {
-        commands.append("load \(source.url.lastPathComponent) from \(start) \(languages.subtitles.primary?.code ?? "-")")
+        commands.append("load \(source.url.lastPathComponent) from \(start) \(languages.subtitles?.primary.code ?? "-")")
     }
     func setPaused(_ paused: Bool) { commands.append("paused \(paused)") }
     func seek(by offset: Duration) { commands.append("seek \(offset)") }
@@ -61,6 +61,7 @@ struct FeatureStoreTests {
             state.session.map { $0.position == .seconds(2) && !$0.addonSubtitles.isEmpty ? .done($0) : .pending } ?? .pending
         }
         #expect(session.phase == .playing)
+        #expect(session.seekStep == .thirty)
         #expect(session.addonSubtitles == [OneSubtitleSource.source])
         #expect(engine.commands == ["load movie.mkv from 30.0 seconds pol"])
         var reports = tracker.reports.stream.makeAsyncIterator()
@@ -111,8 +112,8 @@ private struct NoSegments: SkipSegmentService {
 
 private struct FixedPreferences: PreferencesService {
     func playback() -> AsyncStream<PlaybackPreferences> {
-        let languages = TrackLanguages(audio: nil, subtitles: .preferred(Language("pol").require(), fallback: nil))
-        return AsyncStream { $0.yield(PlaybackPreferences(languages: languages, subtitleStyle: .defaults)) }
+        let languages = TrackLanguages(audio: nil, subtitles: PreferredLanguages(primary: Language("pol").require(), fallback: nil))
+        return AsyncStream { $0.yield(PlaybackPreferences(languages: languages, subtitleStyle: .defaults, seekStep: .thirty)) }
     }
 
     func update(_ preferences: PlaybackPreferences) throws(PreferencesError) {}

@@ -121,8 +121,9 @@ struct PlayerFeatureTests {
 struct PlayerTimelineTests {
     private let start = ContinuousClock.now
 
-    private func playing(at position: Duration = .seconds(50)) -> PlayerFeature.State {
+    private func playing(at position: Duration = .seconds(50), seekStep: SeekStep = .ten) -> PlayerFeature.State {
         var session = PlayerFeature.Session(candidate: Fixture.candidate())
+        session.seekStep = seekStep
         session.phase = .playing
         session.position = position
         session.duration = .seconds(100)
@@ -143,6 +144,18 @@ struct PlayerTimelineTests {
         var state = playing()
         let jumps = [0, 0.5, 1, 1.5, 2, 2.5, 3].map { step(.forward, after: $0, in: &state) }
         #expect(jumps == [10, 20, 30, 40, 50, 60, 60].map { [.seek(by: .seconds($0))] })
+    }
+
+    @Test func aStreakGrowsByTheSeekStep() {
+        var state = playing(seekStep: .thirty)
+        let jumps = [0, 0.5, 1].map { step(.forward, after: $0, in: &state) }
+        #expect(jumps == [30, 60, 60].map { [.seek(by: .seconds($0))] })
+    }
+
+    @Test func aJumpSkipsOneSeekStep() {
+        var state = playing(seekStep: .fifteen)
+        #expect(PlayerFeature.reduce(&state, .jump(.backward)) == [.seek(by: .seconds(-15))])
+        #expect(PlayerFeature.reduce(&state, .jump(.forward)) == [.seek(by: .seconds(15))])
     }
 
     @Test func aStreakEndsAfterASecondOrOnATurn() {
@@ -203,7 +216,7 @@ struct PlayerTimelineTests {
 
     @Test func aSeekDuringAScanEndsIt() {
         var state = scanning(.forward)
-        #expect(PlayerFeature.reduce(&state, .seek(by: .seconds(10))) == [.setPaused(false), .seek(by: .seconds(10))])
+        #expect(PlayerFeature.reduce(&state, .jump(.forward)) == [.setPaused(false), .seek(by: .seconds(10))])
         #expect(state.session?.scan == nil)
     }
 
@@ -273,6 +286,18 @@ struct PlayerControlsTests {
         let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
         _ = PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(index: 1), [source]))
         #expect(state.session?.addonSubtitles == [])
+    }
+
+    @Test func theSeekStepReadForThisCandidateApplies() {
+        var state = playing()
+        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(), .thirty)).isEmpty)
+        #expect(state.session?.seekStep == .thirty)
+    }
+
+    @Test func aSeekStepReadForAnotherCandidateIsDropped() {
+        var state = playing()
+        #expect(PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(index: 1), .thirty)).isEmpty)
+        #expect(state.session?.seekStep == .ten)
     }
 
     @Test func speedChangesOnlyWhenDifferent() {
