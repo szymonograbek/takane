@@ -50,7 +50,8 @@ if [[ "$platform" == macos ]]; then
     logs="$HOME/Library/Logs/$bundle_id"
     rm -f "$logs/smoke-result.json" "$logs/smoke-frame.png"
 
-    # A fresh core profile per run, so results never depend on state left by earlier runs.
+    # A fresh core profile per run, so results never depend on state left by earlier runs. Saved
+    # window state is ignored too: restored from a build with other scenes, it opens no window.
     storage="$(mktemp -d -t stremio-smoke)"
     trap 'rm -rf "$storage"' EXIT
 
@@ -63,7 +64,7 @@ if [[ "$platform" == macos ]]; then
     STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
     EMPTY_OFFICIAL_ADDONS="$no_addons" \
     STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
-        "$app/Contents/MacOS/StremioTV" >/dev/null 2>&1 || status=$?
+        "$app/Contents/MacOS/StremioTV" -ApplePersistenceIgnoreState YES >/dev/null 2>&1 || status=$?
     echo "exit code: $status"
     report "$logs"
     exit "$status"
