@@ -39,6 +39,20 @@ struct BrowsingFeatureTests {
         #expect(state == .loaded(watched))
     }
 
+    @Test func libraryMembershipIsSetOnlyOnceTheTitleLoadedAndArrivesAsAChange() {
+        let show = Fixture.preview("tt0944947", type: .series)
+        let loaded = Fixture.details(Fixture.preview("tt0944947", type: .series, background: URL(filePath: "/wide.jpg")))
+        var state = DetailsFeature.State.loading(show)
+        #expect(DetailsFeature.reduce(&state, .setInLibrary(true)).isEmpty)
+        _ = DetailsFeature.reduce(&state, .loaded(show.media, .success(loaded)))
+
+        #expect(DetailsFeature.reduce(&state, .setInLibrary(true)) == [.setInLibrary(loaded.preview, true)])
+        let added = Fixture.details(loaded.preview, isInLibrary: true)
+        _ = DetailsFeature.reduce(&state, .changed(added))
+        #expect(state == .loaded(added))
+        #expect(DetailsFeature.reduce(&state, .setInLibrary(false)) == [.setInLibrary(loaded.preview, false)])
+    }
+
     @Test func seasonsListSpecialsLastAndPlayStartsAtTheFirstEpisode() {
         let videos = ["tt1:0:1", "tt1:2:1", "tt1:1:2", "tt1:1:1"].map { id in
             let playable = PlayableID(id).require()
