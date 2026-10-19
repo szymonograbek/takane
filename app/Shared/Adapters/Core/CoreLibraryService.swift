@@ -1,6 +1,7 @@
 import Foundation
 
-/// Continue watching as core's library holds it.
+/// Core's library: continue watching, the `library` model's titles and the `calendar` model's
+/// episodes. Core holds one library filter, so a newer `library(_:)` call finishes the older stream.
 struct CoreLibraryService: LibraryService {
     let runtime: CoreRuntime
 
@@ -13,6 +14,35 @@ struct CoreLibraryService: LibraryService {
     func removeFromContinueWatching(_ media: MediaID) {
         runtime.dispatchLogged(.ctx(.rewindLibraryItem(id: media.rawValue)))
         runtime.dispatchLogged(.ctx(.dismissNotificationItem(id: media.rawValue)))
+    }
+
+    func library(_ filter: LibraryFilter) -> AsyncStream<LibraryContents> {
+        let request = LibraryRequest(filter)
+        return runtime.load(.libraryWithFilters(request), into: .library) { (state: LibraryState) in
+            guard state.selected?.request == request else { return nil }
+            return LibraryContents(
+                filter: filter,
+                types: state.selectable.types.compactMap { $0.type.flatMap(ContentType.init) },
+                titles: state.catalog.compactMap(Self.preview),
+                canLoadMore: state.selectable.nextPage != nil
+            )
+        }
+    }
+
+    func loadMoreLibrary() {
+        runtime.dispatchLogged(.library(.loadNextPage), to: .library)
+    }
+
+    func setInLibrary(_ title: MetaPreview, _ isInLibrary: Bool) {
+        runtime.dispatchLogged(.ctx(isInLibrary ? .addToLibrary(title) : .removeFromLibrary(id: title.media.rawValue)))
+    }
+
+    func upcomingEpisodes() -> AsyncStream<Remote<[UpcomingEpisode], CatalogError>> {
+        // Dispatch is synchronous, so the load below sees the calendar unloaded, not the earlier answer.
+        runtime.dispatchLogged(.unload, to: .calendar)
+        return runtime.load(.calendar, into: .calendar, pending: .loading) { (state: CalendarState) in
+            state.upcomingEpisodes(from: Calendar.current.startOfDay(for: .now))
+        }
     }
 
     func checkForNewEpisodes() {
@@ -53,6 +83,15 @@ struct CoreLibraryService: LibraryService {
         } catch {
             throw .unavailable(reason: "\(error)")
         }
+    }
+
+    private static func preview(_ item: LibraryItem) -> MetaPreview? {
+        guard let media = MediaID(item.id), let type = ContentType(item.type) else { return nil }
+        let poster = item.poster.flatMap(URL.init(string:))
+        return MetaPreview(
+            media: media, type: type, name: item.name, poster: poster, posterShape: PosterShape(core: item.posterShape),
+            background: poster.flatMap(background), logo: nil, releaseInfo: nil, description: nil
+        )
     }
 
     private static func item(_ entry: ContinueWatchingState.Item) -> ContinueWatchingItem? {

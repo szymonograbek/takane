@@ -35,3 +35,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Playback](./playback.md) covers the player: controls, speed, subtitles, audio, seek, timeline scrubbing and stop.
 - [Continue watching](./continue-watching.md) covers the Home row and resuming from the saved position.
 - [Playback settings](./playback-settings.md) covers preferred subtitle and audio languages.
+- [Library and calendar](./library-calendar.md) covers Add to Library on Details, the Library tab and the Calendar tab.

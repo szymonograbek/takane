@@ -60,6 +60,36 @@ struct PosterCard: View {
     }
 }
 
+/// Titles in rows of posters between the screen's margins, scrolling down. `card` draws each title,
+/// usually as a `PosterCard`.
+struct PosterGrid<Card: View>: View {
+    @Environment(\.textLayout) private var textLayout
+    let titles: [MetaPreview]
+    @ViewBuilder let card: (MetaPreview) -> Card
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.flexible(), spacing: Metrics.shelfSpacing, alignment: .top),
+                    count: Lockup.poster.columns(textLayout)
+                ),
+                alignment: .leading, spacing: Metrics.sectionSpacing
+            ) {
+                ForEach(titles, content: card)
+            }
+            .padding(.vertical, Metrics.screenPadding)
+            #if os(tvOS)
+            .focusSection()
+            #endif
+        }
+        // As safe area rather than padding, so each poster's `lockupFrame` divides only the width between the margins.
+        .safeAreaPadding(.horizontal, Metrics.screenPadding)
+        .ignoresSafeArea(edges: .horizontal)
+        .scrollClipDisabled()
+    }
+}
+
 /// Blank posters holding a shelf's place while its catalog loads.
 struct PosterPlaceholders: View {
     var body: some View {

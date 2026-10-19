@@ -1,4 +1,5 @@
-/// One title's page: its metadata and videos, loaded from the add-ons, and the watched marks on them.
+/// One title's page: its metadata and videos, loaded from the add-ons, the watched marks on them and
+/// whether the title is in the library.
 enum DetailsFeature: Feature {
     struct Dependencies: Sendable {
         let catalog: any CatalogService
@@ -18,12 +19,14 @@ enum DetailsFeature: Feature {
         case changed(TitleDetails)
         case retry
         case setWatched(WatchedTarget, Bool)
+        case setInLibrary(Bool)
     }
 
     enum Effect: Equatable, Sendable {
         /// Start it when the store is created. Once loaded, it follows the details' changes.
         case load(MetaPreview)
         case setWatched(WatchedTarget, Bool)
+        case setInLibrary(MetaPreview, Bool)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -42,7 +45,10 @@ enum DetailsFeature: Feature {
             return [.load(preview)]
         case (.loaded(let details), .setWatched(let target, let isWatched)) where target.media == details.preview.media:
             return [.setWatched(target, isWatched)]
-        case (_, .loaded), (_, .changed), (.loading, .retry), (.loaded, .retry), (_, .setWatched):
+        case (.loaded(let details), .setInLibrary(let isInLibrary)):
+            return [.setInLibrary(details.preview, isInLibrary)]
+        case (_, .loaded), (_, .changed), (.loading, .retry), (.loaded, .retry), (_, .setWatched),
+             (.loading, .setInLibrary), (.failed, .setInLibrary):
             return []
         }
     }
@@ -67,6 +73,8 @@ enum DetailsFeature: Feature {
             } catch {
                 Log.features.error("marking \(target) as watched: \(isWatched) failed: \(error)")
             }
+        case .setInLibrary(let title, let isInLibrary):
+            dependencies.library.setInLibrary(title, isInLibrary)
         }
     }
 }

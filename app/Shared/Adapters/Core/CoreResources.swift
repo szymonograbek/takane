@@ -50,6 +50,32 @@ struct CatalogsSelection: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey { case type, extra }
 }
 
+/// core's `LibraryRequest`, without the page: a load asks for the first, `LoadNextPage` for more.
+struct LibraryRequest: Codable, Equatable, Sendable {
+    /// Every type when nil.
+    var type: String?
+    /// core's `Sort`, such as `lastwatched`.
+    var sort: String
+
+    init(_ filter: LibraryFilter) {
+        type = filter.type?.rawValue
+        sort = switch filter.sort {
+        case .recentlyWatched: "lastwatched"
+        case .name: "name"
+        case .unwatchedFirst: "notwatched"
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        // core expects an explicit null for every type.
+        try container.encode(type, forKey: .type)
+        try container.encode(sort, forKey: .sort)
+    }
+
+    private enum CodingKeys: String, CodingKey { case type, sort }
+}
+
 struct ResourceRequest: Codable, Hashable, Sendable {
     var base: URL
     var path: ResourcePath

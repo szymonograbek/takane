@@ -1,0 +1,136 @@
+import SwiftUI
+
+/// The titles the user added to their library, as a grid of posters of one type or all, in the
+/// order they pick. A long press on a poster removes it.
+struct LibraryScreen: View {
+    @Environment(AppContext.self) private var app
+    @State private var store: FeatureStore<LibraryFeature>?
+
+    var body: some View {
+        ZStack {
+            Palette.canvas.ignoresSafeArea()
+            if let store {
+                LibraryContent(store: store)
+            }
+        }
+        .navigationTitle("Library")
+        #if os(tvOS)
+        .toolbar(.hidden, for: .navigationBar)
+        #endif
+        .onAppear {
+            guard store == nil else { return }
+            let filter = LibraryFeature.defaultFilter
+            store = FeatureStore(
+                .loading(filter), dependencies: LibraryFeature.Dependencies(library: app.services.library),
+                start: [.observe(filter)]
+            )
+        }
+    }
+}
+
+private struct LibraryContent: View {
+    let store: FeatureStore<LibraryFeature>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // In every state, so the screen always has something to focus.
+            LibraryFilters(filter: store.state.filter, types: types) { store.send(.select($0)) }
+            Group {
+                switch store.state {
+                case .loading:
+                    ProgressView()
+                case .loaded(let contents) where contents.titles.isEmpty:
+                    if let type = contents.filter.type {
+                        ContentUnavailableView {
+                            Label("No \(type.pluralName) in Your Library", systemImage: "books.vertical")
+                        } actions: {
+                            Button("Show All") { store.send(.select(LibraryFilter(type: nil, sort: contents.filter.sort))) }
+                        }
+                    } else {
+                        ContentUnavailableView(
+                            "Your Library Is Empty", systemImage: "books.vertical",
+                            description: Text("Add movies and series from their page with Add to Library.")
+                        )
+                    }
+                case .loaded(let contents):
+                    PosterGrid(titles: contents.titles) { preview in
+                        PosterCard(preview: preview)
+                            .contextMenu {
+                                Button("Remove from Library", systemImage: "minus.circle", role: .destructive) {
+                                    store.send(.remove(preview.media))
+                                }
+                            }
+                            .onAppear {
+                                if preview == contents.titles.last { store.send(.loadMore) }
+                            }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // The grid and the filters draw their own margins.
+        .ignoresSafeArea(edges: .horizontal)
+        // Without it the screen's identifier would replace its controls' own.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("library.screen")
+    }
+
+    private var types: [ContentType] {
+        if case .loaded(let contents) = store.state { contents.types } else { [] }
+    }
+}
+
+/// The type and sort menus above the grid.
+private struct LibraryFilters: View {
+    let filter: LibraryFilter
+    /// The types the library holds.
+    let types: [ContentType]
+    let select: (LibraryFilter) -> Void
+
+    var body: some View {
+        HStack(spacing: 24) {
+            Menu {
+                Picker("Type", selection: Binding(get: { filter.type }, set: { select(LibraryFilter(type: $0, sort: filter.sort)) })) {
+                    Text("All Types").tag(ContentType?.none)
+                    ForEach(choices, id: \.self) { type in
+                        Text(type.pluralName).tag(Optional(type))
+                    }
+                }
+            } label: {
+                Label(filter.type?.pluralName ?? "All Types", systemImage: "line.3.horizontal.decrease")
+            }
+            .accessibilityIdentifier("library.type")
+            Menu {
+                Picker("Sort", selection: Binding(get: { filter.sort }, set: { select(LibraryFilter(type: filter.type, sort: $0)) })) {
+                    ForEach(LibrarySort.allCases, id: \.self) { sort in
+                        Text(sort.name).tag(sort)
+                    }
+                }
+            } label: {
+                Label(filter.sort.name, systemImage: "arrow.up.arrow.down")
+            }
+            .accessibilityIdentifier("library.sort")
+        }
+        .padding(.horizontal, Metrics.screenPadding)
+        #if os(tvOS)
+        .focusSection()
+        #endif
+    }
+
+    /// The library's types, and the chosen one after its last title went.
+    private var choices: [ContentType] {
+        guard let type = filter.type, !types.contains(type) else { return types }
+        return types + [type]
+    }
+}
+
+extension LibrarySort {
+    var name: String {
+        switch self {
+        case .recentlyWatched: "Recently Watched"
+        case .name: "Name"
+        case .unwatchedFirst: "Unwatched First"
+        }
+    }
+}

@@ -21,7 +21,7 @@ struct BrowsingFeatureTests {
     @Test func watchedMarksAreSetOnlyOnTheLoadedTitleAndTheirResultArrivesAsAChange() {
         let show = Fixture.preview("tt0944947", type: .series)
         let episode = PlayableID("tt0944947:1:1").require()
-        let unwatched = TitleDetails(preview: show, genres: [], runtime: nil, imdbRating: nil, videos: [], isWatched: false)
+        let unwatched = Fixture.details(show)
         var state = DetailsFeature.State.loading(show)
         #expect(DetailsFeature.reduce(&state, .setWatched(.video(episode), true)).isEmpty)
         _ = DetailsFeature.reduce(&state, .loaded(show.media, .success(unwatched)))
@@ -31,12 +31,26 @@ struct BrowsingFeatureTests {
         #expect(DetailsFeature.reduce(&state, .setWatched(.title(MediaID("tt0111161").require()), true)).isEmpty)
         #expect(state == .loaded(unwatched))
 
-        let otherTitle = TitleDetails(preview: Fixture.preview("tt0111161"), genres: [], runtime: nil, imdbRating: nil, videos: [], isWatched: true)
+        let otherTitle = Fixture.details(Fixture.preview("tt0111161"), isWatched: true)
         _ = DetailsFeature.reduce(&state, .changed(otherTitle))
         #expect(state == .loaded(unwatched))
-        let watched = TitleDetails(preview: show, genres: [], runtime: nil, imdbRating: nil, videos: [], isWatched: true)
+        let watched = Fixture.details(show, isWatched: true)
         _ = DetailsFeature.reduce(&state, .changed(watched))
         #expect(state == .loaded(watched))
+    }
+
+    @Test func libraryMembershipIsSetOnlyOnceTheTitleLoadedAndArrivesAsAChange() {
+        let show = Fixture.preview("tt0944947", type: .series)
+        let loaded = Fixture.details(Fixture.preview("tt0944947", type: .series, background: URL(filePath: "/wide.jpg")))
+        var state = DetailsFeature.State.loading(show)
+        #expect(DetailsFeature.reduce(&state, .setInLibrary(true)).isEmpty)
+        _ = DetailsFeature.reduce(&state, .loaded(show.media, .success(loaded)))
+
+        #expect(DetailsFeature.reduce(&state, .setInLibrary(true)) == [.setInLibrary(loaded.preview, true)])
+        let added = Fixture.details(loaded.preview, isInLibrary: true)
+        _ = DetailsFeature.reduce(&state, .changed(added))
+        #expect(state == .loaded(added))
+        #expect(DetailsFeature.reduce(&state, .setInLibrary(false)) == [.setInLibrary(loaded.preview, false)])
     }
 
     @Test func seasonsListSpecialsLastAndPlayStartsAtTheFirstEpisode() {
@@ -45,7 +59,7 @@ struct BrowsingFeatureTests {
             guard case .episode(_, let season, let episode) = playable else { fatalError("fixture is an episode") }
             return Video(playable: playable, name: id, season: season, episode: episode, released: nil, thumbnail: nil, overview: nil, isWatched: false)
         }
-        let details = TitleDetails(preview: Fixture.preview("tt1", type: .series), genres: [], runtime: nil, imdbRating: nil, videos: videos, isWatched: false)
+        let details = Fixture.details(Fixture.preview("tt1", type: .series), videos: videos)
         #expect(details.seasons == [1, 2, 0])
         #expect(details.episodes(in: 1).map(\.playable.rawValue) == ["tt1:1:1", "tt1:1:2"])
         #expect(details.firstPlayable == PlayableID("tt1:1:1"))

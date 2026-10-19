@@ -131,8 +131,10 @@ targets:
       - path: app/Shared/Adapters/Core/CoreStreamResults.swift
       - path: app/Shared/Adapters/Core/CoreWire.swift
       - path: app/Shared/Adapters/Core/CoreWirePlayer.swift
+      - path: app/Shared/Adapters/Core/CoreWireLibrary.swift
       - path: app/Shared/Adapters/Core/CoreAction.swift
       - path: app/Shared/Adapters/Core/CoreResources.swift
+      - path: app/Shared/Adapters/Core/CoreUpcomingEpisodes.swift
       - path: app/Tests/Fixtures.swift
       - path: app/AdapterTests
     buildToolPlugins:

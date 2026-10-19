@@ -110,8 +110,12 @@ private struct DetailsContent: View {
                     DescriptionButton(title: preview.name, text: description)
                         .accessibilityIdentifier("details.description")
                 }
-                PlayButtons(preview: preview, details: details, focus: $focus) { store.send(.setWatched(.title(preview.media), $0)) }
-                    .padding(.top, 8)
+                PlayButtons(
+                    preview: preview, details: details, focus: $focus,
+                    setWatched: { store.send(.setWatched(.title(preview.media), $0)) },
+                    setInLibrary: { store.send(.setInLibrary($0)) }
+                )
+                .padding(.top, 8)
             }
             .padding(.horizontal, Metrics.screenPadding)
             .padding(.bottom, 30)
@@ -130,14 +134,15 @@ private struct DetailsContent: View {
     }
 }
 
-/// Resume where the viewer stopped, or Play from the start. For a movie, a long press on either
-/// marks it watched or unwatched.
+/// Resume where the viewer stopped, or Play from the start, then adding the title to the library or
+/// taking it out. For a movie, a long press on Resume or Play marks it watched or unwatched.
 private struct PlayButtons: View {
     @Environment(AppContext.self) private var app
     let preview: MetaPreview
     let details: TitleDetails?
     let focus: FocusState<DetailsFocus?>.Binding
     let setWatched: (Bool) -> Void
+    let setInLibrary: (Bool) -> Void
 
     var body: some View {
         HStack(spacing: 24) {
@@ -160,6 +165,12 @@ private struct PlayButtons: View {
                 .accessibilityIdentifier("details.play")
                 // With Resume on screen, starting over is the secondary action.
                 if progress == nil { play.primaryActionStyle() } else { play }
+            }
+            if let details {
+                Button { setInLibrary(!details.isInLibrary) } label: {
+                    Label(details.isInLibrary ? "In Library" : "Add to Library", systemImage: details.isInLibrary ? "checkmark" : "plus")
+                }
+                .accessibilityIdentifier("details.library")
             }
         }
     }

@@ -25,7 +25,6 @@ struct GenreScreen: View {
 }
 
 private struct GenreContent: View {
-    @Environment(\.textLayout) private var textLayout
     let store: FeatureStore<GenreFeature>
     /// Titles arrive after the screen opens; focus then moves to the first one.
     @FocusState private var focused: MediaID?
@@ -44,27 +43,9 @@ private struct GenreContent: View {
                     Button("Try Again") { store.send(.retry) }
                 }
             case .loaded(_, let titles):
-                ScrollView {
-                    LazyVGrid(
-                        columns: Array(
-                            repeating: GridItem(.flexible(), spacing: Metrics.shelfSpacing, alignment: .top),
-                            count: Lockup.poster.columns(textLayout)
-                        ),
-                        alignment: .leading, spacing: Metrics.sectionSpacing
-                    ) {
-                        ForEach(titles) { preview in
-                            PosterCard(preview: preview).focused($focused, equals: preview.media)
-                        }
-                    }
-                    .padding(.vertical, Metrics.screenPadding)
-                    #if os(tvOS)
-                    .focusSection()
-                    #endif
+                PosterGrid(titles: titles) { preview in
+                    PosterCard(preview: preview).focused($focused, equals: preview.media)
                 }
-                // As safe area rather than padding, so each poster's `lockupFrame` divides only the width between the margins.
-                .safeAreaPadding(.horizontal, Metrics.screenPadding)
-                .ignoresSafeArea(edges: .horizontal)
-                .scrollClipDisabled()
             case .failed(let filter, let error):
                 ContentUnavailableView {
                     Label("Couldn't Load \(filter.title)", systemImage: "exclamationmark.triangle")
