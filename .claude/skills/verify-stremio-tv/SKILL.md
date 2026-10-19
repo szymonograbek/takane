@@ -69,7 +69,10 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
 | `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls |
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
-| `settings.account`, `settings.addons`, `settings.playback`, `settings.about` | Settings rows |
+| `settings.account`, `settings.addons`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows |
+| `subtitles.language`, `subtitles.secondLanguage` | Settings › Subtitles language rows; Second Language shows only when a language is set |
+| `subtitles.size`, `subtitles.font`, `subtitles.bold`, `subtitles.fileStyling`, `subtitles.textColor`, `subtitles.outlineColor`, `subtitles.backgroundColor`, `subtitles.opacity`, `subtitles.position`, `subtitles.reset` | Settings › Subtitles style rows; each but the Bold and Subtitle File Styling toggles and Reset opens a list of choices |
+| `subtitles.preview` | the live preview on Settings › Subtitles and on each style list, where it shows the focused choice |
 | `addons.install`, `addons.manifestURL`, `addons.status`, `addons.row` | Settings › Add-ons |
 
 Feature recipes with exact steps: `features/README.md`.

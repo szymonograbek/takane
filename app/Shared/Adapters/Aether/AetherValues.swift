@@ -41,3 +41,35 @@ extension SubtitleCue {
         self = .image(image.cgImage, frame: frame)
     }
 }
+
+extension SubtitleText {
+    /// The runs of a text cue, placed where the cue asks.
+    init(runs: [SubtitleTextRun], placement: SubtitleTextPlacement?) {
+        self.init(runs: runs.map(SubtitleRun.init), placement: placement.flatMap(SubtitlePlacement.init))
+    }
+}
+
+extension SubtitleRun {
+    /// `run` without its size, which is in the script's own units.
+    init(_ run: SubtitleTextRun) {
+        self.init(
+            text: run.text,
+            isBold: run.isBold,
+            isItalic: run.isItalic,
+            isUnderlined: run.isUnderlined,
+            isStruckThrough: run.isStruckThrough,
+            color: run.color.map { SubtitleColor(red: $0.r, green: $0.g, blue: $0.b) },
+            fontName: run.fontName
+        )
+    }
+}
+
+extension SubtitlePlacement {
+    /// Nil when `placement` sets neither a known alignment nor a position. A position alone aligns
+    /// the text's bottom center to it, as ASS does by default.
+    init?(_ placement: SubtitleTextPlacement) {
+        let alignment = placement.alignment.flatMap(SubtitleAlignment.init(numpad:))
+        guard alignment != nil || placement.position != nil else { return nil }
+        self.init(alignment: alignment ?? .bottomCenter, position: placement.position)
+    }
+}

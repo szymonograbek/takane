@@ -1,13 +1,18 @@
-/// Playback preferences as core's profile settings hold them (`audioLanguage`, `subtitlesLanguage`).
+/// Playback preferences as core's profile settings hold them: `audioLanguage`, and the subtitle
+/// keys `CoreSubtitleSettings` reads.
 struct CorePreferencesService: PreferencesService {
     let runtime: CoreRuntime
 
     func playback() -> AsyncStream<PlaybackPreferences> {
         runtime.observe(.ctx, as: CtxState.self) { ctx in
-            PlaybackPreferences(languages: TrackLanguages(
-                audio: ctx.profile.settings.string("audioLanguage").flatMap(Language.init),
-                subtitles: ctx.profile.settings.string("subtitlesLanguage").flatMap(Language.init)
-            ))
+            guard case .object(let settings) = ctx.profile.settings else {
+                return PlaybackPreferences(languages: .streamDefaults, subtitleStyle: .defaults)
+            }
+            let audio: Language? = if case .string(let code)? = settings["audioLanguage"] { Language(code) } else { nil }
+            return PlaybackPreferences(
+                languages: TrackLanguages(audio: audio, subtitles: CoreSubtitleSettings.languages(in: settings)),
+                subtitleStyle: CoreSubtitleSettings.style(in: settings)
+            )
         }
     }
 
@@ -15,7 +20,8 @@ struct CorePreferencesService: PreferencesService {
         // core takes the whole settings object, so every other key goes back as it was.
         var settings = try currentSettings()
         settings["audioLanguage"] = preferences.languages.audio.map { .string($0.code) } ?? .null
-        settings["subtitlesLanguage"] = preferences.languages.subtitles.map { .string($0.code) } ?? .null
+        CoreSubtitleSettings.write(preferences.languages.subtitles, into: &settings)
+        CoreSubtitleSettings.write(preferences.subtitleStyle, into: &settings)
         do {
             try runtime.dispatch(.ctx(.updateSettings(.object(settings))))
         } catch {
@@ -32,12 +38,5 @@ struct CorePreferencesService: PreferencesService {
         }
         guard case .object(let settings) = profile.settings else { throw .rejected(reason: "settings are not an object") }
         return settings
-    }
-}
-
-private extension JSONValue {
-    func string(_ key: String) -> String? {
-        guard case .object(let fields) = self, case .string(let value)? = fields[key] else { return nil }
-        return value
     }
 }

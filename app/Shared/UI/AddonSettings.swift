@@ -81,27 +81,23 @@ private struct InstallAddonScreen: View {
     }
 }
 
-/// Languages to pick audio and subtitle tracks in.
+/// The language to pick audio tracks in.
 struct PlaybackSettings: View {
     @Environment(AppContext.self) private var app
 
     var body: some View {
-        let languages = app.preferences.state.playback?.languages ?? .streamDefaults
         SettingsPage(title: "Playback") {
             SettingsSymbol(name: "play.rectangle")
         } rows: {
             Section {
-                LanguagePicker(title: "Subtitles", selection: languages.subtitles, none: "Off") {
-                    app.preferences.send(.setLanguage(.subtitle, $0))
-                }
-                LanguagePicker(title: "Audio", selection: languages.audio, none: "Stream Default") {
-                    app.preferences.send(.setLanguage(.audio, $0))
+                LanguagePicker(title: "Audio", selection: app.preferences.state.playback?.languages.audio, none: "Stream Default") {
+                    app.preferences.send(.setAudioLanguage($0))
                 }
             } footer: {
                 if case .rejected(let reason)? = app.preferences.state.failure {
                     Text("Couldn't save the change (\(reason)).")
                 } else {
-                    Text("Streams start with tracks in these languages when they have them. You can switch during playback.")
+                    Text("Streams start with audio in this language when they have it. You can switch during playback.")
                 }
             }
         }
@@ -109,7 +105,7 @@ struct PlaybackSettings: View {
 }
 
 /// A row showing the chosen language that opens the full list.
-private struct LanguagePicker: View {
+struct LanguagePicker: View {
     let title: String
     let selection: Language?
     let none: String

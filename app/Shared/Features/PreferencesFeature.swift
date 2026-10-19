@@ -12,7 +12,9 @@ enum PreferencesFeature: Feature {
 
     enum Event: Sendable {
         case playbackChanged(PlaybackPreferences)
-        case setLanguage(TrackKind, Language?)
+        case setAudioLanguage(Language?)
+        case setSubtitleLanguages(SubtitleLanguages)
+        case setSubtitleStyle(SubtitleStyle)
         case updateFailed(PreferencesError)
     }
 
@@ -28,18 +30,23 @@ enum PreferencesFeature: Feature {
             state.playback = preferences
             state.failure = nil
             return []
-        case .setLanguage(let kind, let language):
-            guard var preferences = state.playback else { return [] }
-            switch kind {
-            case .audio: preferences.languages.audio = language
-            case .subtitle: preferences.languages.subtitles = language
-            }
-            guard preferences != state.playback else { return [] }
-            return [.update(preferences)]
+        case .setAudioLanguage(let language):
+            return change(state) { $0.languages.audio = language }
+        case .setSubtitleLanguages(let languages):
+            return change(state) { $0.languages.subtitles = languages }
+        case .setSubtitleStyle(let style):
+            return change(state) { $0.subtitleStyle = style }
         case .updateFailed(let error):
             state.failure = error
             return []
         }
+    }
+
+    /// Saves the edited preferences, unless they are not loaded yet or the edit changes nothing.
+    private static func change(_ state: State, _ edit: (inout PlaybackPreferences) -> Void) -> [Effect] {
+        guard var preferences = state.playback else { return [] }
+        edit(&preferences)
+        return preferences == state.playback ? [] : [.update(preferences)]
     }
 
     @MainActor

@@ -49,7 +49,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
         let options = LoadOptions(
             httpHeaders: source.headers,
             preferredAudioLanguages: languages.audio.map { [$0.code] } ?? [],
-            preferredSubtitleLanguages: languages.subtitles.map { [$0.code] } ?? []
+            preferredSubtitleLanguages: languages.subtitles.inPreferenceOrder.map(\.code)
         )
         Log.player.info("load \(url.absoluteString) from \(startPosition ?? 0)s headers=\(source.headers.keys.sorted())")
         loading = Task { [player] in
@@ -169,9 +169,12 @@ final class AetherPlaybackEngine: PlaybackEngine {
             .sink { [weak self] visible in
                 guard let self else { return }
                 let video = reported.video
-                let cues = visible.compactMap { cue -> SubtitleCue? in
-                    if case .image(let image) = cue.body { return SubtitleCue(image, on: video) }
-                    return cue.text.map(SubtitleCue.text)
+                let cues = visible.map { cue -> SubtitleCue in
+                    switch cue.body {
+                    case .image(let image): SubtitleCue(image, on: video)
+                    case .text(let plain): .text(SubtitleText(runs: [SubtitleTextRun(text: plain, color: nil)], placement: cue.placement))
+                    case .richText(let runs): .text(SubtitleText(runs: runs, placement: cue.placement))
+                    }
                 }
                 send(.subtitles(cues), on: \.subtitles)
             }

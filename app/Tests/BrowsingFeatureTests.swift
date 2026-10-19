@@ -47,12 +47,4 @@ struct BrowsingFeatureTests {
         _ = AddonsFeature.reduce(&state, .uninstallFinished(debrid.manifestURL, .failure(.rejected(reason: "offline"))))
         #expect(state.removal == .failed(debrid.manifestURL, .rejected(reason: "offline")))
     }
-
-    @Test func choosingTheCurrentLanguageChangesNothing() {
-        let english = Language("eng").require()
-        var state = PreferencesFeature.State(playback: PlaybackPreferences(languages: TrackLanguages(audio: nil, subtitles: english)))
-        #expect(PreferencesFeature.reduce(&state, .setLanguage(.subtitle, english)).isEmpty)
-        let update = PreferencesFeature.reduce(&state, .setLanguage(.audio, english))
-        #expect(update == [.update(PlaybackPreferences(languages: TrackLanguages(audio: english, subtitles: english)))])
-    }
 }

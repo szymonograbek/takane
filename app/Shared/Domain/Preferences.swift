@@ -15,6 +15,7 @@ struct Language: Hashable, Sendable, CustomStringConvertible {
 
 struct PlaybackPreferences: Hashable, Sendable {
     var languages: TrackLanguages
+    var subtitleStyle: SubtitleStyle
 }
 
 enum PreferencesError: Error, Equatable, Sendable {

@@ -21,7 +21,10 @@ struct PlayerScreen: View {
             Color.black
             app.services.videoSurface()
             if let session = state.session {
-                SubtitleOverlay(cues: session.subtitles, videoSize: session.videoSize)
+                SubtitleOverlay(
+                    cues: session.subtitles, videoSize: session.videoSize,
+                    style: app.preferences.state.playback?.subtitleStyle ?? .defaults
+                )
             }
             switch state {
             case .failed(_, let error):
