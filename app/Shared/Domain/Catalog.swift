@@ -72,6 +72,30 @@ enum Board: Equatable, Sendable {
     case rows([CatalogRow])
 }
 
+/// A genre a catalog can be filtered by, such as "Action", exactly as its add-on lists it.
+struct Genre: Hashable, Sendable, CustomStringConvertible {
+    let rawValue: String
+
+    init?(_ rawValue: String) {
+        guard !rawValue.isEmpty else { return nil }
+        self.rawValue = rawValue
+    }
+
+    var description: String { rawValue }
+}
+
+/// The genres one catalog can be filtered by, in its add-on's order.
+struct CatalogGenres: Equatable, Sendable {
+    let catalog: CatalogID
+    let genres: [Genre]
+}
+
+/// One catalog's titles in one of its genres.
+struct GenreFilter: Hashable, Sendable {
+    let catalog: CatalogID
+    let genre: Genre
+}
+
 /// A search query, trimmed and never empty.
 struct SearchText: Hashable, Sendable, CustomStringConvertible {
     let rawValue: String
@@ -83,6 +107,14 @@ struct SearchText: Hashable, Sendable, CustomStringConvertible {
     }
 
     var description: String { rawValue }
+
+    /// Where `typed` ends in this text, when this text starts with it and goes on, ignoring letter case.
+    func continuation(of typed: SearchText) -> String.Index? {
+        guard let match = rawValue.range(of: typed.rawValue, options: [.caseInsensitive, .anchored]),
+              match.upperBound < rawValue.endIndex
+        else { return nil }
+        return match.upperBound
+    }
 }
 
 enum SearchResults: Equatable, Sendable {
@@ -140,8 +172,22 @@ protocol CatalogService: Sendable {
     func loadMore(_ row: CatalogID)
 
     /// Results now, then after every change. Finishes when a newer `search(_:)` call replaces this
-    /// one: providers may serve one search at a time.
+    /// one: providers may serve one search at a time. Adds `text` to `recentSearches()`.
     func search(_ text: SearchText) -> AsyncStream<SearchResults>
+
+    /// The texts searched, most recent first, now and after every change.
+    func recentSearches() -> AsyncStream<[SearchText]>
+
+    /// Forgets every recent search; `recentSearches()` reports it.
+    func clearRecentSearches()
+
+    /// The catalogs that can be filtered by genre without requiring one, in add-on order, now and
+    /// after every add-on change.
+    func genres() -> AsyncStream<[CatalogGenres]>
+
+    /// The first page of the catalog's titles in the genre, now and after every change. Finishes when
+    /// a newer `titles(_:)` call replaces this one: providers may serve one at a time.
+    func titles(_ filter: GenreFilter) -> AsyncStream<Remote<[MetaPreview], CatalogError>>
 
     /// Waits for the first add-on that answers with metadata. Providers may share one selection with
     /// `StreamService`, so this can finish a running `streams(for:)` lookup.

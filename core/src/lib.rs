@@ -196,6 +196,7 @@ mod tests {
             r#"{"field":"board","action":{"action":"Load","args":{"model":"CatalogsWithExtra","args":{"type":null,"extra":[]}}}}"#,
             r#"{"field":"search","action":{"action":"Load","args":{"model":"CatalogsWithExtra","args":{"type":null,"extra":[["search","shawshank"]]}}}}"#,
             r#"{"field":"board","action":{"action":"CatalogsWithExtra","args":{"action":"LoadRange","args":{"start":0,"end":12}}}}"#,
+            r#"{"field":"discover","action":{"action":"Load","args":{"model":"CatalogWithFilters","args":{"request":{"base":"https://v3-cinemeta.strem.io/manifest.json","path":{"resource":"catalog","type":"movie","id":"top","extra":[["genre","Action"]]}}}}}}"#,
             r#"{"field":"board","action":{"action":"CatalogsWithExtra","args":{"action":"LoadNextPage","args":3}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"Authenticate","args":{"type":"Login","email":"a@b.c","password":"x","facebook":false}}}}"#,
             r#"{"field":"player","action":{"action":"Player","args":{"action":"TimeChanged","args":{"time":1000,"duration":60000,"device":"macos"}}}}"#,
@@ -220,6 +221,7 @@ mod tests {
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullUserFromAPI","args":{}}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullAddonsFromAPI"}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"SyncLibraryWithAPI"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"ClearSearchHistory"}}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);

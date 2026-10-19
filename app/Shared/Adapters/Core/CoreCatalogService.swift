@@ -1,7 +1,7 @@
 import Foundation
 
-/// Catalogs and metadata from the user's add-ons through core's `board`, `search` and
-/// `meta_details` models.
+/// Catalogs and metadata from the user's add-ons through core's `board`, `search`, `discover` and
+/// `meta_details` models, and recent searches from its search history.
 ///
 /// Core holds one selection per model. A new search replaces the previous one and finishes its
 /// stream. `details` shares `meta_details` with `CoreStreamService`: it replaces a running stream
@@ -10,7 +10,7 @@ struct CoreCatalogService: CatalogService {
     let runtime: CoreRuntime
 
     func board() -> AsyncStream<Board> {
-        load(.board, into: .board, pending: Board.loading) { state, addons in
+        loadCatalogs(.board, into: .board, pending: Board.loading) { state, addons in
             state.catalogs.isEmpty ? .noCatalogAddons : .rows(Self.rows(state, addons: addons, paging: true))
         }
     }
@@ -29,8 +29,43 @@ struct CoreCatalogService: CatalogService {
     }
 
     func search(_ text: SearchText) -> AsyncStream<SearchResults> {
-        load(.search(text), into: .search, pending: SearchResults.searching(text)) { state, addons in
+        loadCatalogs(.search(text), into: .search, pending: SearchResults.searching(text)) { state, addons in
             state.catalogs.isEmpty ? .noSearchAddons : .rows(text, Self.rows(state, addons: addons, paging: false))
+        }
+    }
+
+    func recentSearches() -> AsyncStream<[SearchText]> {
+        // Core records every search the `search` model loads.
+        runtime.observe(.ctx, as: CtxState.self) { $0.searchHistory.compactMap(SearchText.init) }
+    }
+
+    func clearRecentSearches() {
+        runtime.dispatchLogged(.ctx(.clearSearchHistory))
+    }
+
+    func genres() -> AsyncStream<[CatalogGenres]> {
+        runtime.observe(.ctx, as: CtxState.self) { state in
+            state.profile.addons.flatMap { addon in
+                addon.manifest.catalogs.compactMap { catalog -> CatalogGenres? in
+                    // A catalog that requires the extra lists other values under it, such as Cinemeta's years.
+                    guard let addonURL = ManifestURL(addon.transportUrl), let type = ContentType(catalog.type),
+                          let extra = catalog.extra.first(where: { $0.name == "genre" && !$0.isRequired })
+                    else { return nil }
+                    let genres = extra.options.compactMap(Genre.init)
+                    guard !genres.isEmpty else { return nil }
+                    return CatalogGenres(catalog: CatalogID(addon: addonURL, type: type, id: catalog.id), genres: genres)
+                }
+            }
+        }
+    }
+
+    func titles(_ filter: GenreFilter) -> AsyncStream<Remote<[MetaPreview], CatalogError>> {
+        let request = ResourceRequest(
+            base: filter.catalog.addon.url,
+            path: .catalog(type: filter.catalog.type.rawValue, id: filter.catalog.id, extra: [["genre", filter.genre.rawValue]])
+        )
+        return load(.catalogWithFilters(request), into: .discover, pending: .loading) { (state: CatalogWithFiltersState) in
+            state.selected?.request == request ? Self.items(state.catalog) : nil
         }
     }
 
@@ -74,44 +109,59 @@ struct CoreCatalogService: CatalogService {
         return values
     }
 
-    /// Loads `selection` into `field`, then yields `pending` until core holds it and `transform` of
-    /// every state after. Finishes when another selection replaces it.
-    private func load<Value: Sendable>(
+    /// Loads `selection` into the `CatalogsWithExtra` model `field`, as `load` does, and requests
+    /// every catalog core lists.
+    private func loadCatalogs<Value: Sendable>(
         _ selection: CatalogsSelection,
         into field: CoreField,
         pending: Value,
         _ transform: @escaping @Sendable (CatalogsState, [Addon]) -> Value
     ) -> AsyncStream<Value> {
+        let runtime = runtime
+        return load(.catalogsWithExtra(selection), into: field, pending: pending) { (state: CatalogsState) in
+            guard state.selected == selection else { return nil }
+            // Core lists catalogs without requesting them, on load and when add-ons change.
+            if state.catalogs.contains(where: { $0.first?.content == nil }) {
+                do {
+                    try runtime.dispatch(.catalogs(.loadRange(0..<state.catalogs.count)), to: field)
+                } catch {
+                    Log.core.error("requesting \(field.rawValue) catalogs rejected: \(error)")
+                }
+            }
+            return transform(state, Self.addons(runtime))
+        }
+    }
+
+    /// Loads `selection` into `field`, then yields `pending` until core holds it and `answer` of every
+    /// state after. `answer` is nil for a state of another selection; once core held this one, that
+    /// means another load replaced it, and the stream finishes.
+    private func load<State: Decodable & Sendable, Value: Sendable>(
+        _ selection: CoreAction.Load,
+        into field: CoreField,
+        pending: Value,
+        _ answer: @escaping @Sendable (State) -> Value?
+    ) -> AsyncStream<Value> {
         let (values, continuation) = AsyncStream.makeStream(of: Value.self, bufferingPolicy: .bufferingNewest(1))
         // Subscribe before dispatching so no change is missed.
-        let states = runtime.states(field, as: CatalogsState.self)
+        let states = runtime.states(field, as: State.self)
         do {
-            try runtime.dispatch(.load(.catalogsWithExtra(selection)), to: field)
+            try runtime.dispatch(.load(selection), to: field)
         } catch {
             Log.core.error("loading \(field.rawValue) rejected: \(error)")
             continuation.finish()
             return values
         }
-        let runtime = runtime
         let task = Task {
-            var isSelected = false
+            var wasSelected = false
             for await state in states {
-                guard state.selected == selection else {
+                guard let value = answer(state) else {
                     // Before our load lands the previous selection still shows; after, another load replaced ours.
-                    if isSelected { break }
+                    if wasSelected { break }
                     continuation.yield(pending)
                     continue
                 }
-                isSelected = true
-                // Core lists catalogs without requesting them, on load and when add-ons change.
-                if state.catalogs.contains(where: { $0.first?.content == nil }) {
-                    do {
-                        try runtime.dispatch(.catalogs(.loadRange(0..<state.catalogs.count)), to: field)
-                    } catch {
-                        Log.core.error("requesting \(field.rawValue) catalogs rejected: \(error)")
-                    }
-                }
-                continuation.yield(transform(state, Self.addons(runtime)))
+                wasSelected = true
+                continuation.yield(value)
             }
             continuation.finish()
         }
@@ -139,18 +189,22 @@ struct CoreCatalogService: CatalogService {
                   let addon = addons.first(where: { $0.transportUrl == first.request.base }),
                   let catalog = addon.manifest.catalogs.first(where: { $0.id == id.id && $0.type == id.type.rawValue })
             else { return nil }
-            let items: Remote<[MetaPreview], CatalogError> = switch first.content {
-            case .none, .loading: .loading
-            case .failed(let error) where error == emptyContent: .loaded([])
-            case .failed(let error): .failed(.addonFailed(reason: error.compactDescription))
-            case .ready: .loaded(previews(pages))
-            }
             // Core's own rule for `LoadNextPage`: the last page loaded and the catalog accepts `skip`.
             let canLoadMore = paging && pages.last?.content?.readyContent != nil && catalog.extraNames.contains("skip")
             return CatalogRow(
                 id: id, addonName: addon.manifest.name, name: catalog.name ?? addon.manifest.name,
-                items: items, canLoadMore: canLoadMore
+                items: items(pages), canLoadMore: canLoadMore
             )
+        }
+    }
+
+    /// The titles of a catalog's pages, as its first page stands.
+    private static func items(_ pages: [ResourceLoadable<[MetaItemPreview]>]) -> Remote<[MetaPreview], CatalogError> {
+        switch pages.first?.content {
+        case .none, .loading: .loading
+        case .failed(let error) where error == emptyContent: .loaded([])
+        case .failed(let error): .failed(.addonFailed(reason: error.compactDescription))
+        case .ready: .loaded(previews(pages))
         }
     }
 

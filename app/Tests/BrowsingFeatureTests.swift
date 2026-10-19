@@ -4,6 +4,10 @@ import Testing
 struct BrowsingFeatureTests {
     private let text = SearchText("twin peaks").require()
 
+    private func genre(_ name: String) -> Genre {
+        Genre(name).require()
+    }
+
     @Test func detailsKeepThePreviewUntilTheyLoad() {
         let preview = Fixture.preview("tt0098936", type: .series)
         var state = DetailsFeature.State.loading(preview)
@@ -48,15 +52,91 @@ struct BrowsingFeatureTests {
     }
 
     @Test func searchDropsResultsForAnOlderQuery() {
-        var state = SearchFeature.State.empty
+        var state = SearchFeature.State()
         #expect(SearchFeature.reduce(&state, .queryChanged(text)) == [.search(text)])
         _ = SearchFeature.reduce(&state, .resultsChanged(.rows(SearchText("twin").require(), [])))
-        #expect(state == .searching(text, results: nil))
+        #expect(state.query == .searching(text, results: nil))
         _ = SearchFeature.reduce(&state, .resultsChanged(.rows(text, [])))
-        #expect(state == .searching(text, results: .rows(text, [])))
+        #expect(state.query == .searching(text, results: .rows(text, [])))
         #expect(SearchFeature.reduce(&state, .queryChanged(text)).isEmpty)
         _ = SearchFeature.reduce(&state, .queryChanged(nil))
-        #expect(state == .empty)
+        #expect(state.query == .empty)
+    }
+
+    @Test func recentSearchesLeaveOutTheStepsOfTypingAnotherAndRepeats() {
+        var state = SearchFeature.State()
+        let history = ["breaking ba", "breaking bad", "Twin Peaks", "bre", "twin peaks", "dune"].map { SearchText($0).require() }
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged(history))
+        #expect(state.recentSearches?.map(\.rawValue) == ["breaking bad", "Twin Peaks", "dune"])
+    }
+
+    @Test func suggestionsAreAFewRecentSearchesThatContinueTheQuery() {
+        var state = SearchFeature.State()
+        let history = ["Breaking Bad", "The Bear", "Better Call Saul", "bones", "Bluey", "Blade Runner"].map { SearchText($0).require() }
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged(history))
+        #expect(state.suggestions.isEmpty)
+
+        _ = SearchFeature.reduce(&state, .queryChanged(SearchText("b")))
+        #expect(state.suggestions == [
+            SearchSuggestion(search: history[0], typed: "B", completion: "reaking Bad"),
+            SearchSuggestion(search: history[2], typed: "B", completion: "etter Call Saul"),
+            SearchSuggestion(search: history[3], typed: "b", completion: "ones"),
+            SearchSuggestion(search: history[4], typed: "B", completion: "luey"),
+        ])
+        _ = SearchFeature.reduce(&state, .queryChanged(SearchText("breaking bad")))
+        #expect(state.suggestions.isEmpty)
+    }
+
+    @Test func genresListOneCatalogPerTypeAndShowWithRecentSearchesBeforeTyping() {
+        let popularMovies = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .movie, id: "top"), genres: [genre("Action")])
+        let featuredMovies = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .movie, id: "imdbRating"), genres: [genre("Drama")])
+        let popularSeries = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .series, id: "top"), genres: [genre("Comedy")])
+        var state = SearchFeature.State()
+        #expect(state.browse == .waiting)
+
+        _ = SearchFeature.reduce(&state, .genresChanged([popularMovies, featuredMovies, popularSeries]))
+        #expect(state.genres == [popularMovies, popularSeries])
+        #expect(state.browse == .offers(recentSearches: [], genres: [popularMovies, popularSeries]))
+
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged([text]))
+        #expect(state.browse == .offers(recentSearches: [text], genres: [popularMovies, popularSeries]))
+
+        _ = SearchFeature.reduce(&state, .genresChanged([]))
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged([]))
+        #expect(state.browse == .nothing)
+    }
+
+    @Test func genreTitlesAnswerOnlyTheirFilterAndRetryWhenFailedOrEmpty() {
+        let catalog = CatalogID(addon: Fixture.manifest, type: .movie, id: "top")
+        let action = GenreFilter(catalog: catalog, genre: genre("Action"))
+        let drama = GenreFilter(catalog: catalog, genre: genre("Drama"))
+        let preview = Fixture.preview("tt0111161")
+        var state = GenreFeature.State.loading(action)
+
+        #expect(GenreFeature.reduce(&state, .retry).isEmpty)
+        _ = GenreFeature.reduce(&state, .titlesChanged(drama, .loaded([preview])))
+        #expect(state == .loading(action))
+        _ = GenreFeature.reduce(&state, .titlesChanged(action, .failed(.addonFailed(reason: "offline"))))
+        #expect(state == .failed(action, .addonFailed(reason: "offline")))
+        #expect(GenreFeature.reduce(&state, .retry) == [.load(action)])
+        #expect(state == .loading(action))
+
+        _ = GenreFeature.reduce(&state, .titlesChanged(action, .loaded([])))
+        #expect(GenreFeature.reduce(&state, .retry) == [.load(action)])
+        _ = GenreFeature.reduce(&state, .titlesChanged(action, .loaded([preview])))
+        #expect(state == .loaded(action, [preview]))
+        #expect(GenreFeature.reduce(&state, .retry).isEmpty)
+    }
+
+    @Test func recentSearchesAreClearedOnlyBeforeAnythingIsTyped() {
+        var state = SearchFeature.State()
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged([]))
+        #expect(SearchFeature.reduce(&state, .clearRecentSearches).isEmpty)
+        _ = SearchFeature.reduce(&state, .recentSearchesChanged([text]))
+        #expect(SearchFeature.reduce(&state, .clearRecentSearches) == [.clearRecentSearches])
+        _ = SearchFeature.reduce(&state, .queryChanged(text))
+        #expect(SearchFeature.reduce(&state, .clearRecentSearches).isEmpty)
+        #expect(state.recentSearches == [text])
     }
 
     @Test func onlyRemovableAddonsAreRemoved() {

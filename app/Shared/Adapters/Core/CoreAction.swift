@@ -7,6 +7,7 @@ enum CoreField: String, Codable, Sendable {
     case addonDetails = "addon_details"
     case board
     case search
+    case discover
     case metaDetails = "meta_details"
     case player
     case link
@@ -27,6 +28,8 @@ enum CoreAction: Sendable {
     enum Load: Sendable {
         case addonDetails(transportURL: URL)
         case catalogsWithExtra(CatalogsSelection)
+        /// One catalog, such as a catalog filtered by a genre.
+        case catalogWithFilters(ResourceRequest)
         case metaDetails(metaPath: ResourcePath, streamPath: ResourcePath?)
         /// Core's player selection, as `CoreStreamService` built it into a candidate's tracking token.
         case player(selection: JSONValue)
@@ -63,6 +66,7 @@ enum CoreAction: Sendable {
         case pullAddonsFromAPI
         /// Pulls library items changed elsewhere and pushes the ones changed here.
         case syncLibraryWithAPI
+        case clearSearchHistory
     }
 
     /// Watched marks on the title the `meta_details` model holds, through its library item.
@@ -96,72 +100,6 @@ enum CoreAction: Sendable {
         case videoParamsChanged(hash: String?, size: UInt64?, filename: String?)
         /// Replaces what core saves for the selected video.
         case streamStateChanged(StreamItemState)
-    }
-}
-
-struct ResourcePath: Codable, Hashable, Sendable {
-    var resource: String
-    var type: String
-    var id: String
-    var extra: [[String]] = []
-
-    static func meta(type: String, id: String) -> ResourcePath {
-        ResourcePath(resource: "meta", type: type, id: id)
-    }
-
-    static func stream(type: String, id: String) -> ResourcePath {
-        ResourcePath(resource: "stream", type: type, id: id)
-    }
-
-    static func subtitles(type: String, id: String) -> ResourcePath {
-        ResourcePath(resource: "subtitles", type: type, id: id)
-    }
-}
-
-/// core's `catalogs_with_extra::Selected`: which catalogs a `CatalogsWithExtra` model loads.
-struct CatalogsSelection: Codable, Equatable, Sendable {
-    /// Every type when nil.
-    var type: String?
-    /// `[name, value]` pairs, such as `["search", "shawshank"]`.
-    var extra: [[String]]
-
-    /// Every catalog without a required extra.
-    static let board = CatalogsSelection(type: nil, extra: [])
-
-    /// Every catalog that supports the `search` extra, asked for `text`.
-    static func search(_ text: SearchText) -> CatalogsSelection {
-        CatalogsSelection(type: nil, extra: [["search", text.rawValue]])
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        // core expects an explicit null for every type.
-        try container.encode(type, forKey: .type)
-        try container.encode(extra, forKey: .extra)
-    }
-
-    private enum CodingKeys: String, CodingKey { case type, extra }
-}
-
-struct ResourceRequest: Codable, Hashable, Sendable {
-    var base: URL
-    var path: ResourcePath
-}
-
-extension ResourcePath {
-    var json: JSONValue {
-        .object([
-            "resource": .string(resource),
-            "type": .string(type),
-            "id": .string(id),
-            "extra": .array(extra.map { .array($0.map(JSONValue.string)) }),
-        ])
-    }
-}
-
-extension ResourceRequest {
-    var json: JSONValue {
-        .object(["base": .string(base.absoluteString), "path": path.json])
     }
 }
 
@@ -253,6 +191,8 @@ extension CoreAction.Load: Encodable {
             try model("AddonDetails", AddonDetailsArgs(transportUrl: url)).encode(to: encoder)
         case .catalogsWithExtra(let selection):
             try model("CatalogsWithExtra", selection).encode(to: encoder)
+        case .catalogWithFilters(let request):
+            try model("CatalogWithFilters", ["request": request]).encode(to: encoder)
         case .metaDetails(let metaPath, let streamPath):
             try model("MetaDetails", MetaDetailsArgs(metaPath: metaPath, streamPath: streamPath, guessStream: false))
                 .encode(to: encoder)
@@ -295,6 +235,7 @@ extension CoreAction.Ctx: Encodable {
         case .pullUserFromAPI: try action("PullUserFromAPI", NoArgs()).encode(to: encoder)
         case .pullAddonsFromAPI: try action("PullAddonsFromAPI").encode(to: encoder)
         case .syncLibraryWithAPI: try action("SyncLibraryWithAPI").encode(to: encoder)
+        case .clearSearchHistory: try action("ClearSearchHistory").encode(to: encoder)
         }
     }
 

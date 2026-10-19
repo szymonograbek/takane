@@ -16,26 +16,47 @@ extension View {
     }
 }
 
-/// A title's poster in a shelf or grid, named underneath. Selecting it opens the title.
+/// A title's poster in a shelf or grid, named underneath. Selecting it opens the title. On tvOS
+/// focus lifts the poster and moves its name out of the way; macOS keeps it plain.
 struct PosterCard: View {
     let preview: MetaPreview
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
-            NavigationLink(value: Route.details(preview)) {
-                Artwork(url: preview.poster, title: preview.name)
-                    .frame(width: Metrics.posterWidth, height: Metrics.posterWidth * preview.posterShape.heightRatio)
-                    .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+        NavigationLink(value: Route.details(preview)) {
+            #if os(tvOS)
+            // The borderless style stacks the poster over its name and lifts the label's first
+            // `Image`, which `Artwork` is not, hence the highlight.
+            poster.hoverEffect(.highlight)
+            name
+            #else
+            VStack(alignment: .leading) {
+                poster
+                name
             }
-            .cardButtonStyle()
-            .accessibilityLabel(preview.name)
-            .accessibilityIdentifier("poster.\(preview.media.rawValue)")
-            Text(preview.name)
-                .font(.caption)
-                .foregroundStyle(Palette.secondary)
-                .lineLimit(1)
-                .frame(width: Metrics.posterWidth, alignment: .leading)
+            #endif
         }
+        #if os(tvOS)
+        .buttonStyle(.borderless)
+        #else
+        .buttonStyle(.plain)
+        #endif
+        .accessibilityLabel(preview.name)
+        .accessibilityIdentifier("poster.\(preview.media.rawValue)")
+    }
+
+    private var poster: some View {
+        Artwork(url: preview.poster, title: preview.name)
+            .aspectRatio(preview.posterShape.aspectRatio, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+            .lockupFrame(.poster)
+    }
+
+    private var name: some View {
+        Text(preview.name)
+            .font(.caption)
+            .foregroundStyle(Palette.secondary)
+            .labelLineLimit()
+            .lockupFrame(.poster)
     }
 }
 
@@ -44,8 +65,9 @@ struct PosterPlaceholders: View {
     var body: some View {
         ForEach(0..<6, id: \.self) { _ in
             Palette.surface
-                .frame(width: Metrics.posterWidth, height: Metrics.posterWidth * PosterShape.poster.heightRatio)
+                .aspectRatio(PosterShape.poster.aspectRatio, contentMode: .fit)
                 .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+                .lockupFrame(.poster)
         }
     }
 }
@@ -60,7 +82,7 @@ struct ContinueCard: View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: item.route) {
                 Artwork(url: item.background ?? item.poster, title: item.name)
-                    .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardWidth * 9 / 16)
+                    .aspectRatio(16 / 9, contentMode: .fit)
                     .overlay(alignment: .bottom) {
                         if let fraction = item.fraction {
                             ProgressLine(fraction: fraction).padding(14)
@@ -78,11 +100,11 @@ struct ContinueCard: View {
             .accessibilityLabel("\(item.name), \(item.caption)")
             .accessibilityIdentifier("continueWatching.item")
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(.caption).bold().lineLimit(1)
+                Text(item.name).font(.caption).bold().labelLineLimit()
                 Text(item.caption).font(.caption2).foregroundStyle(Palette.secondary)
             }
-            .frame(width: Metrics.wideCardWidth, alignment: .leading)
         }
+        .lockupFrame(.wide)
     }
 }
 
@@ -100,8 +122,9 @@ struct Shelf<Content: View>: View {
                 LazyHStack(alignment: .top, spacing: Metrics.shelfSpacing) {
                     content()
                 }
-                .padding(.horizontal, Metrics.screenPadding)
             }
+            // As safe area rather than padding, so `lockupFrame` divides only the width between the margins.
+            .safeAreaPadding(.horizontal, Metrics.screenPadding)
             .scrollIndicators(.hidden)
             // Focused cards grow past the row's bounds.
             .scrollClipDisabled()
@@ -112,11 +135,30 @@ struct Shelf<Content: View>: View {
     }
 }
 
+extension View {
+    /// Sizes a lockup to one column of the shelf it sits in.
+    func lockupFrame(_ lockup: Lockup) -> some View {
+        modifier(LockupFrame(lockup: lockup))
+    }
+}
+
+private struct LockupFrame: ViewModifier {
+    @Environment(\.textLayout) private var textLayout
+    let lockup: Lockup
+
+    func body(content: Content) -> some View {
+        content.containerRelativeFrame(
+            .horizontal, count: lockup.columns(textLayout), spacing: Metrics.shelfSpacing, alignment: .leading
+        )
+    }
+}
+
 extension PosterShape {
-    var heightRatio: CGFloat {
+    /// Width over height.
+    var aspectRatio: CGFloat {
         switch self {
-        case .poster: 1.5
-        case .landscape: 9.0 / 16.0
+        case .poster: 2.0 / 3.0
+        case .landscape: 16.0 / 9.0
         case .square: 1
         }
     }

@@ -83,7 +83,7 @@ struct OptionsPanel: View {
         }
         .frame(width: Metrics.playerPanelWidth)
         .padding(Metrics.playerPanelPadding)
-        .background(.regularMaterial, in: .rect(cornerRadius: Metrics.cornerRadius * 2, style: .continuous))
+        .controlBackground(in: .rect(cornerRadius: Metrics.cornerRadius * 2, style: .continuous))
         // Sized on its own rather than by the button row it overlays; short pages sit at the bottom.
         .frame(height: Metrics.playerPanelMaxHeight, alignment: .bottom)
         #if os(tvOS)
@@ -137,15 +137,28 @@ struct OptionsPanel: View {
     }
 }
 
+private extension View {
+    /// The panel floats over video as a control, so it takes Liquid Glass where the system has it.
+    /// The regular variant keeps its text legible over bright frames.
+    @ViewBuilder
+    func controlBackground(in shape: some Shape) -> some View {
+        if #available(tvOS 26, macOS 26, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+        }
+    }
+}
+
 /// A row title with a checkmark before it when checked; unchecked titles keep the same indent.
 private struct CheckedLabel: View {
     let title: String
     let isChecked: Bool
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
             Image(systemName: "checkmark").opacity(isChecked ? 1 : 0)
-            Text(title).lineLimit(1)
+            Text(title).labelLineLimit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityAddTraits(isChecked ? .isSelected : [])

@@ -145,7 +145,7 @@ private struct AccountSettings: View {
             }
         }
         .confirmationDialog("Sign out of Stremio?", isPresented: $confirmingSignOut) {
-            Button("Sign Out", role: .destructive) { app.account.send(.signOut) }
+            Button("Sign Out") { app.account.send(.signOut) }
         } message: {
             Text("Add-ons and watch progress on this device go back to the defaults.")
         }

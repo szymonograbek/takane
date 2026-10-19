@@ -7,6 +7,13 @@ struct Artwork: View {
     var title: String?
 
     var body: some View {
+        // Takes the size it is offered rather than the image's, so `aspectRatio` can shape it.
+        Color.clear
+            .overlay { image }
+            .clipped()
+    }
+
+    private var image: some View {
         AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
             if case .success(let image) = phase {
                 image.resizable().scaledToFill()

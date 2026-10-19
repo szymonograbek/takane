@@ -79,12 +79,12 @@ struct FeatureStoreTests {
     @Test func aNewerSearchCancelsTheOneStillWaiting() async throws {
         let catalog = RecordingCatalog()
         let store = FeatureStore<SearchFeature>(
-            .empty, dependencies: SearchFeature.Dependencies(catalog: catalog, settle: .milliseconds(50))
+            SearchFeature.State(), dependencies: SearchFeature.Dependencies(catalog: catalog, settle: .milliseconds(50))
         )
         store.send(.queryChanged(SearchText("tw")))
         store.send(.queryChanged(SearchText("twin")))
         _ = try await store.until(timeout: .seconds(2), onTimeout: TimedOut()) { state in
-            if case .searching(_, results: .rows?) = state { Probe<Void, TimedOut>.done(()) } else { .pending }
+            if case .searching(_, results: .rows?) = state.query { Probe<Void, TimedOut>.done(()) } else { .pending }
         }
         #expect(catalog.searched.withLock { $0 } == ["twin"])
     }
@@ -133,6 +133,10 @@ private final class RecordingCatalog: CatalogService {
     func loadMore(_ row: CatalogID) {}
     func details(_ media: MediaID, type: ContentType) async throws(DetailsError) -> TitleDetails { throw .notFound }
     func detailsChanges(_ media: MediaID, type: ContentType) -> AsyncStream<TitleDetails> { AsyncStream { $0.finish() } }
+    func recentSearches() -> AsyncStream<[SearchText]> { AsyncStream { $0.finish() } }
+    func clearRecentSearches() {}
+    func genres() -> AsyncStream<[CatalogGenres]> { AsyncStream { $0.finish() } }
+    func titles(_ filter: GenreFilter) -> AsyncStream<Remote<[MetaPreview], CatalogError>> { AsyncStream { $0.finish() } }
 
     func search(_ text: SearchText) -> AsyncStream<SearchResults> {
         searched.withLock { $0.append(text.rawValue) }

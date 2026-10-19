@@ -1,15 +1,22 @@
 import SwiftUI
 
 /// The streams the add-ons offer for one movie or episode. Choosing one starts playback, from the
-/// saved position when continue watching has one.
+/// saved position when continue watching has one. Once it plays, this screen closes under the player,
+/// so leaving the player lands on the title's details; a stream that fails returns here.
 struct StreamsScreen: View {
     @Environment(AppContext.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.textLayout) private var textLayout
     let request: StreamsRequest
 
     var body: some View {
         let state = app.streams.state
         let sections = state.sections(for: request.video)
-        HStack(alignment: .top, spacing: 60) {
+        // At large text sizes the title stacks above the list, which then gets the full width.
+        let columns = textLayout == .large
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Metrics.sectionSpacing))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 60))
+        columns {
             VStack(alignment: .leading, spacing: 12) {
                 Text(request.title).font(.title2).bold().lineLimit(2)
                 if case .episode(_, let season, let episode) = request.video {
@@ -19,13 +26,12 @@ struct StreamsScreen: View {
                     Label("Resumes at \(resume.clock)", systemImage: "clock.arrow.circlepath")
                         .font(.caption).foregroundStyle(Palette.secondary)
                 }
-                Spacer()
             }
-            .frame(width: 520, alignment: .leading)
+            .frame(width: textLayout == .large ? nil : Metrics.streamsInfoWidth, alignment: .leading)
             Group {
-                if sections.isEmpty {
+                if sections.firstCandidate == nil {
                     if state.isLookingUp(request.video) {
-                        ProgressView("Asking your add-ons…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                        CancellableProgress("Asking your add-ons…")
                     } else {
                         ContentUnavailableView {
                             Label("No Playable Streams", systemImage: "play.slash")
@@ -45,6 +51,7 @@ struct StreamsScreen: View {
             }
             .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Metrics.screenPadding)
         .background {
             Artwork(url: request.backdrop, title: nil)
@@ -52,6 +59,16 @@ struct StreamsScreen: View {
                 .ignoresSafeArea()
         }
         .onAppear { app.streams.send(.lookUp(request.video)) }
+        .onChange(of: isPlayingRequest) { _, playing in
+            if playing { dismiss() }
+        }
+    }
+}
+
+extension StreamsScreen {
+    /// A stream for this video got past opening.
+    private var isPlayingRequest: Bool {
+        app.player.state.session.map { $0.candidate.item == request.video && $0.phase != .opening } ?? false
     }
 }
 
@@ -88,15 +105,9 @@ private struct StreamList: View {
             }
         }
         .accessibilityIdentifier("streams.list")
-        .onChange(of: firstCandidate, initial: true) { _, first in
+        .onChange(of: sections.firstCandidate, initial: true) { _, first in
             if focused == nil { focused = first }
         }
-    }
-
-    private var firstCandidate: StreamCandidate.ID? {
-        sections.lazy.compactMap { section in
-            if case .loaded(let candidates) = section.streams { candidates.first?.id } else { nil }
-        }.first
     }
 }
 
@@ -113,6 +124,15 @@ struct StreamSection: Identifiable {
     let streams: Streams
 
     var id: ManifestURL { addon }
+}
+
+extension [StreamSection] {
+    /// The first stream listed, if any add-on has answered with one.
+    var firstCandidate: StreamCandidate.ID? {
+        lazy.compactMap { section in
+            if case .loaded(let candidates) = section.streams { candidates.first?.id } else { nil }
+        }.first
+    }
 }
 
 private struct StreamRow: View {
@@ -157,5 +177,25 @@ extension StreamsFeature.State {
     func isLookingUp(_ item: PlayableID) -> Bool {
         guard case .lookingUp(item, _) = self else { return true }
         return isLookingUp
+    }
+}
+
+/// A pushed screen waiting on its content. Cancel goes back, and gives the screen something to
+/// focus so Menu can go back too.
+struct CancellableProgress: View {
+    @Environment(\.dismiss) private var dismiss
+    let label: LocalizedStringKey
+
+    init(_ label: LocalizedStringKey) {
+        self.label = label
+    }
+
+    var body: some View {
+        VStack(spacing: Metrics.sectionSpacing) {
+            ProgressView(label)
+            Button("Cancel") { dismiss() }
+                .accessibilityIdentifier("loading.cancel")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

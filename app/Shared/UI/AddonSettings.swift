@@ -31,7 +31,7 @@ struct AddonSettings: View {
             "Remove \(removing?.name ?? "add-on")?", isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } },
             titleVisibility: .visible, presenting: removing
         ) { addon in
-            Button("Remove", role: .destructive) { app.addons.send(.uninstall(addon.manifestURL)) }
+            Button("Remove") { app.addons.send(.uninstall(addon.manifestURL)) }
         }
     }
 

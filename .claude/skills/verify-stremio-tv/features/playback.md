@@ -10,7 +10,7 @@ Choosing a stream opens a full-screen player that shows only the video. Select s
 - `play-subtitles` lists embedded tracks and selects one; the app draws its cues over the video, text and bitmap (PGS) alike.
 - `play-seek` skips one skip interval (10 s by default) with left and right while the controls are hidden.
 - `play-timeline` on the focused progress bar: taps jump one skip interval, quick taps jump one interval further each (up to 60 s), a hold scans at 2× and further presses change the rate.
-- `play-stop` returns to the stream list.
+- `play-stop` returns to the screen that opened the stream list: Details, or Home for a hero Play or a Continue Watching card.
 
 ## How to get to it (user POV)
 
@@ -27,7 +27,7 @@ Preconditions:
 - **Speed.** `$T focus player.speed right 6`, `$T select` (focus lands on Normal, `player.option`), press down twice, `$T select`. Reopening the Speed panel shows 1.5× selected.
 - **Subtitles.** `$T focus player.subtitles left 3`, `$T select`, `$T remote down`, `$T select`. The track list reports it selected; within a few seconds of dialogue `$T text player.subtitle` prints the cue, and `$T evidence` shows it above the picture's bottom edge. Off clears it at once.
 - **Timeline.** Controls showing, `$T focus player.progress up 3`, then right away `$T remote right` three times: `player.status` jumps about 60 s (10 + 20 + 30) at the default interval. Hold with `agent-device tv-remote press right --duration-ms 800 --platform ios --target tv --session stremio-tv-verify`: the phase reads `paused`, the time keeps advancing about 2 s per second, and the snapshot has a `2×` label. `$T remote right` makes it `4×`; `$T remote left` twice reads `playing` again. Hold again and `$T select`: `playing`.
-- **Stop.** `$T remote menu` until the stream list is back (closes the controls, then the player).
+- **Stop.** `$T remote menu` until Details is back with Resume (closes the controls, then the player). The stream list closed once the stream started playing; a stream that fails returns to it.
 
 ## Gotchas
 

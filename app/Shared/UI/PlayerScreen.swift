@@ -2,14 +2,15 @@ import SwiftUI
 
 /// Full-screen playback. Only the video shows until the viewer asks for the controls.
 ///
-/// Remote: select shows the controls, play/pause pauses, left and right skip 10 s while the
-/// controls are hidden, Menu backs out of an open panel, hides the controls and then leaves. On the
+/// Remote: while the controls are hidden, pressing the clickpad's left or right edge skips one seek
+/// step and pressing its centre, top or bottom shows the controls; swipes and a resting thumb do
+/// nothing. Play/pause pauses. Menu backs out of an open panel, hides the controls and then leaves. On the
 /// focused progress bar, left and right jump (further with each quick tap) or, held, rewind and
 /// fast forward until select, play/pause or Menu. macOS: space, arrows and Esc. While the controls
 /// are hidden, the next episode's card takes focus near the end, ahead of a skip button.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
-    @State private var controlsVisible = true
+    @State private var controlsVisible = false
     /// Bumped on every interaction; the controls hide 5 s after the last one.
     @State private var interactions = 0
     @FocusState private var focus: PlayerFocus?
@@ -33,7 +34,7 @@ struct PlayerScreen: View {
             case .failed(_, let error):
                 PlaybackFailure(error: error) { player.send(.stop) }
             case .active(let session) where session.phase == .opening || session.isBuffering:
-                ProgressView().controlSize(.large)
+                LoadingSpinner()
             case .idle, .active:
                 EmptyView()
             }
@@ -168,6 +169,17 @@ private struct RemoteSurface: View {
     let interacted: () -> Void
 
     var body: some View {
+        #if os(tvOS)
+        // Presses only: a swipe from a resting thumb arrives as a move command and would seek.
+        RemotePresses(
+            arrow: { isDown, direction in
+                if isDown { app.player.send(.jump(direction)) }
+            },
+            vertical: interacted,
+            select: interacted
+        )
+        .focused(focus, equals: .surface)
+        #else
         Color.clear
             .contentShape(.rect)
             .focusable()
@@ -181,6 +193,7 @@ private struct RemoteSurface: View {
                 @unknown default: break
                 }
             }
+        #endif
     }
 }
 
@@ -219,6 +232,22 @@ private struct PlaybackFailure: View {
         } actions: {
             Button("Choose Another Stream", action: close)
         }
+    }
+}
+
+/// The spinner for opening or buffering, held back for the first 2 s so a short wait shows only black.
+/// Each wait gets a fresh view, so the delay restarts with it.
+private struct LoadingSpinner: View {
+    @State private var isShown = false
+
+    var body: some View {
+        ProgressView()
+            .controlSize(.large)
+            .opacity(isShown ? 1 : 0)
+            .task {
+                guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                isShown = true
+            }
     }
 }
 
