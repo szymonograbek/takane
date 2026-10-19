@@ -57,6 +57,16 @@ private struct MainTabs: View {
                     HomeScreen().withRoutes()
                 }
             }
+            Tab("Library", systemImage: "books.vertical") {
+                NavigationStack {
+                    LibraryScreen().withRoutes()
+                }
+            }
+            Tab("Calendar", systemImage: "calendar") {
+                NavigationStack {
+                    CalendarScreen().withRoutes()
+                }
+            }
             Tab(role: .search) {
                 NavigationStack {
                     SearchScreen().withRoutes()

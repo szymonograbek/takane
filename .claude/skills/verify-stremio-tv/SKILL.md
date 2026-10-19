@@ -51,7 +51,7 @@ $T remote <menu|left|right|up|down|home>
 $T evidence <name>
 ```
 
-Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar items have no identifier; `focus` matches them by their SF Symbol name (`house`, `gearshape`, `magnifyingglass`).
+Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar items have no identifier; `focus` matches them by their SF Symbol name (`house`, `books.vertical`, `calendar`, `magnifyingglass`, `gearshape`).
 
 | Id | Element |
 |---|---|
@@ -65,6 +65,11 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `search.recent`, `search.clearRecent` | on Search before anything is typed: each recent search (label is the query; selecting it runs it) and Clear, which confirms before forgetting them all |
 | `search.genre` | on Search before anything is typed: each genre in the Movies by Genre and Series by Genre rows; label is the genre, selecting it opens its grid |
 | `genre.screen` | a genre's grid of posters (`poster.<imdb id>`), or its empty or error state with Try Again |
+| `library.screen` | the Library tab: the type and sort menus above a grid of posters (`poster.<imdb id>`), or its empty state |
+| `library.type`, `library.sort` | the Library menus; the focused element reports their label (`All Types`, `Series`; `Recently Watched`, `Name`), not the id. A menu opens with its first choice focused. A long press on a poster offers Remove from Library |
+| `calendar.screen` | the Calendar tab: one row per day of upcoming episodes, titled "Today", "Tomorrow", "In 3 days (Friday)", or its empty or error state |
+| `upcoming.<video id>` | each upcoming episode card, such as `upcoming.tt0364845:24:3`; selecting it opens the show's details |
+| `details.library` | Add to Library, or In Library once added; selecting it toggles |
 | `details.resume`, `details.play`, `episode.<id>` | Details actions; focus lands on Resume, else Play, on open and when the details load |
 | `details.description`, `details.descriptionDone` | the description, cut to four lines; selecting it opens the full text, which Done or Back closes |
 | `details.back` | Go Back on a series whose add-ons list no episodes |

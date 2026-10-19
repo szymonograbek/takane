@@ -7,7 +7,7 @@ On first launch Takane shows Welcome with two choices: Sign In with Stremio, or 
 - `welcome` shows the logo, the two buttons and focuses Sign In.
 - `link-code` shows a 4-character code from core's `link` model and a QR code for link.stremio.com.
 - `password-error` shows Stremio's refusal for wrong credentials and keeps the password out of the log.
-- `continue` opens the tabs: Home, Settings, Search.
+- `continue` opens the tabs: Home, Library, Calendar, Search, Settings.
 
 ## How to get to it (user POV)
 
