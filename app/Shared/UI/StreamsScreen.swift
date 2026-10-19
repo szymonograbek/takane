@@ -25,9 +25,9 @@ struct StreamsScreen: View {
             }
             .frame(width: 520, alignment: .leading)
             Group {
-                if sections.isEmpty {
+                if sections.firstCandidate == nil {
                     if state.isLookingUp(request.video) {
-                        ProgressView("Asking your add-ons…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                        CancellableProgress("Asking your add-ons…")
                     } else {
                         ContentUnavailableView {
                             Label("No Playable Streams", systemImage: "play.slash")
@@ -100,15 +100,9 @@ private struct StreamList: View {
             }
         }
         .accessibilityIdentifier("streams.list")
-        .onChange(of: firstCandidate, initial: true) { _, first in
+        .onChange(of: sections.firstCandidate, initial: true) { _, first in
             if focused == nil { focused = first }
         }
-    }
-
-    private var firstCandidate: StreamCandidate.ID? {
-        sections.lazy.compactMap { section in
-            if case .loaded(let candidates) = section.streams { candidates.first?.id } else { nil }
-        }.first
     }
 }
 
@@ -125,6 +119,15 @@ struct StreamSection: Identifiable {
     let streams: Streams
 
     var id: ManifestURL { addon }
+}
+
+extension [StreamSection] {
+    /// The first stream listed, if any add-on has answered with one.
+    var firstCandidate: StreamCandidate.ID? {
+        lazy.compactMap { section in
+            if case .loaded(let candidates) = section.streams { candidates.first?.id } else { nil }
+        }.first
+    }
 }
 
 private struct StreamRow: View {
@@ -169,5 +172,25 @@ extension StreamsFeature.State {
     func isLookingUp(_ item: PlayableID) -> Bool {
         guard case .lookingUp(item, _) = self else { return true }
         return isLookingUp
+    }
+}
+
+/// A pushed screen waiting on its content. Cancel goes back, and gives the screen something to
+/// focus so Menu can go back too.
+struct CancellableProgress: View {
+    @Environment(\.dismiss) private var dismiss
+    let label: LocalizedStringKey
+
+    init(_ label: LocalizedStringKey) {
+        self.label = label
+    }
+
+    var body: some View {
+        VStack(spacing: Metrics.sectionSpacing) {
+            ProgressView(label)
+            Button("Cancel") { dismiss() }
+                .accessibilityIdentifier("loading.cancel")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
