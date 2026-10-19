@@ -77,10 +77,14 @@ enum Metrics {
     /// Room between a settings row's text and the sides of its focus platter, so the text clears
     /// the platter's rounded ends.
     static let rowPadding: CGFloat = 40
+    /// Room above and below a row's text inside its focus platter.
+    static let rowVerticalPadding: CGFloat = 18
     /// The player's list of tracks or speeds.
     static let playerPanelWidth: CGFloat = 720
     static let playerPanelMaxHeight: CGFloat = 560
     static let playerPanelPadding: CGFloat = 30
+    /// The choices a `ChoiceMenu` opens.
+    static let choiceMenuWidth: CGFloat = 560
     static let welcomeLogoSize: CGFloat = 300
     static let progressHeight: CGFloat = 5
     /// The player's progress bar while it has focus.
@@ -101,9 +105,12 @@ enum Metrics {
     static let emblemSize: CGFloat = 180
     static let headerSpacing: CGFloat = 8
     static let rowLift: CGFloat = 0
+    static let rowPadding: CGFloat = 10
+    static let rowVerticalPadding: CGFloat = 4
     static let playerPanelWidth: CGFloat = 320
     static let playerPanelMaxHeight: CGFloat = 360
     static let playerPanelPadding: CGFloat = 12
+    static let choiceMenuWidth: CGFloat = 260
     static let welcomeLogoSize: CGFloat = 160
     static let progressHeight: CGFloat = 5
     static let focusedProgressHeight: CGFloat = 9

@@ -8,8 +8,8 @@ Choosing a stream opens a full-screen player that shows only the video. Select s
 - `play-controls` shows the controls with focus on play/pause.
 - `play-speed` changes the playback speed from the Speed panel.
 - `play-subtitles` lists embedded tracks and selects one; the app draws its cues over the video, text and bitmap (PGS) alike.
-- `play-seek` skips one skip interval (10 s by default) with left and right while the controls are hidden.
-- `play-timeline` on the focused progress bar: taps jump one skip interval, quick taps jump one interval further each (up to 60 s), a hold scans at 2× and further presses change the rate.
+- `play-seek` skips one skip interval (10 s by default) with left and right while the controls are hidden, and shows the controls for 2 s with the progress bar focused.
+- `play-timeline` on the focused progress bar: every tap jumps one skip interval, quick taps in one direction add up beside the picture ("+30s"), a hold scans at 2× and further presses change the rate.
 - `play-stop` returns to the screen that opened the stream list: Details, or Home for a hero Play or a Continue Watching card.
 
 ## How to get to it (user POV)
@@ -26,7 +26,7 @@ Preconditions:
 - **Controls.** After 5 s the controls are gone (screenshot shows video only). `$T select`; `$T focused` prints `player.playPause`.
 - **Speed.** `$T focus player.speed right 6`, `$T select` (focus lands on Normal, `player.option`), press down twice, `$T select`. Reopening the Speed panel shows 1.5× selected.
 - **Subtitles.** `$T focus player.subtitles left 3`, `$T select`, `$T remote down`, `$T select`. The track list reports it selected; within a few seconds of dialogue `$T text player.subtitle` prints the cue, and `$T evidence` shows it above the picture's bottom edge. Off clears it at once.
-- **Timeline.** Controls showing, `$T focus player.progress up 3`, then right away `$T remote right` three times: `player.status` jumps about 60 s (10 + 20 + 30) at the default interval. Hold with `agent-device tv-remote press right --duration-ms 800 --platform ios --target tv --session stremio-tv-verify`: the phase reads `paused`, the time keeps advancing about 2 s per second, and the snapshot has a `2×` label. `$T remote right` makes it `4×`; `$T remote left` twice reads `playing` again. Hold again and `$T select`: `playing`.
+- **Timeline.** Controls showing, `$T focus player.progress up 3`, then right away `$T remote right` three times: `player.status` jumps about 30 s at the default interval, and a screenshot within a second (`xcrun simctl io <udid> screenshot`) shows "+30s" at the right edge. With the controls hidden, one `$T remote right` jumps 10 s and `$T focused` prints `player.progress`; 2 s later the controls are gone. Hold with `agent-device tv-remote press right --duration-ms 800 --platform ios --target tv --session stremio-tv-verify`: the phase reads `paused`, the time keeps advancing about 2 s per second, and the snapshot has a `2×` label. `$T remote right` makes it `4×`; `$T remote left` twice reads `playing` again. Hold again and `$T select`: `playing`.
 - **Stop.** `$T remote menu` until Details is back with Resume (closes the controls, then the player). The stream list closed once the stream started playing; a stream that fails returns to it.
 
 ## Gotchas

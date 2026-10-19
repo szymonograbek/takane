@@ -3,15 +3,16 @@ import SwiftUI
 /// Full-screen playback. Only the video shows until the viewer asks for the controls.
 ///
 /// Remote: while the controls are hidden, pressing the clickpad's left or right edge skips one seek
-/// step and pressing its centre, top or bottom shows the controls; swipes and a resting thumb do
-/// nothing. Play/pause pauses. Menu backs out of an open panel, hides the controls and then leaves. On the
-/// focused progress bar, left and right jump (further with each quick tap) or, held, rewind and
-/// fast forward until select, play/pause or Menu. macOS: space, arrows and Esc. While the controls
-/// are hidden, the next episode's card takes focus near the end, ahead of a skip button.
+/// step and shows the controls for a moment with the progress bar focused, and pressing its centre,
+/// top or bottom shows them; swipes and a resting thumb do nothing. Play/pause pauses. Menu backs
+/// out of an open panel, hides the controls and then leaves. On the focused progress bar, left and
+/// right jump one step or, held, rewind and fast forward until select, play/pause or Menu. Quick
+/// jumps in one direction add up beside the picture ("+30s"). macOS: space, arrows and Esc. While
+/// the controls are hidden, the next episode's card takes focus near the end, ahead of a skip button.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
-    @State private var controlsVisible = false
-    /// Bumped on every interaction; the controls hide 5 s after the last one.
+    @State private var controls = Controls.hidden
+    /// Bumped on every interaction; the controls hide a while after the last one.
     @State private var interactions = 0
     @FocusState private var focus: PlayerFocus?
     @State private var panel: PlayerPanel?
@@ -38,11 +39,14 @@ struct PlayerScreen: View {
             case .idle, .active:
                 EmptyView()
             }
-            if !controlsVisible {
-                RemoteSurface(focus: $focus, interacted: poke)
+            if let session = state.session {
+                StreakBadge(streak: session.streak)
+            }
+            if controls == .hidden {
+                RemoteSurface(focus: $focus, interacted: poke, stepped: peek)
             }
             if let session = state.session {
-                if controlsVisible {
+                if controls.isVisible {
                     PlayerControls(
                         session: session, state: state, focus: $focus, panel: $panel, interacted: poke
                     )
@@ -60,19 +64,25 @@ struct PlayerScreen: View {
             }
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.25), value: controlsVisible)
+        .animation(.easeInOut(duration: 0.25), value: controls.isVisible)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(state.statusLine)
         .accessibilityIdentifier("player.status")
-        .onChange(of: controlsVisible, initial: true) { _, visible in
-            focus = visible ? .playPause : restingFocus
+        .onChange(of: controls, initial: true) { old, new in
+            switch (old, new) {
+            case (_, .hidden): focus = restingFocus
+            case (_, .peeking): focus = .progress
+            // Stays where the viewer moved it from the progress bar.
+            case (.peeking, .shown), (.shown, .shown): break
+            case (.hidden, .shown): focus = .playPause
+            }
         }
         .onChange(of: state.activeSegment) {
-            guard !controlsVisible else { return }
+            guard controls == .hidden else { return }
             focus = restingFocus
         }
         .onChange(of: state.session?.upNextCard != nil) {
-            guard !controlsVisible else { return }
+            guard controls == .hidden else { return }
             focus = restingFocus
         }
         .onChange(of: state.candidate) { nextStreams = nil }
@@ -85,14 +95,16 @@ struct PlayerScreen: View {
             }
         }
         .onChange(of: focus) { _, focused in
-            // Moving between controls counts as using them.
-            if focused != nil, focused != .surface { interactions += 1 }
+            // Moving between controls counts as using them, and leaving the progress bar keeps them up.
+            guard let focused, focused != .surface else { return }
+            interactions += 1
+            if controls == .peeking, focused != .progress { controls = .shown }
         }
-        .task(id: Autohide(interactions: interactions, isPlaying: isPlaying)) {
-            guard (try? await Task.sleep(for: .seconds(5))) != nil else { return }
+        .task(id: Autohide(interactions: interactions, isPlaying: isPlaying, controls: controls)) {
+            guard (try? await Task.sleep(for: controls.autohideDelay)) != nil else { return }
             // An open panel keeps the controls up.
             guard isPlaying, panel == nil else { return }
-            controlsVisible = false
+            controls = .hidden
         }
         #if os(tvOS)
         .onPlayPauseCommand {
@@ -112,8 +124,8 @@ struct PlayerScreen: View {
                 player.send(.togglePause)
             } else if panel != nil {
                 closePanel()
-            } else if controlsVisible, state.session != nil {
-                controlsVisible = false
+            } else if controls.isVisible, state.session != nil {
+                controls = .hidden
             } else {
                 player.send(.stop)
             }
@@ -148,8 +160,10 @@ struct PlayerScreen: View {
     private func closePanel() {
         guard let open = panel else { return }
         if let parent = open.parent {
-            focus = .link(open)
             panel = parent
+            // Once the parent's rows are in place; until then the focus engine moves focus off the
+            // closed page's row to the parent's first.
+            Task { focus = .link(open) }
         } else {
             focus = open.button
             panel = nil
@@ -157,8 +171,65 @@ struct PlayerScreen: View {
     }
 
     private func poke() {
-        controlsVisible = true
+        if controls == .hidden { controls = .shown }
         interactions += 1
+    }
+
+    /// A seek from the bare video shows the controls only for a moment.
+    private func peek() {
+        if controls == .hidden { controls = .peeking }
+        interactions += 1
+    }
+}
+
+/// Whether the transport bar shows, and why.
+private enum Controls: Equatable {
+    case hidden
+    /// Shown by a seek from the bare video, with focus on the progress bar, until the seeking stops.
+    case peeking
+    case shown
+
+    var isVisible: Bool { self != .hidden }
+
+    var autohideDelay: Duration {
+        self == .peeking ? .seconds(2) : .seconds(5)
+    }
+}
+
+/// How far a streak of quick jumps has gone, beside the picture on the side it jumps to ("+30s"),
+/// for a moment after each tap.
+private struct StreakBadge: View {
+    let streak: PlayerFeature.StepStreak?
+    @State private var shown: PlayerFeature.StepStreak?
+
+    var body: some View {
+        // A view that is always there, so the task runs before the first streak.
+        Color.clear
+            .overlay(alignment: shown?.direction == .forward ? .trailing : .leading) {
+                if let shown {
+                    VStack(spacing: 8) {
+                        Image(systemName: shown.direction == .forward ? "goforward" : "gobackward")
+                            .font(.largeTitle)
+                        Text(distance(shown)).font(.title3).bold().monospacedDigit()
+                    }
+                    .foregroundStyle(Palette.text)
+                    .shadow(color: .black.opacity(0.6), radius: 8)
+                    .padding(.horizontal, Metrics.screenPadding)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: shown == nil)
+            .task(id: streak) {
+                shown = streak
+                guard streak != nil, (try? await Task.sleep(for: PlayerFeature.streakWindow)) != nil else { return }
+                shown = nil
+            }
+    }
+
+    /// "+30s", "−1m 30s".
+    private func distance(_ streak: PlayerFeature.StepStreak) -> String {
+        let sign = streak.direction == .forward ? "+" : "−"
+        return sign + streak.distance.formatted(.units(allowed: [.minutes, .seconds], width: .narrow))
     }
 }
 
@@ -167,13 +238,15 @@ private struct RemoteSurface: View {
     @Environment(AppContext.self) private var app
     var focus: FocusState<PlayerFocus?>.Binding
     let interacted: () -> Void
+    /// After a skip.
+    let stepped: () -> Void
 
     var body: some View {
         #if os(tvOS)
         // Presses only: a swipe from a resting thumb arrives as a move command and would seek.
         RemotePresses(
             arrow: { isDown, direction in
-                if isDown { app.player.send(.jump(direction)) }
+                if isDown { step(direction) }
             },
             vertical: interacted,
             select: interacted
@@ -187,13 +260,18 @@ private struct RemoteSurface: View {
             .onTapGesture(perform: interacted)
             .onMoveCommand { direction in
                 switch direction {
-                case .left: app.player.send(.jump(.backward))
-                case .right: app.player.send(.jump(.forward))
+                case .left: step(.backward)
+                case .right: step(.forward)
                 case .up, .down: interacted()
                 @unknown default: break
                 }
             }
         #endif
+    }
+
+    private func step(_ direction: PlayerFeature.Direction) {
+        app.player.send(.timeline(.step(direction, at: .now)))
+        stepped()
     }
 }
 
@@ -211,10 +289,11 @@ enum PlayerFocus: Hashable {
     case playNext, dismissNext
 }
 
-/// Restarts the autohide countdown on every interaction and when playback starts or pauses.
+/// Restarts the autohide countdown on every interaction, when playback starts or pauses and when the controls change.
 private struct Autohide: Hashable {
     let interactions: Int
     let isPlaying: Bool
+    let controls: Controls
 }
 
 private struct PlaybackFailure: View {

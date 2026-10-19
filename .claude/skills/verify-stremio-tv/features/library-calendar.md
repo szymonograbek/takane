@@ -22,12 +22,11 @@ Preconditions:
 
 - **Add.** Search for a series still airing (check Cinemeta, `https://v3-cinemeta.strem.io/meta/series/<id>.json`, for `videos` released after today; NCIS `tt0364845` airs weekly in autumn). `$T focus poster.<id> down 6` (the row may need `left`), `$T select`, wait 6 s, `$T focus details.library right 3`, `$T select`. `$T text details.library` prints `In Library`. Select again for `Add to Library`.
 - **Library.** From the tab bar, `$T focus books.vertical left 4` (or `right`), `$T remote down`: focus lands on a menu. The ax snapshot lists a `poster.<id>` per title.
-- **Filter and sort.** On the type menu, `$T select` opens it with All Types focused; `$T remote down` twice and `$T select` picks Series. `$T text library.type` prints `Series`. `$T remote right`, `$T select`, `$T remote down`, `$T select` picks Name.
+- **Filter and sort.** From the tab bar, `$T remote down` lands on a filter button. On the type button, `$T select` opens the Show list with All Types focused; `$T remote down` twice and `$T select` picks Series, closes the list and leaves the button focused. `$T text library.type` prints `Series`. `$T remote right`, `$T select`, `$T remote down`, `$T select` picks Name; `$T text library.sort` prints `Sort: Name`.
 - **Remove.** `$T focus poster.<id> down 3`, then `agent-device tv-remote longpress select --duration-ms 1500 --session stremio-tv-verify` opens the context menu with Remove from Library focused; `$T select`. The poster leaves the grid.
 - **Calendar.** `$T focus calendar right 3`, wait up to 8 s. The ax snapshot lists the day labels (`"label":"In 2 days (Wednesday)"`) and an `upcoming.<video id>` per episode. `$T remote down` scrolls to later days.
 
 ## Gotchas
 
 - After Remove from Library nothing is focused until the next arrow press; tvOS does not move focus to a neighbor after a context menu's item disappears.
-- `$T focus library.type` and `library.sort` match by label only, since the focused element is the menu's label.
 - Calendar labels depend on today's date; read them from the snapshot instead of hard-coding them.

@@ -154,16 +154,16 @@ struct PlayerTimelineTests {
         PlayerFeature.reduce(&state, .timeline(.step(direction, at: start + .seconds(seconds))))
     }
 
-    @Test func tapsInQuickSuccessionJumpFurtherUpToAMinute() {
-        var state = playing()
-        let jumps = [0, 0.5, 1, 1.5, 2, 2.5, 3].map { step(.forward, after: $0, in: &state) }
-        #expect(jumps == [10, 20, 30, 40, 50, 60, 60].map { [.seek(by: .seconds($0))] })
-    }
-
-    @Test func aStreakGrowsByTheSeekStep() {
+    @Test func everyTapJumpsOneSeekStep() {
         var state = playing(seekStep: .thirty)
         let jumps = [0, 0.5, 1].map { step(.forward, after: $0, in: &state) }
-        #expect(jumps == [30, 60, 60].map { [.seek(by: .seconds($0))] })
+        #expect(jumps == [30, 30, 30].map { [.seek(by: .seconds($0))] })
+    }
+
+    @Test func aStreakAddsUpHowFarItJumped() {
+        var state = playing()
+        _ = [0, 0.5, 1].map { step(.forward, after: $0, in: &state) }
+        #expect(state.session?.streak?.distance == .seconds(30))
     }
 
     @Test func aJumpSkipsOneSeekStep() {
@@ -174,10 +174,13 @@ struct PlayerTimelineTests {
 
     @Test func aStreakEndsAfterASecondOrOnATurn() {
         var state = playing()
-        #expect(step(.backward, after: 0, in: &state) == [.seek(by: .seconds(-10))])
-        #expect(step(.backward, after: 1, in: &state) == [.seek(by: .seconds(-20))])
-        #expect(step(.backward, after: 2.1, in: &state) == [.seek(by: .seconds(-10))])
-        #expect(step(.forward, after: 2.2, in: &state) == [.seek(by: .seconds(10))])
+        _ = step(.backward, after: 0, in: &state)
+        _ = step(.backward, after: 1, in: &state)
+        #expect(state.session?.streak?.distance == .seconds(20))
+        _ = step(.backward, after: 2.1, in: &state)
+        #expect(state.session?.streak?.distance == .seconds(10))
+        _ = step(.forward, after: 2.2, in: &state)
+        #expect(state.session?.streak == PlayerFeature.StepStreak(direction: .forward, distance: .seconds(10), lastTap: start + .seconds(2.2)))
     }
 
     @Test func holdingPausesAndScansAtTwiceSpeed() {

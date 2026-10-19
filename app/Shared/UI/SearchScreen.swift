@@ -1,18 +1,32 @@
 import SwiftUI
 
 /// Searches every add-on that can, showing each catalog's answers as a row. Before anything is
-/// typed, offers recent searches and genres.
+/// typed, offers recent searches and genres. Menu from anything below the field goes back to the
+/// field, as in the system's own search, and from the field to the tab bar.
 struct SearchScreen: View {
     @Environment(AppContext.self) private var app
     @State private var store: FeatureStore<SearchFeature>?
     @State private var query = ""
+    #if os(tvOS)
+    /// Holds the keyboard and everything below it. Resetting focus in it lands on the first element
+    /// in view, which is the keyboard once the results are scrolled back to the top.
+    @Namespace private var searchScope
+    @Environment(\.resetFocus) private var resetFocus
+    @State private var scroll = ScrollPosition(edge: .top)
+    #endif
 
     var body: some View {
         ScrollView {
             if let store {
                 SearchResultsView(store: store) { query = $0.rawValue }
+                    #if os(tvOS)
+                    .onExitCommand(perform: focusField)
+                    #endif
             }
         }
+        #if os(tvOS)
+        .scrollPosition($scroll)
+        #endif
         .scrollClipDisabled()
         // Shelves draw their own margins.
         .ignoresSafeArea(edges: .horizontal)
@@ -20,6 +34,9 @@ struct SearchScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.canvas.ignoresSafeArea())
         .searchable(text: $query, prompt: "Movies and series")
+        #if os(tvOS)
+        .focusScope(searchScope)
+        #endif
         .searchSuggestions {
             ForEach(store?.state.suggestions ?? [], id: \.search) { suggestion in
                 Text("\(Text(suggestion.typed).foregroundStyle(Palette.secondary))\(Text(suggestion.completion).bold())")
@@ -35,6 +52,14 @@ struct SearchScreen: View {
             )
         }
     }
+
+    #if os(tvOS)
+    private func focusField() {
+        scroll.scrollTo(edge: .top)
+        // After the scroll lays out, so the keyboard is in view.
+        Task { resetFocus(in: searchScope) }
+    }
+    #endif
 }
 
 private struct SearchResultsView: View {

@@ -68,8 +68,7 @@ enum PanelRow {
     }
 }
 
-/// A page of choices above the transport bar, the current one checked. It stands in for a system
-/// `Menu`, which on tvOS leaves nothing focused for over a second after it closes.
+/// A page of choices above the transport bar, the current one checked, in a `GlassList`.
 struct OptionsPanel: View {
     let sections: [PanelSection]
     var focus: FocusState<PlayerFocus?>.Binding
@@ -77,26 +76,9 @@ struct OptionsPanel: View {
     let open: (PlayerPanel) -> Void
 
     var body: some View {
-        ViewThatFits(in: .vertical) {
-            list
-            ScrollView { list }
-        }
-        .frame(width: Metrics.playerPanelWidth)
-        .padding(Metrics.playerPanelPadding)
-        .controlBackground(in: .rect(cornerRadius: Metrics.cornerRadius * 2, style: .continuous))
-        // Sized on its own rather than by the button row it overlays; short pages sit at the bottom.
-        .frame(height: Metrics.playerPanelMaxHeight, alignment: .bottom)
-        #if os(tvOS)
-        .focusSection()
-        #endif
-    }
-
-    private var list: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        GlassList(width: Metrics.playerPanelWidth, maxHeight: Metrics.playerPanelMaxHeight, alignment: .bottom) {
             ForEach(Array(numbered.enumerated()), id: \.offset) { _, numbered in
-                if let title = numbered.section.title {
-                    Text(title).font(.caption).foregroundStyle(Palette.secondary).padding(.top, 8)
-                }
+                if let title = numbered.section.title { GlassListHeader(title) }
                 ForEach(Array(numbered.section.rows.enumerated()), id: \.offset) { offset, row in
                     rowView(row, index: numbered.start + offset)
                 }
@@ -131,36 +113,9 @@ struct OptionsPanel: View {
             .accessibilityIdentifier("player.option")
         case .note(let label, let detail):
             LabeledContent(label, value: detail)
-                .padding(.horizontal, Metrics.playerPanelPadding)
+                .padding(.horizontal, Metrics.rowPadding)
+                .padding(.vertical, Metrics.rowVerticalPadding)
                 .foregroundStyle(Palette.secondary)
         }
-    }
-}
-
-private extension View {
-    /// The panel floats over video as a control, so it takes Liquid Glass where the system has it.
-    /// The regular variant keeps its text legible over bright frames.
-    @ViewBuilder
-    func controlBackground(in shape: some Shape) -> some View {
-        if #available(tvOS 26, macOS 26, *) {
-            glassEffect(.regular, in: shape)
-        } else {
-            background(.regularMaterial, in: shape)
-        }
-    }
-}
-
-/// A row title with a checkmark before it when checked; unchecked titles keep the same indent.
-private struct CheckedLabel: View {
-    let title: String
-    let isChecked: Bool
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            Image(systemName: "checkmark").opacity(isChecked ? 1 : 0)
-            Text(title).labelLineLimit()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityAddTraits(isChecked ? .isSelected : [])
     }
 }
