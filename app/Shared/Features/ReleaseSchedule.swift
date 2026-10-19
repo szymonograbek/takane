@@ -14,8 +14,9 @@ struct ReleaseDay: Identifiable, Hashable, Sendable {
 
 enum ReleaseSchedule {
     /// `episodes` grouped by the day of `calendar` they come out on, from the day of `today` on,
-    /// earliest first, each day's in the order given. Each day is labeled by its distance from today, in days up to 13, in weeks
-    /// up to 59 days, then in months, with its weekday from 2 days on.
+    /// earliest first, each day's in the order given. Each day is labeled by its distance from today:
+    /// in days up to 13, in weeks up to 59 days, then in months. From 2 days on the label names the
+    /// weekday, and in months the date too, since a month holds each weekday more than once.
     static func days(_ episodes: [UpcomingEpisode], today: Date, calendar: Calendar) -> [ReleaseDay] {
         let start = calendar.startOfDay(for: today)
         let byDay = Dictionary(grouping: episodes) { calendar.startOfDay(for: $0.released) }
@@ -39,7 +40,8 @@ enum ReleaseSchedule {
         default:
             // 60 days or more read as two months, even when a calendar month is still short of it.
             let months = max(2, calendar.dateComponents([.month], from: today, to: day).month ?? 0)
-            return "In \(months) months (\(weekday))"
+            let date = "\(calendar.monthSymbols[calendar.component(.month, from: day) - 1]) \(calendar.component(.day, from: day))"
+            return "In \(months) months (\(weekday), \(date))"
         }
     }
 }

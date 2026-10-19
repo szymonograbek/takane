@@ -101,7 +101,7 @@ struct ReleaseScheduleTests {
 
         #expect(days.map(\.label) == [
             "Today", "Tomorrow", "In 2 days (Wednesday)", "In 13 days (Sunday)", "In 2 weeks (Monday)",
-            "In 8 weeks (Thursday)", "In 2 months (Friday)", "In 3 months (Tuesday)",
+            "In 8 weeks (Thursday)", "In 2 months (Friday, December 18)", "In 3 months (Tuesday, January 19)",
         ])
     }
 
