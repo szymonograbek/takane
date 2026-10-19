@@ -66,7 +66,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `search.genre` | on Search before anything is typed: each genre in the Movies by Genre and Series by Genre rows; label is the genre, selecting it opens its grid |
 | `genre.screen` | a genre's grid of posters (`poster.<imdb id>`), or its empty or error state with Try Again |
 | `library.screen` | the Library tab: the type and sort menus above a grid of posters (`poster.<imdb id>`), or its empty state |
-| `library.type`, `library.sort` | the Library filter rows: buttons labeled with each choice (`All Types`, `Movies`, `Series`; `Recently Watched`, `Name`, `Unwatched First`), the current one checked and reported selected. Down from the tab bar lands on the nearest one. A long press on a poster offers Remove from Library |
+| `library.type`, `library.sort` | the Library filter buttons, labeled with the current choice (`All Types`, `Series`; `Sort: Recently Watched`, `Sort: Name`). Selecting one opens a Show or Sort By list below it with the current choice focused; up and down move in it, a choice or Menu closes it with the button focused, and up from its first row closes it too. The rows have no identifier; match them by label. A long press on a poster offers Remove from Library |
 | `calendar.screen` | the Calendar tab: one row per day of upcoming episodes, titled "Today", "Tomorrow", "In 3 days (Friday)", or its empty or error state |
 | `upcoming.<video id>` | each upcoming episode card, such as `upcoming.tt0364845:24:3`; selecting it opens the show's details |
 | `details.library` | Add to Library, or In Library once added; selecting it toggles |

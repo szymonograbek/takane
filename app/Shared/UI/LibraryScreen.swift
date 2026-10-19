@@ -27,11 +27,12 @@ struct LibraryScreen: View {
 
 private struct LibraryContent: View {
     let store: FeatureStore<LibraryFeature>
+    @State private var openFilter: LibraryFilters.Kind?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // In every state, so the screen always has something to focus.
-            LibraryFilters(filter: store.state.filter, types: types) { store.send(.select($0)) }
+            LibraryFilters(filter: store.state.filter, types: types, open: $openFilter) { store.send(.select($0)) }
             Group {
                 switch store.state {
                 case .loading:
@@ -64,8 +65,11 @@ private struct LibraryContent: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Keeps focus in an open filter's choices.
+            .disabled(openFilter != nil)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .choiceMenus()
         // The grid and the filters draw their own margins.
         .ignoresSafeArea(edges: .horizontal)
         // Without it the screen's identifier would replace its controls' own.
@@ -78,37 +82,43 @@ private struct LibraryContent: View {
     }
 }
 
-/// The type and sort above the grid, each a row of its choices.
+/// The type and sort above the grid, each a button that opens its choices.
 private struct LibraryFilters: View {
-    @Environment(\.textLayout) private var textLayout
+    enum Kind {
+        case type, sort
+    }
+
     let filter: LibraryFilter
     /// The types the library holds.
     let types: [ContentType]
+    @Binding var open: Kind?
     let select: (LibraryFilter) -> Void
 
     var body: some View {
-        // At large text sizes the sort goes below the type, so both fit the width.
-        let layout = textLayout == .large
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Metrics.headerSpacing))
-            : AnyLayout(HStackLayout(spacing: Metrics.sectionSpacing))
-        layout {
-            ChoiceRow(
-                title: "Type",
+        HStack(spacing: 24) {
+            ChoiceMenu(
+                title: "Show", label: filter.type?.pluralName ?? "All Types", systemImage: "line.3.horizontal.decrease",
                 choices: [(name: "All Types", value: nil)] + choices.map { (name: $0.pluralName, value: Optional($0)) },
-                selection: filter.type
+                selection: filter.type, isPresented: presented(.type)
             ) { select(LibraryFilter(type: $0, sort: filter.sort)) }
+            .disabled(open == .sort)
             .accessibilityIdentifier("library.type")
-            ChoiceRow(
-                title: "Sort",
+            ChoiceMenu(
+                title: "Sort By", label: "Sort: \(filter.sort.name)", systemImage: "arrow.up.arrow.down",
                 choices: LibrarySort.allCases.map { (name: $0.name, value: $0) },
-                selection: filter.sort
+                selection: filter.sort, isPresented: presented(.sort)
             ) { select(LibraryFilter(type: filter.type, sort: $0)) }
+            .disabled(open == .type)
             .accessibilityIdentifier("library.sort")
         }
         .padding(.horizontal, Metrics.screenPadding)
         #if os(tvOS)
         .focusSection()
         #endif
+    }
+
+    private func presented(_ kind: Kind) -> Binding<Bool> {
+        Binding { open == kind } set: { open = $0 ? kind : nil }
     }
 
     /// The library's types, and the chosen one after its last title went.
