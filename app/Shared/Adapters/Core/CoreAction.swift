@@ -53,6 +53,16 @@ enum CoreAction: Sendable {
         case rewindLibraryItem(id: String)
         /// Marks a library item as a whole. Core ignores an id not in the library.
         case libraryItemMarkAsWatched(id: String, isWatched: Bool)
+        /// Forgets the new episodes found for a title, which takes it out of continue watching.
+        case dismissNotificationItem(id: String)
+        /// Asks add-ons for episodes of the library's shows newer than the one watched last.
+        /// Core asks at most every 6 hours.
+        case pullNotifications
+        /// Refreshes the signed-in user and signs out if the session expired.
+        case pullUserFromAPI
+        case pullAddonsFromAPI
+        /// Pulls library items changed elsewhere and pushes the ones changed here.
+        case syncLibraryWithAPI
     }
 
     /// Watched marks on the title the `meta_details` model holds, through its library item.
@@ -274,6 +284,12 @@ extension CoreAction.Ctx: Encodable {
         case .rewindLibraryItem(let id): try action("RewindLibraryItem", id).encode(to: encoder)
         case .libraryItemMarkAsWatched(let id, let isWatched):
             try action("LibraryItemMarkAsWatched", MarkAsWatchedArgs(id: id, isWatched: isWatched)).encode(to: encoder)
+        case .dismissNotificationItem(let id): try action("DismissNotificationItem", id).encode(to: encoder)
+        case .pullNotifications: try action("PullNotifications").encode(to: encoder)
+        // No token: core uses the profile's.
+        case .pullUserFromAPI: try action("PullUserFromAPI", NoArgs()).encode(to: encoder)
+        case .pullAddonsFromAPI: try action("PullAddonsFromAPI").encode(to: encoder)
+        case .syncLibraryWithAPI: try action("SyncLibraryWithAPI").encode(to: encoder)
         }
     }
 

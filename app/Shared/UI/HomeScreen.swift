@@ -158,8 +158,17 @@ private struct CatalogShelf: View {
 }
 
 extension ContinueWatchingItem {
-    var streamsRequest: StreamsRequest {
-        StreamsRequest(video: video, title: name, backdrop: background ?? poster)
+    /// Resumes a title stopped partway. A show with new episodes opens its page, to pick one.
+    var route: Route {
+        switch reason {
+        case .partway:
+            .streams(StreamsRequest(video: video, title: name, backdrop: background ?? poster))
+        case .newEpisodes:
+            .details(MetaPreview(
+                media: media, type: type, name: name, poster: poster, posterShape: .poster,
+                background: background, logo: nil, releaseInfo: nil, description: nil
+            ))
+        }
     }
 }
 

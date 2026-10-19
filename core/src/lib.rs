@@ -212,6 +212,11 @@ mod tests {
             r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkAsWatched","args":false}}}"#,
             r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkVideoAsWatched","args":[{"id":"tt0944947:1:1","title":"Winter Is Coming","released":"2011-04-17T00:00:00.000Z","season":1,"episode":1},true]}}}"#,
             r#"{"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"MarkSeasonAsWatched","args":[1,false]}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"DismissNotificationItem","args":"tt0944947"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullNotifications"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullUserFromAPI","args":{}}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullAddonsFromAPI"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"SyncLibraryWithAPI"}}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);

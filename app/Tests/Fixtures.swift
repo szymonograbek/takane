@@ -29,10 +29,11 @@ extension Fixture {
     }
 
     static func continueWatching(video: PlayableID, offset: Duration) -> ContinueWatchingItem {
-        ContinueWatchingItem(
-            media: video.media, type: .series, name: "Show", poster: nil, background: nil,
-            video: video, offset: offset, duration: .seconds(3_000)
-        )
+        continueWatching(video: video, reason: .partway(offset: offset, duration: .seconds(3_000)))
+    }
+
+    static func continueWatching(video: PlayableID, reason: ContinueWatchingItem.Reason) -> ContinueWatchingItem {
+        ContinueWatchingItem(media: video.media, type: .series, name: "Show", poster: nil, background: nil, video: video, reason: reason)
     }
 }
 

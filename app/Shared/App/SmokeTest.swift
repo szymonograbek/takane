@@ -199,13 +199,13 @@ struct SmokeTest {
 
         // Pausing makes core push the player's library item into the library, which feeds continue watching.
         app.player.send(.togglePause)
-        let progress = try await app.home.until(timeout: .seconds(10), onTimeout: Failure.timedOut("continue watching progress")) { state in
-            guard let watched = state.continueWatching.first(where: { $0.media == item.media }), watched.offset >= .seconds(5) else {
-                return Probe<ContinueWatchingItem, Failure>.pending
+        let offset = try await app.home.until(timeout: .seconds(10), onTimeout: Failure.timedOut("continue watching progress")) { state in
+            guard case .partway(let watched, _)? = state.continueWatching.first(where: { $0.media == item.media })?.reason, watched >= .seconds(5) else {
+                return Probe<Duration, Failure>.pending
             }
             return .done(watched)
         }
-        result.continueWatchingTimeOffsetMs = UInt64(progress.offset / .milliseconds(1))
+        result.continueWatchingTimeOffsetMs = UInt64(offset / .milliseconds(1))
         Log.smoke.info("SMOKE step 4/4 continue watching has the item after pause: timeOffset=\(result.continueWatchingTimeOffsetMs ?? 0)ms")
     }
 

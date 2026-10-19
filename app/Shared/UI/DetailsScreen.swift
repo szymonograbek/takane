@@ -116,7 +116,7 @@ private struct PlayButtons: View {
             let progress = app.home.state.progress(of: preview.media)
             if let progress {
                 NavigationLink(value: Route.streams(StreamsRequest(preview: preview, video: progress.video))) {
-                    Label("Resume · \(progress.remainingLabel)", systemImage: "play.fill")
+                    Label("Resume · \(progress.caption)", systemImage: "play.fill")
                 }
                 .primaryActionStyle()
                 .contextMenu { movieMenu }

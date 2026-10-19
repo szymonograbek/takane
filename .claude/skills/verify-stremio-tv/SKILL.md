@@ -60,7 +60,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `signIn.password`, `signIn.email`, `signIn.passwordField`, `signIn.submit`, `signIn.error` | email sign-in |
 | `home.screen` | Home's scroll view |
 | `hero.play`, `hero.details` | hero buttons (Play only for movies) |
-| `continueWatching.item` | each Continue Watching card; label `<name>, <time left>` |
+| `continueWatching.item` | each Continue Watching card; label `<name>, <time left>`, or `<name>, New episode` for a show with new episodes |
 | `poster.<imdb id>` | each poster in Home rows and search results |
 | `details.resume`, `details.play`, `episode.<id>` | Details actions |
 | `streams.row` | each playable stream (unplayable ones are not listed) |

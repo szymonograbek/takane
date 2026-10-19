@@ -1,6 +1,6 @@
 import Foundation
 
-/// A title the user started and has not finished.
+/// A title the user started and has not finished, or a show with episodes newer than the one watched.
 struct ContinueWatchingItem: Identifiable, Hashable, Sendable {
     let media: MediaID
     let type: ContentType
@@ -10,10 +10,16 @@ struct ContinueWatchingItem: Identifiable, Hashable, Sendable {
     let background: URL?
     /// The movie, or the episode watched last.
     let video: PlayableID
-    let offset: Duration
-    let duration: Duration
+    let reason: Reason
 
     var id: MediaID { media }
+
+    enum Reason: Hashable, Sendable {
+        /// The user stopped partway through `video`.
+        case partway(offset: Duration, duration: Duration)
+        /// `count` episodes came out after `video`, which the user is not partway through.
+        case newEpisodes(count: Int)
+    }
 }
 
 /// The user's library as it changes.
@@ -21,7 +27,7 @@ protocol LibraryService: Sendable {
     /// Continue watching now, then after every change.
     func continueWatching() -> AsyncStream<[ContinueWatchingItem]>
 
-    /// Forgets the progress on `media`, which takes it out of continue watching.
+    /// Forgets the progress and new episodes of `media`, which takes it out of continue watching.
     func removeFromContinueWatching(_ media: MediaID)
 
     /// Marks `target` watched or unwatched. A title is marked from its loaded details or, once it
@@ -29,6 +35,10 @@ protocol LibraryService: Sendable {
     /// are marked only from their title's loaded details. Marking a title watched resets its
     /// progress, which takes it out of continue watching.
     func setWatched(_ target: WatchedTarget, _ isWatched: Bool) throws(WatchedError)
+
+    /// Looks for episodes of the library's shows that came out since each was last watched. Those
+    /// shows join continue watching.
+    func checkForNewEpisodes()
 }
 
 /// What one watched mark covers.

@@ -91,11 +91,15 @@ extension HomeFeature.State {
 
     /// Where to start `video`: the saved position when continue watching holds this exact video.
     func resumePosition(for video: PlayableID) -> Duration? {
-        continueWatching.first { $0.video == video }?.offset
+        guard case .partway(let offset, _)? = continueWatching.first(where: { $0.video == video })?.reason else { return nil }
+        return offset
     }
 
-    /// The continue watching entry for a title, to offer Resume on its page.
+    /// The continue watching entry for a title the user stopped partway through, to offer Resume on its page.
     func progress(of media: MediaID) -> ContinueWatchingItem? {
-        continueWatching.first { $0.media == media }
+        continueWatching.first { item in
+            guard item.media == media, case .partway = item.reason else { return false }
+            return true
+        }
     }
 }

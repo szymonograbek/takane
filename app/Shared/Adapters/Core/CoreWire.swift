@@ -317,8 +317,20 @@ struct Subtitles: Decodable, Sendable {
 // MARK: - continue_watching_preview
 
 struct ContinueWatchingState: Decodable, Sendable {
-    /// Each item is a library item (flattened) plus a notification count the app ignores for now.
-    let items: [LibraryItem]
+    /// A library item, flattened, with the number of new episodes core found for it.
+    struct Item: Decodable, Sendable {
+        let library: LibraryItem
+        let notifications: Int
+
+        init(from decoder: any Decoder) throws {
+            library = try LibraryItem(from: decoder)
+            notifications = try decoder.container(keyedBy: CodingKeys.self).decode(Int.self, forKey: .notifications)
+        }
+
+        private enum CodingKeys: String, CodingKey { case notifications }
+    }
+
+    let items: [Item]
 }
 
 // MARK: - library

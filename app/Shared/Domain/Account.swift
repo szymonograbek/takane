@@ -69,4 +69,8 @@ protocol AccountService: Sendable {
     func signIn(email: EmailAddress, password: Password) async throws(AccountError)
 
     func signOut()
+
+    /// Pulls what changed on the account from other devices (add-ons, library, watch progress) and
+    /// pushes what this device has not uploaded yet. Signed out, it does nothing.
+    func sync()
 }

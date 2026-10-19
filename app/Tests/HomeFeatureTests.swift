@@ -29,7 +29,7 @@ struct HomeFeatureTests {
     @Test func onlyAMovieInContinueWatchingIsMarkedWatched() {
         let movie = ContinueWatchingItem(
             media: Fixture.movie.media, type: .movie, name: "Movie", poster: nil, background: nil,
-            video: Fixture.movie, offset: .seconds(600), duration: .seconds(6_000)
+            video: Fixture.movie, reason: .partway(offset: .seconds(600), duration: .seconds(6_000))
         )
         let series = Fixture.continueWatching(video: Fixture.episode, offset: .seconds(600))
         var state = HomeFeature.State(continueWatching: [movie, series])
@@ -42,6 +42,14 @@ struct HomeFeatureTests {
         let item = Fixture.continueWatching(video: Fixture.episode, offset: .seconds(600))
         let state = HomeFeature.State(continueWatching: [item])
         #expect(state.resumePosition(for: Fixture.episode) == .seconds(600))
+        #expect(state.progress(of: item.media) == item)
         #expect(state.resumePosition(for: PlayableID("tt0944947:1:2").require()) == nil)
+    }
+
+    @Test func aShowListedForNewEpisodesHasNothingToResume() {
+        let item = Fixture.continueWatching(video: Fixture.episode, reason: .newEpisodes(count: 2))
+        let state = HomeFeature.State(continueWatching: [item])
+        #expect(state.resumePosition(for: Fixture.episode) == nil)
+        #expect(state.progress(of: item.media) == nil)
     }
 }

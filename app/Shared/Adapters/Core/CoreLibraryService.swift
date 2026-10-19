@@ -12,6 +12,11 @@ struct CoreLibraryService: LibraryService {
 
     func removeFromContinueWatching(_ media: MediaID) {
         runtime.dispatchLogged(.ctx(.rewindLibraryItem(id: media.rawValue)))
+        runtime.dispatchLogged(.ctx(.dismissNotificationItem(id: media.rawValue)))
+    }
+
+    func checkForNewEpisodes() {
+        runtime.dispatchLogged(.ctx(.pullNotifications))
     }
 
     /// Core marks through the `meta_details` model's library item, which exists for a loaded title
@@ -50,8 +55,11 @@ struct CoreLibraryService: LibraryService {
         }
     }
 
-    private static func item(_ item: LibraryItem) -> ContinueWatchingItem? {
-        guard let media = MediaID(item.id), let type = ContentType(item.type) else { return nil }
+    private static func item(_ entry: ContinueWatchingState.Item) -> ContinueWatchingItem? {
+        let item = entry.library
+        guard let media = MediaID(item.id), let type = ContentType(item.type),
+              let reason = reason(item.state, newEpisodes: entry.notifications)
+        else { return nil }
         let poster = item.poster.flatMap(URL.init(string:))
         return ContinueWatchingItem(
             media: media,
@@ -60,9 +68,16 @@ struct CoreLibraryService: LibraryService {
             poster: poster,
             background: poster.flatMap(background),
             video: item.state.videoId.flatMap(PlayableID.init) ?? .movie(media),
-            offset: .milliseconds(item.state.timeOffset),
-            duration: .milliseconds(item.state.duration)
+            reason: reason
         )
+    }
+
+    /// Core lists an item for its progress or, with none, for new episodes.
+    private static func reason(_ state: LibraryItem.State, newEpisodes: Int) -> ContinueWatchingItem.Reason? {
+        if state.timeOffset > 0 {
+            return .partway(offset: .milliseconds(state.timeOffset), duration: .milliseconds(state.duration))
+        }
+        return newEpisodes > 0 ? .newEpisodes(count: newEpisodes) : nil
     }
 
     /// Cinemeta's posters come from Stremio's image service, which serves the same title's wide
