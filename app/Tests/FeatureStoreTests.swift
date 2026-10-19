@@ -37,6 +37,10 @@ private final class FakeTracker: PlaybackTracker {
     func paused(_ paused: Bool) { reports.continuation.yield("paused \(paused)") }
     func ended() { reports.continuation.yield("ended") }
     func stop() { reports.continuation.yield("stop") }
+    func remember(_ choices: TrackChoices) { reports.continuation.yield("remember \(choices)") }
+    func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices> {
+        AsyncStream { $0.finish() }
+    }
 }
 
 @MainActor

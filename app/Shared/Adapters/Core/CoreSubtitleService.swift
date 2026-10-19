@@ -34,7 +34,7 @@ struct CoreSubtitleService: SubtitleService {
         let listening = Task {
             var isSelected = false
             for await player in states {
-                guard Self.plays(candidate, from: source, in: player) else {
+                guard player.plays(candidate, from: source) else {
                     // Before the tracker's load lands nothing is selected; after, another candidate replaced this one.
                     if isSelected { break } else { continue }
                 }
@@ -49,11 +49,6 @@ struct CoreSubtitleService: SubtitleService {
             listening.cancel()
         }
         return results
-    }
-
-    private static func plays(_ candidate: StreamCandidate, from source: PlaybackSource, in player: PlayerState) -> Bool {
-        guard let selected = player.selected else { return false }
-        return selected.stream.source == .url(source.url) && selected.subtitlesPath?.id == candidate.item.rawValue
     }
 
     private static func sources(from player: PlayerState, addonNames: [URL: String]) -> [SubtitleSource] {

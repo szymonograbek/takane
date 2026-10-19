@@ -46,6 +46,7 @@ enum PlayerFeature: Feature {
         var segments: Remote<[SkipSegment], SkipSegmentError>?
         var scan: Scan?
         var streak: StepStreak?
+        var restore = Restore.awaiting
     }
 
     enum State: Equatable, Sendable {
@@ -70,6 +71,7 @@ enum PlayerFeature: Feature {
         case segmentsFound(PlayableID, Result<[SkipSegment], SkipSegmentError>)
         case subtitlesFound(StreamCandidate, [SubtitleSource])
         case preferencesRead(StreamCandidate, SeekStep)
+        case remembered(StreamCandidate, TrackChoices)
     }
 
     enum Report: Equatable, Sendable {
@@ -77,13 +79,15 @@ enum PlayerFeature: Feature {
         case seek(to: Duration, of: Duration)
         case paused(Bool)
         case ended
+        /// The viewer chose these tracks and speed.
+        case choices(TrackChoices)
     }
 
     enum Effect: Equatable, Sendable {
         /// Feeds engine events back as `.engine`. Start it once, when the store is created.
         case listen
-        /// Reads the preferences and starts playback, then follows the add-ons' subtitles for it
-        /// until another candidate replaces it.
+        /// Reads the preferences and starts playback, then follows the add-ons' subtitles and what was
+        /// remembered for it until another candidate replaces it.
         case begin(StreamCandidate, PlaybackSource, from: Duration)
         case setPaused(Bool)
         case seek(by: Duration)
@@ -123,13 +127,13 @@ enum PlayerFeature: Feature {
             return update(&state, session) { $0.apply(event) }
 
         case (.active(let session), .select(let track)):
-            return session.tracks.contains { $0.id == track && !$0.isSelected } ? [.select(track)] : []
+            return update(&state, session) { $0.select(track) }
 
         case (.active(let session), .chooseSubtitles(let choice)):
-            return choose(choice, in: session)
+            return update(&state, session) { $0.chooseSubtitles(choice) }
 
         case (.active(let session), .setSpeed(let speed)):
-            return speed == session.speed ? [] : [.setSpeed(speed)]
+            return update(&state, session) { $0.setSpeed(speed) }
 
         case (.active(let session), .skip(let segment)) where session.segments?.value?.contains(segment) == true:
             return update(&state, session) { $0.endScan() + [.seekTo(segment.range.upperBound)] }
@@ -144,8 +148,12 @@ enum PlayerFeature: Feature {
 
         case (.active(var session), .subtitlesFound(let candidate, let sources)) where candidate == session.candidate:
             session.addonSubtitles = sources
+            let effects = session.continueRestore()
             state = .active(session)
-            return []
+            return effects
+
+        case (.active(let session), .remembered(let candidate, let choices)) where candidate == session.candidate:
+            return update(&state, session) { $0.restoreRemembered(choices) }
 
         case (.active(var session), .preferencesRead(let candidate, let step)) where candidate == session.candidate:
             session.seekStep = step
@@ -170,8 +178,8 @@ enum PlayerFeature: Feature {
              (.idle, .select), (.idle, .chooseSubtitles), (.idle, .setSpeed), (.idle, .skip), (.idle, .segmentsFound),
              (.failed, .select), (.failed, .chooseSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
              (.idle, .subtitlesFound), (.failed, .subtitlesFound), (.idle, .timeline), (.failed, .timeline),
-             (.idle, .preferencesRead), (.failed, .preferencesRead),
-             (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .preferencesRead), (.active, .skip):
+             (.idle, .preferencesRead), (.failed, .preferencesRead), (.idle, .remembered), (.failed, .remembered),
+             (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .preferencesRead), (.active, .skip), (.active, .remembered):
             return []
         }
     }
@@ -195,20 +203,6 @@ enum PlayerFeature: Feature {
         let effects = change(&session)
         state = .active(session)
         return effects
-    }
-
-    /// An add-on file plays from the track it was added as; one not added yet is added.
-    private static func choose(_ choice: SubtitleChoice, in session: Session) -> [Effect] {
-        switch choice {
-        case .off:
-            return session.subtitleChoice == .off ? [] : [.turnOffSubtitles]
-        case .builtIn(let track):
-            return session.tracks.contains { $0.id == track && $0.externalFile == nil && !$0.isSelected } ? [.select(track)] : []
-        case .addon(let id):
-            guard let subtitle = session.addonSubtitle(id) else { return [] }
-            guard let track = session.tracks.first(where: { $0.externalFile == subtitle.url }) else { return [.addSubtitles(subtitle)] }
-            return track.isSelected ? [] : [.select(track.id)]
-        }
     }
 
     /// Updates `session` for an engine event. A `.stopped` while opening is the previous file
@@ -256,6 +250,7 @@ enum PlayerFeature: Feature {
             session.decoder = name
         case .tracks(let tracks):
             session.tracks = tracks
+            return session.continueRestore()
         case .speed(let speed):
             session.speed = speed
         case .subtitles(let cues):
@@ -282,9 +277,7 @@ extension PlayerFeature {
             if let preferences { send(.preferencesRead(candidate, preferences.seekStep)) }
             tracker.begin(candidate)
             engine.load(source, from: start, languages: preferences?.languages ?? .streamDefaults)
-            for await sources in dependencies.subtitles.subtitles(for: candidate, playing: source) {
-                send(.subtitlesFound(candidate, sources))
-            }
+            await follow(candidate, playing: source, dependencies, send)
         case .setPaused(let paused):
             engine.setPaused(paused)
         case .seek(let offset):
@@ -320,6 +313,8 @@ extension PlayerFeature {
             tracker.paused(paused)
         case .report(.ended):
             tracker.ended()
+        case .report(.choices(let choices)):
+            tracker.remember(choices)
         }
     }
 }
@@ -331,10 +326,7 @@ extension PlayerFeature.Session {
     }
 
     var subtitleChoice: PlayerFeature.SubtitleChoice {
-        guard let track = tracks.first(where: { $0.id.kind == .subtitle && $0.isSelected }) else { return .off }
-        guard let file = track.externalFile else { return .builtIn(track.id) }
-        let subtitle = addonSubtitles.lazy.compactMap(\.subtitles.value).joined().first { $0.url == file }
-        return subtitle.map { .addon($0.id) } ?? .off
+        tracks.first { $0.id.kind == .subtitle && $0.isSelected }.map(subtitleChoice(of:)) ?? .off
     }
 
     func addonSubtitle(_ id: AddonSubtitle.ID) -> AddonSubtitle? {

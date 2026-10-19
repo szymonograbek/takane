@@ -92,6 +92,8 @@ enum CoreAction: Sendable {
         case ended
         /// What subtitle add-ons match the file by. Core prefers what the stream itself declares.
         case videoParamsChanged(hash: String?, size: UInt64?, filename: String?)
+        /// Replaces what core saves for the selected video.
+        case streamStateChanged(StreamItemState)
     }
 }
 
@@ -194,7 +196,8 @@ private struct Tagged<Args: Encodable>: Encodable {
     }
 }
 
-private struct DynamicKey: CodingKey {
+/// A JSON object key known only at run time.
+struct DynamicKey: CodingKey {
     let stringValue: String
     var intValue: Int? { nil }
     init(_ string: String) { stringValue = string }
@@ -346,6 +349,7 @@ extension CoreAction.Player: Encodable {
 
         let videoParams: VideoParams
     }
+    private struct StreamStateChangedArgs: Encodable { let state: StreamItemState }
 
     func encode(to encoder: any Encoder) throws {
         switch self {
@@ -360,6 +364,8 @@ extension CoreAction.Player: Encodable {
         case .videoParamsChanged(let hash, let size, let filename):
             let params = VideoParamsChangedArgs.VideoParams(hash: hash, size: size, filename: filename)
             try action("VideoParamsChanged", VideoParamsChangedArgs(videoParams: params)).encode(to: encoder)
+        case .streamStateChanged(let state):
+            try action("StreamStateChanged", StreamStateChangedArgs(state: state)).encode(to: encoder)
         }
     }
 }

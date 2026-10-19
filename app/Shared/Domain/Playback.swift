@@ -198,6 +198,29 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func snapshot() async -> CGImage?
 }
 
+/// The tracks and speed the viewer chose for a title, remembered so it plays the same way next time.
+struct TrackChoices: Hashable, Sendable {
+    /// A track by the engine's number and its language. Another file, such as the next episode, may
+    /// number its tracks differently, so the language confirms the number.
+    struct Track: Hashable, Sendable {
+        let number: Int
+        let language: String?
+    }
+
+    enum Subtitles: Hashable, Sendable {
+        case builtIn(Track)
+        /// An add-on's file, by its address.
+        case addon(URL, language: String?)
+    }
+
+    /// Nil when none was chosen.
+    var audio: Track?
+    /// Nil when subtitles are off or none was chosen.
+    var subtitles: Subtitles?
+    /// Nil when none was chosen.
+    var speed: PlaybackSpeed?
+}
+
 /// Records what the user watched, so progress, watched state and continue watching follow playback.
 protocol PlaybackTracker: Sendable {
     func begin(_ candidate: StreamCandidate)
@@ -207,4 +230,10 @@ protocol PlaybackTracker: Sendable {
     func paused(_ paused: Bool)
     func ended()
     func stop()
+    /// Remembers what the viewer chose for the candidate being tracked.
+    func remember(_ choices: TrackChoices)
+    /// What was remembered for `candidate`, playing from `source`, or carried over from an earlier
+    /// episode, once known. Call it after `begin(candidate)`. Yields at most once, and finishes once
+    /// another candidate replaces it.
+    func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices>
 }
