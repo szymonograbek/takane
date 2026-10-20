@@ -38,6 +38,11 @@ private struct ShareLogsContent: View {
                 selection: window, isPresented: $choosingWindow
             ) { store.send(.select($0)) }
             .accessibilityIdentifier("shareLogs.window")
+            // Spans the width, so moving up from the key's button lands here, not on the tab bar.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            #if os(tvOS)
+            .focusSection()
+            #endif
             Group {
                 switch store.state {
                 case .idle, .starting:
