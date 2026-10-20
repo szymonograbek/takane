@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.2.0](https://github.com/szymonograbek/takane/compare/v1.1.3...v1.2.0) (2026-10-20)
+
+
+### Features
+
+* **features:** play live tv channels from add-ons ([fcfe2c0](https://github.com/szymonograbek/takane/commit/fcfe2c077ff96ef5b04e8f33f0b3e6d28fb738e3))
+* **features:** play live tv channels from add-ons ([b9d948b](https://github.com/szymonograbek/takane/commit/b9d948b309dd5c571a11b22071b07e7ad7a4ab4a))
+* **ui:** share redacted logs over the local network ([794da46](https://github.com/szymonograbek/takane/commit/794da4655791d4a8353a8446778a1aeb61ca7c41))
+* **ui:** share redacted logs over the local network ([12c8759](https://github.com/szymonograbek/takane/commit/12c8759c8b500eeb76bd8f4452ea9ca98f2b3616))
+* **ui:** shorten the log key and hide it until shown ([86308ef](https://github.com/szymonograbek/takane/commit/86308ef5de29bc8908b931702fbb4407b2f18d48))
+
+
+### Bug Fixes
+
+* **ui:** let focus move up from the log key to the time range ([67fda09](https://github.com/szymonograbek/takane/commit/67fda094dfe5dea414c263a5f17cd149e374394d))
+
 ## [1.1.3](https://github.com/szymonograbek/takane/compare/v1.1.2...v1.1.3) (2026-10-20)
 
 
