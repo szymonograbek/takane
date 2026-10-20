@@ -113,7 +113,7 @@ The logs are safe to share. Before anything is written to them, Takane replaces 
 
 A code stays the same within a log, so a log can show you played the same episode twice without naming it. What remains is what helps fix the problem: which screens you opened and what you pressed, and how playback went. If you want to, say in your issue which title it was.
 
-Share Logs also shows your log key. Sending it to the developer is optional: it lets them see the titles and add-ons behind the codes, never your debrid keys. Send it privately and never post it in the issue.
+Share Logs also shows a log key. You don't need it to report a problem. Keep it to yourself unless the developer asks for it.
 
 ## Contributing
 

@@ -21,6 +21,7 @@ Preconditions:
 
 - **Open.** `$T focus gearshape right`, `$T focus settings.about down`, `$T select`, `$T focus about.shareLogs down`, `$T select`. `$T text shareLogs.url` prints the address. The simulator shares the Mac's network, so `curl -sD - <address>` from the Mac fetches it (outside the command sandbox).
 - **Window.** With `shareLogs.window` focused, `$T select`, `$T remote down`, `$T select`. The button reads `Last 6 Hours`; `$T text shareLogs.url` prints the same address, and the next download's second line starts `Last 6 Hours:`.
+- **Log key** (Release build only). `shareLogs.key` reads `XXXX-XXXX-XXXX` under a placeholder until `$T focus shareLogs.showKey down`, `$T select`; it then reads the key and the button `Hide Log Key`. Leaving and reopening the screen hides it again. `swift scripts/reveal-log.swift <download> <key>` reveals the download's codes.
 - **Not found.** `curl -sD - <address with another path>` prints `HTTP/1.1 404 Not Found`.
 - **Stop.** `$T remote menu`. `curl -m 5 <address>` fails with `Couldn't connect to server`.
 

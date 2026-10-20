@@ -100,26 +100,39 @@ private struct SharedLink: View {
             }
             .frame(maxWidth: Metrics.readingWidth, alignment: .leading)
         }
+        // Spans the width below the time range, so moving down from it reaches the key's button.
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 }
 
-/// The key that reveals what release logs hide, for the user to hand over privately. Debug builds
-/// hide nothing, so they have none.
+/// The key that reveals what release logs hide, for the user to hand over if the developer asks. It
+/// stays hidden until asked for, so a photo of the screen does not give it away, and hides again when
+/// the screen goes. Debug builds hide nothing, so they have none.
 private struct LogKeyNote: View {
     let key: LogKey
+    @State private var isShown = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.headerSpacing) {
             Text("Log Key").font(.headline)
-            Text(key.text)
-                .font(.title3.monospaced().weight(.semibold))
+            // Hidden, it draws placeholder characters, so neither the screen nor accessibility holds the key.
+            Text(isShown ? key.text : "XXXX-XXXX-XXXX")
+                .font(.largeTitle.monospaced().weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
+                .redacted(reason: isShown ? [] : .placeholder)
                 .accessibilityIdentifier("shareLogs.key")
-            Text("The log hides titles, add-ons and your account. To let the developer see them, send this key privately. Never post it in the issue.")
+            Button(isShown ? "Hide Log Key" : "Show Log Key", systemImage: isShown ? "eye.slash" : "eye") {
+                isShown.toggle()
+            }
+            .accessibilityIdentifier("shareLogs.showKey")
+            Text("Lets the developer read the details the log hides, only if they ask for it. Never post it in an issue.")
                 .font(.callout)
                 .foregroundStyle(Palette.secondary)
         }
         .padding(.top, Metrics.headerSpacing)
+        .onDisappear { isShown = false }
     }
 }

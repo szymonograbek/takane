@@ -8,8 +8,9 @@ enum Fixture {
     static let channel = PlayableID.liveChannel(MediaID("fox-sports").require())
     static let source = PlaybackSource(url: Redacted(URL(filePath: "/movie.mkv")), headers: ["Authorization": "token"])
     /// Release redaction under a fixed log key, so tests can assert the codes it writes.
-    static let releaseKey = LogKey(bytes: Data(repeating: 7, count: LogKey.byteCount)).require()
-    static let release = Redaction.pseudonymized(releaseKey.pseudonymizer)
+    static let releaseKey = LogKey(text: "K0FM-Q2XD-91NB").require()
+    static let releaseSecrets = LogSecrets(releaseKey)
+    static let release = Redaction.pseudonymized(releaseSecrets.pseudonymizer)
 
     /// `body`'s text as a release log line reads it.
     static func inRelease<Value>(_ body: () -> Value) -> Value {

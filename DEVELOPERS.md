@@ -33,7 +33,7 @@ Versions follow [Semantic Versioning](https://semver.org) and come from the [Con
 
 macOS: `~/Library/Logs/com.ograbek.stremio-tv/app.log` (previous run: `app.previous.log`). tvOS simulator: `Library/Caches/Logs/app.log` inside the app's data container (`xcrun simctl get_app_container booted com.ograbek.stremio-tv data`). Also in Console.app under subsystem `com.ograbek.stremio-tv`. Swift, Rust and AetherEngine logs share the file, tagged by category. `STREMIO_LOG_LEVEL=trace|debug|info|warning|error` sets the threshold.
 
-Release builds replace personal values in their logs with codes (`#k3f9qa`), the same for the same value. A shared log ends with an encrypted legend of its codes. When a user sends you their log key privately (Settings › About › Share Logs), `swift scripts/reveal-log.swift <log-file> <log-key>` prints the log with each code followed by its value, as in `#k3f9qa‹tt0063350›`. Links show only their origin, so no debrid key is revealed. A wrong key fails with "wrong log key". Never post a user's key or a revealed log in an issue.
+Release builds replace personal values in their logs with codes (`#k3f9qa`), the same for the same value. A shared log ends with an encrypted legend of its codes. When a user sends you their log key privately (Settings › About › Share Logs, 12 characters such as `K0FM-Q2XD-91NB`), `swift scripts/reveal-log.swift <log-file> <log-key>` prints the log with each code followed by its value, as in `#k3f9qa‹tt0063350›`. Links show only their origin, so no debrid key is revealed. The key may be typed in any case, with or without dashes; the script takes a moment to stretch it. A wrong key fails with "wrong log key". Never post a user's key or a revealed log in an issue.
 
 ## Smoke test
 

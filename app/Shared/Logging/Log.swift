@@ -83,10 +83,14 @@ struct Log: Sendable {
         #endif
     }()
 
+    /// What `key` unlocks. Made with the first line, it derives its keys in the background, so only a
+    /// line that codes a value in the first fraction of a second waits for them.
+    static let secrets: LogSecrets? = key.map(LogSecrets.init)
+
     /// What lines show of `Redacted` and other personal values: revealed in debug builds, codes in
     /// release ones, each recorded in the session's legend as `RedactedMask.legendText(of:)` shows it.
     static let redaction: Redaction = {
-        guard let codes = key?.pseudonymizer else { return .revealed }
+        guard let codes = secrets?.pseudonymizer else { return .revealed }
         return .pseudonymized(Pseudonymizer { value in
             let code = codes.code(value)
             LogSink.shared.record(code, standingFor: RedactedMask.legendText(of: value))
@@ -203,9 +207,9 @@ private final class LogSink: Sendable {
             LogLines.written(since: start, in: Self.text(of: file))
         }
         let text = Self.header(window, start: start, end: now) + lines.joined()
-        guard let key = Log.key else { return text }
+        guard let secrets = Log.secrets else { return text }
         let legend = LogLegend.entries(in: files.map { Self.text(of: Self.legend(of: $0)) }, appearingIn: text)
-        return text + LogLegend.section(key.seal(legend))
+        return text + LogLegend.section(secrets.seal(legend))
     }
 
     private static func text(of file: URL) -> String {
