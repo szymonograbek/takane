@@ -81,7 +81,7 @@ final class CoreRuntime: Sendable {
     }
 
     /// `transform` of the field's state now, then after every change that alters it.
-    func observe<State: Decodable, Value: Equatable & Sendable>(
+    func observe<State: Decodable & SendableMetatype, Value: Equatable & Sendable>(
         _ field: CoreField,
         as type: State.Type = State.self,
         _ transform: @escaping @Sendable (State) -> Value
