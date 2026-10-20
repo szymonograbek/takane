@@ -19,6 +19,7 @@ if ! xcodebuild -project StremioTV.xcodeproj -scheme StremioTV-tvOS -configurati
     CODE_SIGNING_ALLOWED=NO build \
     > "$log" 2>&1; then
     grep -E "error:" "$log" | sort -u >&2 || true
+    tail -n 40 "$log" >&2
     echo "build failed, see $log" >&2
     exit 1
 fi
