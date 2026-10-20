@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/szymonograbek/takane/compare/v1.1.1...v1.1.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **core:** require a sendable metatype in observe for xcode 26 ([0268c85](https://github.com/szymonograbek/takane/commit/0268c85d194fca869be7e923cdfd1400f5a7564f))
+* **core:** require a sendable metatype in observe for xcode 26 ([203f948](https://github.com/szymonograbek/takane/commit/203f9484216cd27737ab1f95925d1dc347462d29))
+
 ## [1.1.1](https://github.com/szymonograbek/takane/compare/v1.1.0...v1.1.1) (2026-10-19)
 
 
