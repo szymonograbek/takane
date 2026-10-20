@@ -49,7 +49,7 @@ final class FeatureStore<F: Feature> {
         start.forEach(run)
     }
 
-    isolated deinit {
+    deinit {
         effects.values.forEach { $0.cancel() }
     }
 
