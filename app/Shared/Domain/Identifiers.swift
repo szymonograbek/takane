@@ -16,8 +16,10 @@ struct MediaID: Hashable, Sendable, CustomStringConvertible {
 enum PlayableID: Hashable, Sendable, CustomStringConvertible {
     case movie(MediaID)
     case episode(MediaID, season: Int, episode: Int)
+    /// A live TV channel: its streams never end, so there is no progress to keep.
+    case liveChannel(MediaID)
 
-    /// Parses add-on ids: `tt0111161` as a movie, `tt0944947:1:1` (show, season, episode) as an episode.
+    /// Parses add-on ids, which do not say a channel is live: `tt0111161` as a movie, `tt0944947:1:1` (show, season, episode) as an episode.
     init?(_ text: String) {
         let parts = text.split(separator: ":", omittingEmptySubsequences: false)
         switch parts.count {
@@ -37,14 +39,14 @@ enum PlayableID: Hashable, Sendable, CustomStringConvertible {
     /// The title this plays: the movie itself, or the show an episode belongs to.
     var media: MediaID {
         switch self {
-        case .movie(let media), .episode(let media, _, _): media
+        case .movie(let media), .episode(let media, _, _), .liveChannel(let media): media
         }
     }
 
     /// The add-on id, inverse of `init?(_:)`.
     var rawValue: String {
         switch self {
-        case .movie(let media): media.rawValue
+        case .movie(let media), .liveChannel(let media): media.rawValue
         case .episode(let media, let season, let episode): "\(media.rawValue):\(season):\(episode)"
         }
     }
@@ -54,7 +56,7 @@ enum PlayableID: Hashable, Sendable, CustomStringConvertible {
     /// How the player names it: "Twin Peaks · S1 E3" for an episode of `title`, else `title`.
     func playerTitle(_ title: String) -> String {
         switch self {
-        case .movie: title
+        case .movie, .liveChannel: title
         case .episode(_, let season, let episode): "\(title) · S\(season) E\(episode)"
         }
     }

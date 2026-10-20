@@ -158,7 +158,7 @@ private struct PlayButtons: View {
             }
             if let first = details?.firstPlayable {
                 let play = NavigationLink(value: Route.streams(StreamsRequest(preview: preview, video: first))) {
-                    Label(preview.type == .movie ? "Play" : "Play First Episode", systemImage: "play.fill")
+                    Label(preview.playable == nil ? "Play First Episode" : "Play", systemImage: "play.fill")
                 }
                 .contextMenu { movieMenu }
                 .focused(focus, equals: .play)

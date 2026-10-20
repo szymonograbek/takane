@@ -50,8 +50,8 @@ private struct Hero: View {
                     Text(description).font(.callout).lineLimit(2).frame(maxWidth: 760, alignment: .leading)
                 }
                 HStack(spacing: 24) {
-                    if preview.type == .movie {
-                        NavigationLink(value: Route.streams(StreamsRequest(preview: preview, video: .movie(preview.media)))) {
+                    if let playable = preview.playable {
+                        NavigationLink(value: Route.streams(StreamsRequest(preview: preview, video: playable))) {
                             Label("Play", systemImage: "play.fill")
                         }
                         .primaryActionStyle()
