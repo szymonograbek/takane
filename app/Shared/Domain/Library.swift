@@ -4,7 +4,7 @@ import Foundation
 struct ContinueWatchingItem: Identifiable, Hashable, Sendable {
     let media: MediaID
     let type: ContentType
-    let name: String
+    let name: Redacted<String>
     let poster: URL?
     /// Wide artwork, when the provider has it.
     let background: URL?
@@ -55,7 +55,7 @@ struct LibraryContents: Equatable, Sendable {
 struct UpcomingEpisode: Identifiable, Hashable, Sendable {
     let show: MetaPreview
     let video: PlayableID
-    let name: String
+    let name: Redacted<String>
     let released: Date
 
     var id: PlayableID { video }

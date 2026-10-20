@@ -25,9 +25,9 @@ struct CoreSubtitleService: SubtitleService {
                 fingerprint = nil
             }
             guard !Task.isCancelled else { return }
-            Log.core.info("video params for \(candidate.item): hash \(fingerprint?.hash ?? "-"), size \(fingerprint?.size ?? 0)")
+            Log.core.info("video params for \(candidate.item): hash \(fingerprint.map { "\(Redacted($0.hash))" } ?? "-"), size \(fingerprint?.size ?? 0)")
             runtime.dispatchLogged(
-                .player(.videoParamsChanged(hash: fingerprint?.hash, size: fingerprint?.size, filename: candidate.filename)),
+                .player(.videoParamsChanged(hash: fingerprint?.hash, size: fingerprint?.size, filename: candidate.filename?.rawValue)),
                 to: .player
             )
         }
@@ -51,7 +51,7 @@ struct CoreSubtitleService: SubtitleService {
         return results
     }
 
-    private static func sources(from player: PlayerState, addonNames: [URL: String]) -> [SubtitleSource] {
+    private static func sources(from player: PlayerState, addonNames: [URL: Redacted<String>]) -> [SubtitleSource] {
         player.subtitles.compactMap { loadable -> SubtitleSource? in
             guard let addon = ManifestURL(loadable.request.base) else { return nil }
             let subtitles: Remote<[AddonSubtitle], SubtitleSourceError> = switch loadable.content {
@@ -60,13 +60,16 @@ struct CoreSubtitleService: SubtitleService {
             case .ready(let files):
                 .loaded(files.compactMap { file in
                     URL(string: file.url).map {
-                        AddonSubtitle(id: AddonSubtitle.ID(addon: addon, key: file.id), url: $0, language: file.lang, label: file.label)
+                        AddonSubtitle(
+                            id: AddonSubtitle.ID(addon: addon, key: Redacted(file.id)), url: Redacted($0),
+                            language: file.lang, label: file.label.map(Redacted.init)
+                        )
                     }
                 })
             case .failed(let error):
                 .failed(.addonFailed(reason: error.compactDescription))
             }
-            let name = addonNames[addon.url] ?? addon.url.host() ?? "?"
+            let name = addonNames[addon.url.rawValue] ?? Redacted(addon.url.rawValue.host() ?? "?")
             return SubtitleSource(addon: addon, addonName: name, subtitles: subtitles)
         }
     }

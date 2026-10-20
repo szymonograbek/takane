@@ -3,7 +3,7 @@ import Testing
 
 struct PlayerUpNextTests {
     private let next = UpNext(
-        video: PlayableID("tt0944947:1:2").require(), show: "Game of Thrones", title: "The Kingsroad",
+        video: PlayableID("tt0944947:1:2").require(), show: Redacted("Game of Thrones"), title: Redacted("The Kingsroad"),
         thumbnail: nil, backdrop: nil, stream: Fixture.candidate(index: 1)
     )
     private let nextStream = Fixture.candidate(index: 1)
@@ -60,7 +60,7 @@ struct PlayerUpNextTests {
             .report(.movedToNext), .begin(nextStream, Fixture.source, from: .zero), .watchUpNext(nextStream),
         ])
         #expect(state.session?.candidate == nextStream)
-        #expect(state.session?.title == "Game of Thrones · S1 E2")
+        #expect(state.session?.title.rawValue == "Game of Thrones · S1 E2")
         #expect(state.session?.upNext == PlayerFeature.UpNextOffer.notFound)
     }
 

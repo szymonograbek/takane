@@ -14,12 +14,15 @@ extension SmokeTest {
         }
         let session = app.player.state.session
         result.subtitleCounts = Dictionary(
-            (session?.addonSubtitles ?? []).map { ($0.addonName, $0.subtitles.value?.count ?? 0) },
+            (session?.addonSubtitles ?? []).map { ($0.addonName.rawValue, $0.subtitles.value?.count ?? 0) },
             uniquingKeysWith: +
         )
         result.subtitleCounts["built-in"] = session?.builtInSubtitles.count
-        result.subtitleLabels = files.prefix(5).map { "\($0.language) \($0.label ?? "")" }
-        Log.smoke.info("SMOKE subtitles found: \(result.subtitleCounts); first: \(result.subtitleLabels)")
+        result.subtitleLabels = files.prefix(5).map { "\($0.language) \($0.label?.rawValue ?? "")" }
+        Log.smoke.info(
+            "SMOKE subtitles found: \((session?.addonSubtitles ?? []).map { "\($0.addonName): \($0.subtitles.value?.count ?? 0)" }), "
+                + "built-in: \(session?.builtInSubtitles.count ?? 0); first: \(files.prefix(5).map { "\($0.language) \($0.label?.description ?? "")" })"
+        )
 
         let first = files[0]
         app.player.send(.chooseSubtitles(.addon(first.id)))
@@ -27,7 +30,7 @@ extension SmokeTest {
             guard let session = state.session, session.subtitleChoice == .addon(first.id) else { return Probe<MediaTrack, Failure>.pending }
             return session.tracks.first { $0.externalFile == first.url }.map(Probe.done) ?? .pending
         }
-        result.playedSubtitle = "\(first.id.key) as track \(track.id.number)"
-        Log.smoke.info("SMOKE subtitles playing: \(result.playedSubtitle ?? "")")
+        result.playedSubtitle = "\(first.id.key.rawValue) as track \(track.id.number)"
+        Log.smoke.info("SMOKE subtitles playing: \(first.id.key) as track \(track.id.number)")
     }
 }

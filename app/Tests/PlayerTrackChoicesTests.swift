@@ -15,10 +15,10 @@ struct PlayerTrackChoicesTests {
         channelCount: nil, isForced: false, externalFile: nil, isSelected: false
     )
     private let synced = AddonSubtitle(
-        id: AddonSubtitle.ID(addon: Fixture.manifest, key: "synced-1"),
-        url: URL(string: "https://subs.example/synced-1.srt").require(),
+        id: AddonSubtitle.ID(addon: Fixture.manifest, key: Redacted("synced-1")),
+        url: Redacted(URL(string: "https://subs.example/synced-1.srt").require()),
         language: "pol",
-        label: "Synced"
+        label: Redacted("Synced")
     )
 
     private func opened() -> PlayerFeature.State {
@@ -64,9 +64,9 @@ struct PlayerTrackChoicesTests {
         _ = PlayerFeature.reduce(&state, .engine(.tracks([english])))
         let remembered = TrackChoices(subtitles: .addon(synced.url, language: "pol"))
         #expect(PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), remembered)).isEmpty)
-        let loading = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loading)
+        let loading = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitle Sync"), subtitles: .loading)
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [loading])).isEmpty)
-        let loaded = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
+        let loaded = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitle Sync"), subtitles: .loaded([synced]))
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [loaded])) == [.addSubtitles(synced)])
         #expect(state.session?.restore == .settled)
     }
@@ -85,7 +85,7 @@ struct PlayerTrackChoicesTests {
         _ = PlayerFeature.reduce(&state, .engine(.tracks([english, subtitles])))
         _ = PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), TrackChoices(subtitles: .addon(synced.url, language: "pol"))))
         _ = PlayerFeature.reduce(&state, .chooseSubtitles(.builtIn(subtitles.id)))
-        let loaded = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
+        let loaded = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitle Sync"), subtitles: .loaded([synced]))
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [loaded])).isEmpty)
     }
 

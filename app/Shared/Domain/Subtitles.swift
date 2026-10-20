@@ -4,16 +4,17 @@ import Foundation
 struct AddonSubtitle: Identifiable, Hashable, Sendable {
     struct ID: Hashable, Sendable {
         let addon: ManifestURL
-        /// The add-on's own id for the file.
-        let key: String
+        /// The add-on's own id for the file, which can say which title it is for.
+        let key: Redacted<String>
     }
 
     let id: ID
-    let url: URL
+    /// Configured add-ons may carry credentials in it.
+    let url: Redacted<URL>
     /// As the add-on gives it, usually an ISO 639-2 code such as `eng`.
     let language: String
     /// The add-on's description of the file, such as its release name or how well it is timed.
-    let label: String?
+    let label: Redacted<String>?
 }
 
 enum SubtitleSourceError: Error, Equatable, Sendable {
@@ -23,7 +24,7 @@ enum SubtitleSourceError: Error, Equatable, Sendable {
 /// One add-on's answer for the stream playing.
 struct SubtitleSource: Identifiable, Equatable, Sendable {
     let addon: ManifestURL
-    let addonName: String
+    let addonName: Redacted<String>
     let subtitles: Remote<[AddonSubtitle], SubtitleSourceError>
 
     var id: ManifestURL { addon }

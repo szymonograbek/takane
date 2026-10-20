@@ -24,7 +24,7 @@ enum PlayerFeature: Feature {
     struct Session: Equatable, Sendable {
         let candidate: StreamCandidate
         /// What the viewer chose, such as "Twin Peaks · S1 E3", for the controls.
-        var title = ""
+        var title = Redacted("")
         var phase = Phase.opening
         var position = Duration.zero
         /// Zero until the engine knows it.
@@ -60,7 +60,7 @@ enum PlayerFeature: Feature {
 
     enum Event: Sendable {
         /// Plays `candidate` from `start`, such as a saved position, labelled `title`.
-        case open(StreamCandidate, from: Duration = .zero, title: String = "")
+        case open(StreamCandidate, from: Duration = .zero, title: Redacted<String> = Redacted(""))
         case togglePause
         /// Skips one `seekStep` in `direction`.
         case jump(Direction)
@@ -194,7 +194,7 @@ enum PlayerFeature: Feature {
     }
 
     /// Starts a session for `candidate`, or fails it when it cannot play, stopping what played before.
-    static func open(_ candidate: StreamCandidate, from start: Duration, title: String, replacing state: inout State) -> [Effect] {
+    static func open(_ candidate: StreamCandidate, from start: Duration, title: Redacted<String>, replacing state: inout State) -> [Effect] {
         switch candidate.playability {
         case .playable(let source):
             state = .active(Session(candidate: candidate, title: title))
@@ -305,7 +305,7 @@ extension PlayerFeature {
         case .turnOffSubtitles:
             engine.turnOffSubtitles()
         case .addSubtitles(let subtitle):
-            engine.addSubtitles(subtitle.url, title: subtitle.label ?? subtitle.language, language: subtitle.language)
+            engine.addSubtitles(subtitle.url, title: subtitle.label?.rawValue ?? subtitle.language, language: subtitle.language)
         case .setSpeed(let speed):
             engine.setSpeed(speed)
         case .findSegments(let item, let duration):

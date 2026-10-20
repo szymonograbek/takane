@@ -32,7 +32,7 @@ struct PlayerState: Decodable, Sendable {
     /// Whether core has `candidate`, playing from `source`, selected.
     func plays(_ candidate: StreamCandidate, from source: PlaybackSource) -> Bool {
         guard let selected else { return false }
-        return selected.stream.source == .url(source.url) && selected.subtitlesPath?.id == candidate.item.rawValue
+        return selected.stream.source == .url(source.url.rawValue) && selected.subtitlesPath?.id == candidate.item.rawValue
     }
 }
 

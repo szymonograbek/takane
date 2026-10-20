@@ -21,14 +21,14 @@ extension CalendarState {
         var seen = Set<PlayableID>()
         let episodes = shows.flatMap { show in Self.episodes(of: show, from: start) }
             .filter { seen.insert($0.video).inserted }
-            .sorted { ($0.released, $0.show.name, $0.video.rawValue) < ($1.released, $1.show.name, $1.video.rawValue) }
+            .sorted { ($0.released, $0.show.name.rawValue, $0.video.rawValue) < ($1.released, $1.show.name.rawValue, $1.video.rawValue) }
         return .loaded(episodes)
     }
 
     private static func episodes(of show: Show, from start: Date) -> [UpcomingEpisode] {
         guard let media = MediaID(show.id), let type = ContentType(show.type) else { return [] }
         let preview = MetaPreview(
-            media: media, type: type, name: show.name,
+            media: media, type: type, name: Redacted(show.name),
             poster: show.poster.flatMap(URL.init(string:)), posterShape: PosterShape(core: show.posterShape),
             background: show.background.flatMap(URL.init(string:)), logo: show.logo.flatMap(URL.init(string:)),
             releaseInfo: nil, description: nil
@@ -37,7 +37,7 @@ extension CalendarState {
             guard let playable = PlayableID(video.id), case .episode = playable, let released = video.released.flatMap(Date.init(core:)),
                   released >= start
             else { return nil }
-            return UpcomingEpisode(show: preview, video: playable, name: video.title, released: released)
+            return UpcomingEpisode(show: preview, video: playable, name: Redacted(video.title), released: released)
         }
     }
 }

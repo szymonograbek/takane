@@ -115,7 +115,7 @@ extension AddonsFeature.Install {
         switch self {
         case .idle: nil
         case .installing: "Installing…"
-        case .installed(let addon): "Installed \(addon.name)"
+        case .installed(let addon): "Installed \(addon.name.rawValue)"
         case .failed(_, let error): error.message
         }
     }

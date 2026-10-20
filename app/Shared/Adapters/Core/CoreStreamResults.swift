@@ -3,7 +3,7 @@ import Foundation
 /// The add-ons' answers in core's `meta_details` state, as stream results whose tracking tokens
 /// hold the selection core's player model loads.
 enum CoreStreamResults {
-    static func results(for item: PlayableID, from details: MetaDetailsState, addonNames: [URL: String]) -> StreamResults {
+    static func results(for item: PlayableID, from details: MetaDetailsState, addonNames: [URL: Redacted<String>]) -> StreamResults {
         // Core's player model loads the item's metadata from this request and records progress against
         // it, so a stream picked while the metadata loads, or after it failed, needs it too.
         let metaRequest = (details.metaItems.first { $0.content?.readyContent != nil } ?? details.metaItems.first)?.request
@@ -21,7 +21,7 @@ enum CoreStreamResults {
         let sources = responses.map { addon, loadables in
             StreamSource(
                 addon: addon,
-                addonName: addonNames[addon.url] ?? addon.url.host() ?? "?",
+                addonName: addonNames[addon.url.rawValue] ?? Redacted(addon.url.rawValue.host() ?? "?"),
                 candidates: candidates(from: loadables, addon: addon, item: item, metaRequest: metaRequest)
             )
         }
@@ -66,7 +66,7 @@ enum CoreStreamResults {
         metaRequest: ResourceRequest?
     ) -> StreamCandidate {
         let playability: Playability = switch stream.source {
-        case .url(let url): .playable(PlaybackSource(url: url, headers: stream.requestHeaders))
+        case .url(let url): .playable(PlaybackSource(url: Redacted(url), headers: stream.requestHeaders))
         case .unsupported(let kind): .unsupported(kind: kind)
         }
         // The subtitles path makes core's player model ask subtitle add-ons for this item.
@@ -79,11 +79,11 @@ enum CoreStreamResults {
         return StreamCandidate(
             id: id,
             item: item,
-            name: stream.name,
-            description: stream.description,
-            filename: stream.filename,
+            name: stream.name.map(Redacted.init),
+            description: stream.description.map(Redacted.init),
+            filename: stream.filename.map(Redacted.init),
             playability: playability,
-            tracking: TrackingToken(payload: .object(selection))
+            tracking: TrackingToken(payload: Redacted(.object(selection)))
         )
     }
 }

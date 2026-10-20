@@ -53,7 +53,7 @@ struct CoreCatalogService: CatalogService {
                     else { return nil }
                     let genres = extra.options.compactMap(Genre.init)
                     guard !genres.isEmpty else { return nil }
-                    return CatalogGenres(catalog: CatalogID(addon: addonURL, type: type, id: catalog.id), genres: genres)
+                    return CatalogGenres(catalog: CatalogID(addon: addonURL, type: type, id: Redacted(catalog.id)), genres: genres)
                 }
             }
         }
@@ -61,8 +61,8 @@ struct CoreCatalogService: CatalogService {
 
     func titles(_ filter: GenreFilter) -> AsyncStream<Remote<[MetaPreview], CatalogError>> {
         let request = ResourceRequest(
-            base: filter.catalog.addon.url,
-            path: .catalog(type: filter.catalog.type.rawValue, id: filter.catalog.id, extra: [["genre", filter.genre.rawValue]])
+            base: filter.catalog.addon.url.rawValue,
+            path: .catalog(type: filter.catalog.type.rawValue, id: filter.catalog.id.rawValue, extra: [["genre", filter.genre.rawValue]])
         )
         return runtime.load(.catalogWithFilters(request), into: .discover, pending: .loading) { (state: CatalogWithFiltersState) in
             state.selected?.request == request ? Self.items(state.catalog) : nil
@@ -143,19 +143,19 @@ struct CoreCatalogService: CatalogService {
 
     private static func catalogID(_ request: ResourceRequest) -> CatalogID? {
         guard let addon = ManifestURL(request.base), let type = ContentType(request.path.type) else { return nil }
-        return CatalogID(addon: addon, type: type, id: request.path.id)
+        return CatalogID(addon: addon, type: type, id: Redacted(request.path.id))
     }
 
     private static func rows(_ state: CatalogsState, addons: [Addon], paging: Bool) -> [CatalogRow] {
         state.catalogs.compactMap { pages in
             guard let first = pages.first, let id = catalogID(first.request),
                   let addon = addons.first(where: { $0.transportUrl == first.request.base }),
-                  let catalog = addon.manifest.catalogs.first(where: { $0.id == id.id && $0.type == id.type.rawValue })
+                  let catalog = addon.manifest.catalogs.first(where: { $0.id == id.id.rawValue && $0.type == id.type.rawValue })
             else { return nil }
             // Core's own rule for `LoadNextPage`: the last page loaded and the catalog accepts `skip`.
             let canLoadMore = paging && pages.last?.content?.readyContent != nil && catalog.extraNames.contains("skip")
             return CatalogRow(
-                id: id, addonName: addon.manifest.name, name: catalog.name ?? addon.manifest.name,
+                id: id, addonName: addon.manifest.name, name: catalog.name.map(Redacted.init) ?? addon.manifest.name,
                 items: items(pages), canLoadMore: canLoadMore
             )
         }
@@ -180,10 +180,10 @@ struct CoreCatalogService: CatalogService {
     private static func preview(_ item: MetaItemPreview) -> MetaPreview? {
         guard let media = MediaID(item.id), let type = ContentType(item.type) else { return nil }
         return MetaPreview(
-            media: media, type: type, name: item.name,
+            media: media, type: type, name: Redacted(item.name),
             poster: item.poster.flatMap(URL.init(string:)), posterShape: PosterShape(core: item.posterShape),
             background: item.background.flatMap(URL.init(string:)), logo: item.logo.flatMap(URL.init(string:)),
-            releaseInfo: item.releaseInfo, description: item.description
+            releaseInfo: item.releaseInfo.map(Redacted.init), description: item.description.map(Redacted.init)
         )
     }
 
@@ -197,9 +197,9 @@ struct CoreCatalogService: CatalogService {
             videos: item.videos.compactMap { video in
                 PlayableID(video.id).map { playable in
                     Video(
-                        playable: playable, name: video.title, season: video.season, episode: video.episode,
+                        playable: playable, name: Redacted(video.title), season: video.season, episode: video.episode,
                         released: video.released.flatMap(Date.init(core:)), thumbnail: video.thumbnail.flatMap(URL.init(string:)),
-                        overview: video.overview, isWatched: state.watchedVideos.contains(video.id)
+                        overview: video.overview.map(Redacted.init), isWatched: state.watchedVideos.contains(video.id)
                     )
                 }
             },

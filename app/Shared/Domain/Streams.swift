@@ -2,7 +2,8 @@ import Foundation
 
 /// Where and how a player fetches a stream.
 struct PlaybackSource: Hashable, Sendable {
-    let url: URL
+    /// Debrid links carry the user's key.
+    let url: Redacted<URL>
     /// Sent with every HTTP request for the stream.
     let headers: [String: String]
 }
@@ -16,7 +17,8 @@ enum Playability: Hashable, Sendable {
 /// Opaque data the stream provider needs back to track playback of a candidate it returned.
 /// Only the provider that created it reads `payload`.
 struct TrackingToken: Hashable, Sendable {
-    let payload: JSONValue
+    /// Core's holds the stream as its add-on gave it, name included.
+    let payload: Redacted<JSONValue>
 }
 
 /// One stream an add-on offers for an item.
@@ -28,9 +30,10 @@ struct StreamCandidate: Identifiable, Hashable, Sendable {
 
     let id: ID
     let item: PlayableID
-    let name: String?
-    let description: String?
-    let filename: String?
+    /// Add-ons put their own name, or the name of the add-on they wrap, in these.
+    let name: Redacted<String>?
+    let description: Redacted<String>?
+    let filename: Redacted<String>?
     let playability: Playability
     let tracking: TrackingToken
 
@@ -46,7 +49,7 @@ enum StreamSourceError: Error, Equatable, Sendable {
 /// One add-on's answer for an item.
 struct StreamSource: Identifiable, Equatable, Sendable {
     let addon: ManifestURL
-    let addonName: String
+    let addonName: Redacted<String>
     let candidates: Remote<[StreamCandidate], StreamSourceError>
 
     var id: ManifestURL { addon }

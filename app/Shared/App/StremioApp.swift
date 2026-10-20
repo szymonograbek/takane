@@ -57,6 +57,7 @@ struct Services: Sendable {
     let videoSurface: @MainActor @Sendable () -> AnyView
     let skipSegments: any SkipSegmentService
     let subtitles: any SubtitleService
+    let logSharing: any LogSharing
 
     @MainActor
     static func live(storageDirectory: URL) async throws(StartupError) -> Services {
@@ -83,7 +84,8 @@ struct Services: Sendable {
             engine: engine,
             videoSurface: { AnyView(engine.surface()) },
             skipSegments: SkipDBSkipSegmentService(),
-            subtitles: CoreSubtitleService(runtime: core)
+            subtitles: CoreSubtitleService(runtime: core),
+            logSharing: LocalLogServer()
         )
     }
 }

@@ -260,10 +260,10 @@ struct PlayerControlsTests {
         channelCount: nil, isForced: false, externalFile: nil, isSelected: false
     )
     private let synced = AddonSubtitle(
-        id: AddonSubtitle.ID(addon: Fixture.manifest, key: "synced-1"),
-        url: URL(string: "https://subs.example/synced-1.srt").require(),
+        id: AddonSubtitle.ID(addon: Fixture.manifest, key: Redacted("synced-1")),
+        url: Redacted(URL(string: "https://subs.example/synced-1.srt").require()),
         language: "pol",
-        label: "Synced"
+        label: Redacted("Synced")
     )
     private let intro = SkipSegment(kind: .intro, range: .seconds(60)..<(.seconds(90)), fit: .matched, confidence: 1)
 
@@ -290,13 +290,13 @@ struct PlayerControlsTests {
         let choice = PlayerFeature.SubtitleChoice.addon(synced.id)
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)).isEmpty)
 
-        let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
+        let source = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitle Sync"), subtitles: .loaded([synced]))
         _ = PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source]))
         let remembered = TrackChoices(subtitles: .addon(synced.url, language: "pol"), speed: .normal)
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.addSubtitles(synced), .report(.choices(remembered))])
 
         let added = MediaTrack(
-            id: MediaTrack.ID(kind: .subtitle, number: 2), title: "Synced", language: "pol", codec: "subrip",
+            id: MediaTrack.ID(kind: .subtitle, number: 2), title: Redacted("Synced"), language: "pol", codec: "subrip",
             channelCount: nil, isForced: false, externalFile: synced.url, isSelected: true
         )
         _ = PlayerFeature.reduce(&state, .engine(.tracks([english, added])))
@@ -312,7 +312,7 @@ struct PlayerControlsTests {
 
     @Test func subtitlesForAnotherCandidateAreDropped() {
         var state = playing()
-        let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitle Sync", subtitles: .loaded([synced]))
+        let source = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitle Sync"), subtitles: .loaded([synced]))
         _ = PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(index: 1), [source]))
         #expect(state.session?.addonSubtitles == [])
     }

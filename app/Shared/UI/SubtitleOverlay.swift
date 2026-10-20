@@ -37,7 +37,7 @@ struct SubtitleOverlay: View {
         for case .text(let text) in cues {
             let placement = (style.usesFileStyling ? text.placement : nil) ?? SubtitlePlacement(alignment: .bottomCenter, position: nil)
             if placement.position == nil, let index = blocks.firstIndex(where: { $0.placement == placement }) {
-                blocks[index].runs += [SubtitleRun(text: "\n")] + text.runs
+                blocks[index].runs += [SubtitleRun(text: Redacted("\n"))] + text.runs
             } else {
                 blocks.append(TextBlock(placement: placement, runs: text.runs))
             }
@@ -117,7 +117,7 @@ private struct StyledSubtitle: View {
         .compositingGroup()
         .opacity(style.opacity.fraction)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(runs.map(\.text).joined())
+        .accessibilityLabel(runs.map(\.text.rawValue).joined())
         .accessibilityIdentifier("player.subtitle")
     }
 
@@ -126,7 +126,7 @@ private struct StyledSubtitle: View {
     private func text(size: CGFloat, color: (SubtitleRun) -> SubtitleColor) -> Text {
         var text = AttributedString()
         for run in runs {
-            var part = AttributedString(run.text)
+            var part = AttributedString(run.text.rawValue)
             part.swiftUI.font = font(for: run, size: size)
             part.swiftUI.foregroundColor = Color(color(run))
             part.swiftUI.underlineStyle = run.isUnderlined ? .single : nil

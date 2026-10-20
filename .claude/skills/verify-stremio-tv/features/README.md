@@ -36,3 +36,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Continue watching](./continue-watching.md) covers the Home row and resuming from the saved position.
 - [Playback settings](./playback-settings.md) covers preferred subtitle and audio languages.
 - [Library and calendar](./library-calendar.md) covers Add to Library on Details, the Library tab and the Calendar tab.
+- [Share logs](./share-logs.md) covers Settings › About › Share Logs: the link, its time range and stopping on leave.

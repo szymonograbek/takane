@@ -46,7 +46,7 @@ struct CoreStreamResultsTests {
     /// The `metaRequest` each candidate's player selection carries, in list order.
     private static func metaRequests(in results: StreamResults) -> [JSONValue?] {
         results.sources.flatMap { $0.candidates.value ?? [] }.map { candidate in
-            guard case .object(let selection) = candidate.tracking.payload else { return nil }
+            guard case .object(let selection) = candidate.tracking.payload.rawValue else { return nil }
             return selection["metaRequest"]
         }
     }
@@ -79,12 +79,12 @@ struct CoreStreamResultsTests {
     /// Each candidate's id and the `streamRequest` its player selection carries, in list order.
     private static func streamRequests(in results: StreamResults) -> [String] {
         results.sources.flatMap { $0.candidates.value ?? [] }.map { candidate in
-            guard case .object(let selection) = candidate.tracking.payload,
+            guard case .object(let selection) = candidate.tracking.payload.rawValue,
                   case .object(let request)? = selection["streamRequest"],
                   case .string(let base)? = request["base"],
                   case .object(let path)? = request["path"],
                   case .string(let resource)? = path["resource"] else { return "\(candidate.id.index) none" }
-            return "\(candidate.id.addon.url.host() ?? "?") \(candidate.id.index) \(resource) from \(base)"
+            return "\(candidate.id.addon.url.rawValue.host() ?? "?") \(candidate.id.index) \(resource) from \(base)"
         }
     }
 
@@ -100,9 +100,9 @@ struct CoreStreamResultsTests {
             metaItems: Self.metaItem(Self.other, content: Self.readyMeta(videos: "[]")),
             metaStreams: Self.embeddedStreams(Self.other)
         )
-        let names = [URL(string: Self.other).require(): "Other Meta", URL(string: Self.debrid).require(): "Debrid"]
+        let names = [URL(string: Self.other).require(): Redacted("Other Meta"), URL(string: Self.debrid).require(): Redacted("Debrid")]
         let results = CoreStreamResults.results(for: Fixture.movie, from: details, addonNames: names)
-        #expect(results.sources.map(\.addonName) == ["Other Meta", "Debrid"])
+        #expect(results.sources.map(\.addonName.rawValue) == ["Other Meta", "Debrid"])
         #expect(Self.streamRequests(in: results) == [
             "other-meta.example 0 stream from \(Self.other)",
             "debrid.example 0 stream from \(Self.debrid)",
@@ -117,8 +117,8 @@ struct CoreStreamResultsTests {
             metaStreams: Self.embeddedStreams(Self.debrid)
         )
         let results = CoreStreamResults.results(for: Fixture.movie, from: details, addonNames: [:])
-        #expect(results.sources.map(\.addonName) == ["debrid.example"])
-        #expect(results.sources.first?.candidates.value?.map(\.name) == ["Embedded", "1080p"])
+        #expect(results.sources.map(\.addonName.rawValue) == ["debrid.example"])
+        #expect(results.sources.first?.candidates.value?.map(\.name?.rawValue) == ["Embedded", "1080p"])
         #expect(Self.streamRequests(in: results) == [
             "debrid.example 0 stream from \(Self.debrid)",
             "debrid.example 1 stream from \(Self.debrid)",

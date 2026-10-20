@@ -16,7 +16,7 @@ import UniformTypeIdentifiers
 ///   catalogs, search and metadata, then that installing Cinemeta fills the board (core starts
 ///   without its default add-ons under `EMPTY_OFFICIAL_ADDONS=1`)
 ///
-/// Writes `smoke-result.json` and `smoke-frame.png` next to the log file.
+/// Writes `smoke-result.json`, `smoke-frame.png` and `smoke-export.log` next to the log file.
 @MainActor
 struct SmokeTest {
     struct Configuration {
@@ -42,8 +42,8 @@ struct SmokeTest {
         case addon(AddonError)
         case catalog(String)
         case details(DetailsError)
-        case noPlayableStream(addon: String, groups: [String: Int])
-        case noSubtitles(addon: String, SubtitleSourceError?)
+        case noPlayableStream(addon: Redacted<String>, groups: [String: Int])
+        case noSubtitles(addon: Redacted<String>, SubtitleSourceError?)
         case player(PlaybackError)
         case noAudioOutput([String: String])
         case timedOut(String)
@@ -108,7 +108,7 @@ struct SmokeTest {
     func run() async {
         let started = ContinuousClock.now
         var result = Result()
-        Log.smoke.info("SMOKE start: addon=\(configuration.manifest.url.host() ?? "?") item=\(configuration.item.coreType)/\(configuration.item)")
+        Log.smoke.info("SMOKE start: addon=\(configuration.manifest) item=\(configuration.item.coreType)/\(configuration.item)")
         do {
             if configuration.expectsNoAddons {
                 try await noAddonSteps(&result.catalog)
@@ -150,12 +150,12 @@ struct SmokeTest {
     private func steps(_ result: inout Result) async throws(Failure) {
         let manifest = configuration.manifest
         let addon = try await install(manifest)
-        result.addon = "\(addon.name) \(addon.version)"
+        result.addon = "\(addon.name.rawValue) \(addon.version)"
         if let subtitles = configuration.subtitlesManifest {
             let installed = try await install(subtitles)
             Log.smoke.info("SMOKE subtitles addon installed: \(installed.name) \(installed.version)")
         }
-        Log.smoke.info("SMOKE step 1/4 addon installed: \(result.addon ?? "")")
+        Log.smoke.info("SMOKE step 1/4 addon installed: \(addon.name) \(addon.version)")
 
         let item = configuration.item
         app.streams.send(.lookUp(item))
@@ -164,13 +164,13 @@ struct SmokeTest {
             return .done(results)
         }
         let loaded = streams.sources.compactMap { source in source.candidates.value.map { (source, $0) } }
-        result.streamGroups = Dictionary(loaded.map { ($0.0.addonName, $0.1.count) }, uniquingKeysWith: +)
+        result.streamGroups = Dictionary(loaded.map { ($0.0.addonName.rawValue, $0.1.count) }, uniquingKeysWith: +)
         guard let candidate = loaded.first(where: { $0.0.addon == manifest })?.1.first(where: { $0.source != nil }),
               let source = candidate.source
         else { throw .noPlayableStream(addon: addon.name, groups: result.streamGroups) }
-        result.playedStream = [candidate.name, candidate.filename ?? candidate.description].compactMap { $0 }.joined(separator: " | ")
-        result.playedURLHost = source.url.host()
-        Log.smoke.info("SMOKE step 2/4 streams resolved: \(result.streamGroups); playing \(result.playedStream ?? "")")
+        result.playedStream = [candidate.name, candidate.filename ?? candidate.description].compactMap { $0?.rawValue }.joined(separator: " | ")
+        result.playedURLHost = source.url.rawValue.host()
+        Log.smoke.info("SMOKE step 2/4 streams resolved: \(loaded.map { "\($0.0.addonName): \($0.1.count)" }); playing \(candidate.item)")
 
         app.player.send(.open(candidate))
         let session = try await app.player.until(timeout: .seconds(90), onTimeout: Failure.timedOut("10s of playback")) { state in
@@ -218,18 +218,6 @@ struct SmokeTest {
         Log.smoke.write(written ? .info : .error) { "frame \(image.width)x\(image.height) written=\(written) to \(url.path)" }
         return written
     }
-
-    private func write(_ result: Result) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let url = Self.outputDirectory.appending(path: "smoke-result.json")
-        do {
-            try encoder.encode(result).write(to: url)
-            Log.smoke.info("SMOKE result written to \(url.path)")
-        } catch {
-            Log.smoke.error("SMOKE result write failed: \(error)")
-        }
-    }
 }
 
 // MARK: - Catalog journey
@@ -258,10 +246,10 @@ extension SmokeTest {
         }
         result.board = "rows"
         result.boardRows = rows.count
-        result.pagedRow = "\(paged.addonName) \(paged.name) (\(paged.id.type))"
+        result.pagedRow = "\(paged.addonName.rawValue) \(paged.name.rawValue) (\(paged.id.type))"
         let before = paged.items.value?.count ?? 0
         result.pagedRowItems = before
-        Log.smoke.info("SMOKE catalog 1/4 board: \(rows.count) rows, \(result.pagedRow ?? "") has \(before) items")
+        Log.smoke.info("SMOKE catalog 1/4 board: \(rows.count) rows, \(paged.addonName) \(paged.name) (\(paged.id.type)) has \(before) items")
 
         let board = catalog.board()
         catalog.loadMore(paged.id)
@@ -294,8 +282,8 @@ extension SmokeTest {
         }
         result.search = "rows"
         result.searchRows = searchRows
-        result.searchHitRow = "\(hit.addonName) \(hit.name) (\(hit.id.type))"
-        Log.smoke.info("SMOKE catalog 3/4 search \(query): \(searchRows) rows, \(searched) in \(result.searchHitRow ?? "")")
+        result.searchHitRow = "\(hit.addonName.rawValue) \(hit.name.rawValue) (\(hit.id.type))"
+        Log.smoke.info("SMOKE catalog 3/4 search \(query): \(searchRows) rows, \(searched) in \(hit.addonName) \(hit.name) (\(hit.id.type))")
 
         let details: TitleDetails
         do {
@@ -303,9 +291,9 @@ extension SmokeTest {
         } catch {
             throw .details(error)
         }
-        result.details = details.preview.name
+        result.details = details.preview.name.rawValue
         result.detailsVideos = details.videos.count
-        guard details.preview.name == "Pioneer One", details.videos.contains(where: { $0.playable == episode }) else {
+        guard details.preview.name.rawValue == "Pioneer One", details.videos.contains(where: { $0.playable == episode }) else {
             throw .catalog("details of \(show): \(details.preview.name) with \(details.videos.count) videos, no \(episode)")
         }
         Log.smoke.info("SMOKE catalog 4/4 details: \(details.preview.name), \(details.videos.count) videos incl. \(episode)")

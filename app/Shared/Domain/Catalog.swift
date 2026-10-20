@@ -24,7 +24,8 @@ struct ContentType: Hashable, Sendable, CustomStringConvertible {
 struct CatalogID: Hashable, Sendable {
     let addon: ManifestURL
     let type: ContentType
-    let id: String
+    /// A third-party add-on's ids can name it, or the add-ons it gathers.
+    let id: Redacted<String>
 }
 
 enum PosterShape: Hashable, Sendable {
@@ -33,17 +34,17 @@ enum PosterShape: Hashable, Sendable {
     case square
 }
 
-/// A title in a catalog.
+/// A title in a catalog. Its texts name it, so logs show them redacted.
 struct MetaPreview: Identifiable, Hashable, Sendable {
     let media: MediaID
     let type: ContentType
-    let name: String
+    let name: Redacted<String>
     let poster: URL?
     let posterShape: PosterShape
     let background: URL?
     let logo: URL?
-    let releaseInfo: String?
-    let description: String?
+    let releaseInfo: Redacted<String>?
+    let description: Redacted<String>?
 
     var id: MediaID { media }
 
@@ -64,9 +65,9 @@ enum CatalogError: Error, Equatable, Sendable {
 /// One catalog's titles. A failing add-on fails its own row, never the board or the search.
 struct CatalogRow: Identifiable, Equatable, Sendable {
     let id: CatalogID
-    let addonName: String
+    let addonName: Redacted<String>
     /// The catalog's name from the manifest, such as "Popular", or the add-on's name when it has none.
-    let name: String
+    let name: Redacted<String>
     /// Pages loaded so far, flattened, each title once. `.loading` until the first page answers;
     /// a catalog that answered with nothing is `.loaded([])`.
     let items: Remote<[MetaPreview], CatalogError>
@@ -106,7 +107,8 @@ struct GenreFilter: Hashable, Sendable {
     let genre: Genre
 }
 
-/// A search query, trimmed and never empty.
+/// A search query, trimmed and never empty. It says what the user looks for, so its text is
+/// redacted like a `Redacted` value's.
 struct SearchText: Hashable, Sendable, CustomStringConvertible {
     let rawValue: String
 
@@ -116,7 +118,7 @@ struct SearchText: Hashable, Sendable, CustomStringConvertible {
         rawValue = trimmed
     }
 
-    var description: String { rawValue }
+    var description: String { Redaction.current.text(rawValue) }
 
     /// Where `typed` ends in this text, when this text starts with it and goes on, ignoring letter case.
     func continuation(of typed: SearchText) -> String.Index? {
@@ -139,12 +141,12 @@ enum SearchResults: Equatable, Sendable {
 /// One playable video of a title, such as a series episode.
 struct Video: Identifiable, Hashable, Sendable {
     let playable: PlayableID
-    let name: String
+    let name: Redacted<String>
     let season: Int?
     let episode: Int?
     let released: Date?
     let thumbnail: URL?
-    let overview: String?
+    let overview: Redacted<String>?
     let isWatched: Bool
 
     var id: PlayableID { playable }

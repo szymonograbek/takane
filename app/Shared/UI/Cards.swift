@@ -40,19 +40,19 @@ struct PosterCard: View {
         #else
         .buttonStyle(.plain)
         #endif
-        .accessibilityLabel(preview.name)
+        .accessibilityLabel(preview.name.rawValue)
         .accessibilityIdentifier("poster.\(preview.media.rawValue)")
     }
 
     private var poster: some View {
-        Artwork(url: preview.poster, title: preview.name)
+        Artwork(url: preview.poster, title: preview.name.rawValue)
             .aspectRatio(preview.posterShape.aspectRatio, contentMode: .fit)
             .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             .lockupFrame(.poster)
     }
 
     private var name: some View {
-        Text(preview.name)
+        Text(preview.name.rawValue)
             .font(.caption)
             .foregroundStyle(Palette.secondary)
             .labelLineLimit()
@@ -136,7 +136,7 @@ struct ContinueCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: item.route) {
-                Artwork(url: item.background ?? item.poster, title: item.name)
+                Artwork(url: item.background ?? item.poster, title: item.name.rawValue)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .overlay(alignment: .bottom) {
                         if let fraction = item.fraction {
@@ -152,10 +152,10 @@ struct ContinueCard: View {
                 }
                 Button("Remove from Continue Watching", systemImage: "minus.circle", role: .destructive, action: remove)
             }
-            .accessibilityLabel("\(item.name), \(item.caption)")
+            .accessibilityLabel("\(item.name.rawValue), \(item.caption)")
             .accessibilityIdentifier("continueWatching.item")
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(.caption).bold().labelLineLimit()
+                Text(item.name.rawValue).font(.caption).bold().labelLineLimit()
                 Text(item.caption).font(.caption2).foregroundStyle(Palette.secondary)
             }
         }

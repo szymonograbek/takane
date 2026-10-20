@@ -57,7 +57,10 @@ struct BrowsingFeatureTests {
         let videos = ["tt1:0:1", "tt1:2:1", "tt1:1:2", "tt1:1:1"].map { id in
             let playable = PlayableID(id).require()
             guard case .episode(_, let season, let episode) = playable else { fatalError("fixture is an episode") }
-            return Video(playable: playable, name: id, season: season, episode: episode, released: nil, thumbnail: nil, overview: nil, isWatched: false)
+            return Video(
+                playable: playable, name: Redacted(id), season: season, episode: episode,
+                released: nil, thumbnail: nil, overview: nil, isWatched: false
+            )
         }
         let details = Fixture.details(Fixture.preview("tt1", type: .series), videos: videos)
         #expect(details.seasons == [1, 2, 0])
@@ -107,9 +110,9 @@ struct BrowsingFeatureTests {
     }
 
     @Test func genresListOneCatalogPerTypeAndShowWithRecentSearchesBeforeTyping() {
-        let popularMovies = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .movie, id: "top"), genres: [genre("Action")])
-        let featuredMovies = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .movie, id: "imdbRating"), genres: [genre("Drama")])
-        let popularSeries = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .series, id: "top"), genres: [genre("Comedy")])
+        let popularMovies = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted("top")), genres: [genre("Action")])
+        let featuredMovies = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted("imdbRating")), genres: [genre("Drama")])
+        let popularSeries = CatalogGenres(catalog: CatalogID(addon: Fixture.manifest, type: .series, id: Redacted("top")), genres: [genre("Comedy")])
         var state = SearchFeature.State()
         #expect(state.browse == .waiting)
 
@@ -126,7 +129,7 @@ struct BrowsingFeatureTests {
     }
 
     @Test func genreTitlesAnswerOnlyTheirFilterAndRetryWhenFailedOrEmpty() {
-        let catalog = CatalogID(addon: Fixture.manifest, type: .movie, id: "top")
+        let catalog = CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted("top"))
         let action = GenreFilter(catalog: catalog, genre: genre("Action"))
         let drama = GenreFilter(catalog: catalog, genre: genre("Drama"))
         let preview = Fixture.preview("tt0111161")
@@ -159,8 +162,8 @@ struct BrowsingFeatureTests {
     }
 
     @Test func onlyRemovableAddonsAreRemoved() {
-        let official = InstalledAddon(manifestURL: Fixture.otherManifest, name: "Cinemeta", version: "3", isRemovable: false)
-        let debrid = InstalledAddon(manifestURL: Fixture.manifest, name: "Debrid", version: "1", isRemovable: true)
+        let official = InstalledAddon(manifestURL: Fixture.otherManifest, name: Redacted("Cinemeta"), version: "3", isRemovable: false)
+        let debrid = InstalledAddon(manifestURL: Fixture.manifest, name: Redacted("Debrid"), version: "1", isRemovable: true)
         var state = AddonsFeature.State(installed: [official, debrid])
         #expect(AddonsFeature.reduce(&state, .uninstall(official.manifestURL)).isEmpty)
         #expect(AddonsFeature.reduce(&state, .uninstall(debrid.manifestURL)) == [.uninstall(debrid.manifestURL)])

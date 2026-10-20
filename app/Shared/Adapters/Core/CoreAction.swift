@@ -277,7 +277,7 @@ extension CoreAction.Ctx: Encodable {
         init(_ title: MetaPreview) {
             id = title.media.rawValue
             type = title.type.rawValue
-            name = title.name
+            name = title.name.rawValue
             poster = title.poster
             posterShape = title.posterShape.coreName
             background = title.background

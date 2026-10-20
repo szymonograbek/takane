@@ -68,8 +68,8 @@ struct SubtitleSettings: View {
 /// Its second line is styled as a file would, so turning file styling on shows a color.
 struct SubtitlePreview: View {
     private static let sample = SubtitleCue.text(SubtitleText(runs: [
-        SubtitleRun(text: "I thought you'd never get here.\n"),
-        SubtitleRun(text: "Come on, the boat leaves at dawn.", isItalic: true, color: SubtitleColor(red: 140, green: 220, blue: 255)),
+        SubtitleRun(text: Redacted("I thought you'd never get here.\n")),
+        SubtitleRun(text: Redacted("Come on, the boat leaves at dawn."), isItalic: true, color: SubtitleColor(red: 140, green: 220, blue: 255)),
     ], placement: nil))
 
     let style: SubtitleStyle

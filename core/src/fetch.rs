@@ -37,7 +37,6 @@ pub fn send(request: &FetchRequest) -> oneshot::Receiver<FetchOutcome> {
     let (sender, receiver) = oneshot::channel();
     pending().lock().expect("pending fetches lock").insert(id, sender);
     let payload = serde_json::to_vec(request).expect("FetchRequest serializes");
-    tracing::debug!(id, method = %request.method, url = %request.url, "fetch start");
     host::fetch(id, &payload);
     receiver
 }

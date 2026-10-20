@@ -40,6 +40,7 @@ targetTemplates:
         CFBundleShortVersionString: "1.1.3" # x-release-please-version
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.entertainment
+        NSLocalNetworkUsageDescription: Takane shares its logs with devices on your network when you ask it to.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.stremio-tv
@@ -103,6 +104,8 @@ targets:
       - path: app/Shared/Features
       - path: app/Shared/Logging
       - path: app/Shared/App/LaunchOptions.swift
+      # Plain values, so tests can read what a navigation log line shows.
+      - path: app/Shared/UI/Route.swift
       - path: app/Tests
     buildToolPlugins:
       - plugin: SwiftLintBuildToolPlugin

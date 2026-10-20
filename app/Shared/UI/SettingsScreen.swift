@@ -12,7 +12,7 @@ struct SettingsScreen: View {
                 NavigationLink {
                     AccountSettings()
                 } label: {
-                    LabeledContent("Account", value: app.account.state.account.email ?? "Not Signed In")
+                    LabeledContent("Account", value: app.account.state.account.email?.rawValue ?? "Not Signed In")
                 }
                 .accessibilityIdentifier("settings.account")
                 NavigationLink {
@@ -143,7 +143,7 @@ private struct AccountSettings: View {
                         .accessibilityIdentifier("account.signIn")
                 }
             case .signedIn(let email):
-                ValueRow(title: "Email", value: email)
+                ValueRow(title: "Email", value: email.rawValue)
                 Button("Sign Out", role: .destructive) { confirmingSignOut = true }
                     .accessibilityIdentifier("account.signOut")
             }
@@ -163,6 +163,10 @@ private struct AboutSettings: View {
         } rows: {
             SettingsSection(note: "Takane plays streams from your Stremio add-ons. Built on stremio-core and AetherEngine.") {
                 ValueRow(title: "Version", value: Bundle.main.version)
+            }
+            SettingsSection(note: "Download this device's logs on a phone or computer on the same network, to report a problem.") {
+                NavigationLink("Share Logs") { ShareLogsScreen() }
+                    .accessibilityIdentifier("about.shareLogs")
             }
         }
     }

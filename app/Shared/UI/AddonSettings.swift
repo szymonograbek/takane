@@ -17,7 +17,7 @@ struct AddonSettings: View {
             }
             SettingsSection(title: "Installed", note: note) {
                 ForEach(state.installed) { addon in
-                    ValueRow(title: addon.name, value: addon.version)
+                    ValueRow(title: addon.name.rawValue, value: addon.version)
                         .accessibilityIdentifier("addons.row")
                         .contextMenu {
                             if addon.isRemovable {
@@ -28,7 +28,7 @@ struct AddonSettings: View {
             }
         }
         .confirmationDialog(
-            "Remove \(removing?.name ?? "add-on")?", isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } },
+            "Remove \(removing?.name.rawValue ?? "add-on")?", isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } },
             titleVisibility: .visible, presenting: removing
         ) { addon in
             Button("Remove") { app.addons.send(.uninstall(addon.manifestURL)) }

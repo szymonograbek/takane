@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 struct AccountFeatureTests {
-    private let code = LinkCode(code: "K7Q2", link: URL(filePath: "/link"))
+    private let code = LinkCode(code: Redacted("K7Q2"), link: Redacted(URL(filePath: "/link")))
     private let email = EmailAddress("anna@example.com").require()
     private let password = Password("secret").require()
 
@@ -16,7 +16,7 @@ struct AccountFeatureTests {
 
     @Test func anAnswerForAnOlderCodeIsDropped() {
         var state = AccountFeature.State(signIn: .linking(.loaded(code)))
-        let older = LinkCode(code: "AAAA", link: URL(filePath: "/link"))
+        let older = LinkCode(code: Redacted("AAAA"), link: Redacted(URL(filePath: "/link")))
         _ = AccountFeature.reduce(&state, .linkFinished(older, .failure(.linkExpired)))
         #expect(state.signIn == .linking(.loaded(code)))
         _ = AccountFeature.reduce(&state, .linkFinished(code, .failure(.linkExpired)))
@@ -50,19 +50,19 @@ struct AccountFeatureTests {
 
     @Test func signingInEndsTheFlow() {
         var state = AccountFeature.State(signIn: .linking(.loaded(code)))
-        _ = AccountFeature.reduce(&state, .accountChanged(.signedIn(email: "anna@example.com")))
-        #expect(state == AccountFeature.State(account: .signedIn(email: "anna@example.com"), signIn: .idle))
+        _ = AccountFeature.reduce(&state, .accountChanged(.signedIn(email: Redacted("anna@example.com"))))
+        #expect(state == AccountFeature.State(account: .signedIn(email: Redacted("anna@example.com")), signIn: .idle))
     }
 
     @Test func signingOutNeedsAnAccount() {
         var state = AccountFeature.State()
         #expect(AccountFeature.reduce(&state, .signOut).isEmpty)
-        state.account = .signedIn(email: "anna@example.com")
+        state.account = .signedIn(email: Redacted("anna@example.com"))
         #expect(AccountFeature.reduce(&state, .signOut) == [.signOut])
     }
 
     @Test func emailAndPasswordParseAtTheBoundary() {
-        #expect(EmailAddress(" anna@example.com ")?.rawValue == "anna@example.com")
+        #expect(EmailAddress(" anna@example.com ")?.address.rawValue == "anna@example.com")
         #expect(EmailAddress("anna") == nil)
         #expect(EmailAddress("a@b@c") == nil)
         #expect(Password("") == nil)

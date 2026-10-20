@@ -63,7 +63,8 @@ final class CoreClient: Sendable {
         if action.isSensitive {
             Log.core.debug("dispatch → \(field?.rawValue ?? "null") <credentials redacted>")
         } else {
-            Log.core.debug("dispatch → \(String(decoding: request, as: UTF8.self))")
+            let json = try? JSONDecoder().decode(JSONValue.self, from: request)
+            Log.core.debug("dispatch → \(json.map { RedactedMask.json($0).compactDescription } ?? "<undecodable>")")
         }
         try Self.callBridge { error in
             request.withSBBytes { sb_dispatch($0, error) }
@@ -144,11 +145,12 @@ private final class CoreHost: Sendable {
             Self.reject(id, "invalid fetch request: \(error)")
             return
         }
-        guard let url = URL(string: request.url) else {
-            Self.reject(id, "invalid URL: \(request.url)")
+        // Add-on requests carry the add-on's URL, credentials included.
+        guard let url = URL(string: request.url).map(Redacted.init) else {
+            Self.reject(id, "invalid URL: \(Redacted(request.url))")
             return
         }
-        var urlRequest = URLRequest(url: url)
+        var urlRequest = URLRequest(url: url.rawValue)
         urlRequest.httpMethod = request.method
         for (name, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: name)
@@ -159,7 +161,7 @@ private final class CoreHost: Sendable {
                 urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             }
         }
-        Log.network.debug("#\(id) → \(request.method) \(url.absoluteString) body=\(request.body?.count ?? 0)B")
+        Log.network.debug("#\(id) → \(request.method) \(url) body=\(request.body?.count ?? 0)B")
 
         let session = session
         Task {
@@ -169,13 +171,14 @@ private final class CoreHost: Sendable {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let elapsed = ContinuousClock.now - started
                 let level: Log.Level = (200..<300).contains(status) ? .debug : .warning
-                Log.network.write(level) { "#\(id) ← \(status) \(data.count)B in \(elapsed) \(url.absoluteString)" }
-                if level == .warning {
+                Log.network.write(level) { "#\(id) ← \(status) \(data.count)B in \(elapsed) \(url)" }
+                // An add-on's error page can name it.
+                if level == .warning, case .revealed = Log.redaction {
                     Log.network.warning("#\(id) body: \(String(decoding: data.prefix(500), as: UTF8.self))")
                 }
                 data.withSBBytes { sb_fetch_resolve(id, UInt16(clamping: status), $0) }
             } catch {
-                Log.network.error("#\(id) ✕ \(url.absoluteString): \(error)")
+                Log.network.error("#\(id) ✕ \(url): \(error)")
                 Self.reject(id, error.localizedDescription)
             }
         }
@@ -216,7 +219,7 @@ private final class CoreHost: Sendable {
                 // Auth events echo the request, password and token included.
                 let payload = (core.args ?? .null).redacting(keys: ["password", "token", "authKey"])
                 let level: Log.Level = core.event == "Error" ? .error : .info
-                Log.core.write(level) { "event \(core.event) \(payload.compactDescription)" }
+                Log.core.write(level) { "event \(core.event) \(RedactedMask.json(payload).compactDescription)" }
                 events.yield(CoreEvent(name: core.event, args: payload))
             } else {
                 Log.core.warning("unknown runtime event \(raw.name)")

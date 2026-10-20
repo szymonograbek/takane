@@ -20,7 +20,8 @@ struct MediaTrack: Identifiable, Hashable, Sendable {
     }
 
     let id: ID
-    let title: String?
+    /// Files often carry their release's name in it.
+    let title: Redacted<String>?
     /// As the stream labels it, usually an ISO 639 code such as `eng`.
     let language: String?
     let codec: String?
@@ -28,7 +29,7 @@ struct MediaTrack: Identifiable, Hashable, Sendable {
     let channelCount: Int?
     let isForced: Bool
     /// The file the track was added from, such as an add-on subtitle. Nil for the stream's own tracks.
-    let externalFile: URL?
+    let externalFile: Redacted<URL>?
     let isSelected: Bool
 }
 
@@ -81,13 +82,14 @@ struct SubtitleText: Hashable, Sendable {
 extension SubtitleText {
     /// Unstyled text, placed by the player.
     init(_ plain: String) {
-        self.init(runs: [SubtitleRun(text: plain)], placement: nil)
+        self.init(runs: [SubtitleRun(text: Redacted(plain))], placement: nil)
     }
 }
 
 /// A span of subtitle text styled alike.
 struct SubtitleRun: Hashable, Sendable {
-    var text: String
+    /// A line of the title's dialogue, which says what is playing.
+    var text: Redacted<String>
     var isBold = false
     var isItalic = false
     var isUnderlined = false
@@ -189,7 +191,7 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func select(_ track: MediaTrack.ID)
     func turnOffSubtitles()
     /// Adds a subtitle file as a track and selects it. A file that fails to load is logged.
-    func addSubtitles(_ file: URL, title: String, language: String)
+    func addSubtitles(_ file: Redacted<URL>, title: String, language: String)
     func setSpeed(_ speed: PlaybackSpeed)
     func stop()
     /// Output health by name (route, decoders, audio delivery, frame counters), for logs and the smoke test.
@@ -210,7 +212,7 @@ struct TrackChoices: Hashable, Sendable {
     enum Subtitles: Hashable, Sendable {
         case builtIn(Track)
         /// An add-on's file, by its address.
-        case addon(URL, language: String?)
+        case addon(Redacted<URL>, language: String?)
     }
 
     /// Nil when none was chosen.
@@ -225,9 +227,9 @@ struct TrackChoices: Hashable, Sendable {
 struct UpNext: Equatable, Sendable {
     let video: PlayableID
     /// The series it belongs to, such as "Twin Peaks".
-    let show: String
+    let show: Redacted<String>
     /// The episode's own title. Empty when the add-on gives none.
-    let title: String
+    let title: Redacted<String>
     let thumbnail: URL?
     /// The series' backdrop.
     let backdrop: URL?

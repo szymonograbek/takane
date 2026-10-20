@@ -79,15 +79,15 @@ private struct UpcomingCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: Route.details(episode.show)) {
-                Artwork(url: episode.show.background ?? episode.show.poster, title: episode.show.name)
+                Artwork(url: episode.show.background ?? episode.show.poster, title: episode.show.name.rawValue)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             }
             .cardButtonStyle()
-            .accessibilityLabel("\(episode.show.name), \(caption)")
+            .accessibilityLabel("\(episode.show.name.rawValue), \(caption)")
             .accessibilityIdentifier("upcoming.\(episode.video.rawValue)")
             VStack(alignment: .leading, spacing: 2) {
-                Text(episode.show.name).font(.caption).bold().labelLineLimit()
+                Text(episode.show.name.rawValue).font(.caption).bold().labelLineLimit()
                 Text(caption).font(.caption2).foregroundStyle(Palette.secondary).labelLineLimit()
             }
         }
@@ -96,7 +96,7 @@ private struct UpcomingCard: View {
 
     /// "S2 · E5 · The Rains of Castamere".
     private var caption: String {
-        guard case .episode(_, let season, let number) = episode.video else { return episode.name }
-        return "S\(season) · E\(number) · \(episode.name)"
+        guard case .episode(_, let season, let number) = episode.video else { return episode.name.rawValue }
+        return "S\(season) · E\(number) · \(episode.name.rawValue)"
     }
 }

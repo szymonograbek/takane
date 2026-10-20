@@ -104,10 +104,10 @@ private struct DetailsContent: View {
                     LinearGradient(colors: [.clear, Palette.canvas], startPoint: .center, endPoint: .bottom)
                 }
             VStack(alignment: .leading, spacing: 16) {
-                TitleMark(name: preview.name, logo: preview.logo)
+                TitleMark(name: preview.name.rawValue, logo: preview.logo)
                 Text(metadata(preview, details: details)).font(.caption).foregroundStyle(Palette.secondary)
                 if let description = preview.description {
-                    DescriptionButton(title: preview.name, text: description)
+                    DescriptionButton(title: preview.name.rawValue, text: description.rawValue)
                         .accessibilityIdentifier("details.description")
                 }
                 PlayButtons(
@@ -126,7 +126,7 @@ private struct DetailsContent: View {
     }
 
     private func metadata(_ preview: MetaPreview, details: TitleDetails?) -> String {
-        var parts = [preview.releaseInfo, details?.runtime].compactMap(\.self)
+        var parts = [preview.releaseInfo?.rawValue, details?.runtime].compactMap(\.self)
         if let genres = details?.genres, !genres.isEmpty { parts.append(genres.prefix(3).joined(separator: ", ")) }
         if let rating = details?.imdbRating { parts.append("★ \(rating)") }
         if preview.type == .movie, details?.isWatched == true { parts.append("Watched") }
@@ -241,7 +241,7 @@ private struct EpisodeCard: View {
         let hidesSpoilers = !video.isWatched && (app.preferences.state.preferences?.hidesSpoilers ?? false)
         VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
             NavigationLink(value: Route.streams(StreamsRequest(preview: show, video: video.playable))) {
-                Artwork(url: video.thumbnail ?? show.background, title: video.name)
+                Artwork(url: video.thumbnail ?? show.background, title: video.name.rawValue)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .blur(radius: hidesSpoilers ? Metrics.spoilerBlurRadius : 0, opaque: true)
                     .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
@@ -258,11 +258,11 @@ private struct EpisodeCard: View {
                 if video.isWatched {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.secondary).accessibilityLabel("Watched")
                 }
-                Text("\(video.episode.map { "\($0). " } ?? "")\(video.name)").bold().labelLineLimit()
+                Text("\(video.episode.map { "\($0). " } ?? "")\(video.name.rawValue)").bold().labelLineLimit()
             }
             .font(.caption)
             if let overview = video.overview, !hidesSpoilers {
-                Text(overview).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2)
+                Text(overview.rawValue).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2)
             }
         }
         .lockupFrame(.wide)

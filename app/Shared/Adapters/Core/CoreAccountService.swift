@@ -31,8 +31,8 @@ struct CoreAccountService: AccountService {
                     loaded.withLock { $0 = true }
                     return .pending
                 case .ready(let code) where loaded.withLock({ $0 }):
-                    guard let link = URL(string: code.link) else { return .failed(.unavailable(reason: "invalid link \(code.link)")) }
-                    return .done(LinkCode(code: code.code, link: link))
+                    guard let link = URL(string: code.link) else { return .failed(.unavailable(reason: "invalid link \(Redacted(code.link))")) }
+                    return .done(LinkCode(code: Redacted(code.code), link: Redacted(link)))
                 case .failed(let error) where loaded.withLock({ $0 }):
                     return .failed(.unavailable(reason: Self.message(error)))
                 case .none, .ready, .failed:
@@ -47,13 +47,13 @@ struct CoreAccountService: AccountService {
     func signIn(confirming code: LinkCode) async throws(AccountError) {
         let deadline = ContinuousClock.now + Self.linkLifetime
         while ContinuousClock.now < deadline {
-            guard !Task.isCancelled, (try? linkState().code?.readyContent?.code) == code.code else { throw .superseded }
+            guard !Task.isCancelled, (try? linkState().code?.readyContent?.code) == code.code.rawValue else { throw .superseded }
             try dispatch(.link(.readData), to: .link)
             try? await Task.sleep(for: Self.linkPollInterval)
             // Before confirmation the API answers with an error; only a key means confirmed.
             let state = try linkState()
-            if state.code?.readyContent?.code == code.code, let authKey = state.data?.readyContent?.authKey {
-                try await authenticate(.loginWithToken(authKey))
+            if state.code?.readyContent?.code == code.code.rawValue, let authKey = state.data?.readyContent?.authKey {
+                try await authenticate(.loginWithToken(authKey.rawValue))
                 runtime.dispatchLogged(.unload, to: .link)
                 return
             }
@@ -66,7 +66,7 @@ struct CoreAccountService: AccountService {
     }
 
     func signIn(email: EmailAddress, password: Password) async throws(AccountError) {
-        try await authenticate(.login(email: email.rawValue, password: password.rawValue))
+        try await authenticate(.login(email: email.address.rawValue, password: password.rawValue))
     }
 
     func signOut() {

@@ -1,7 +1,7 @@
 import Testing
 
 struct AddonsFeatureTests {
-    private let addon = InstalledAddon(manifestURL: Fixture.manifest, name: "Debrid", version: "1.0.0", isRemovable: true)
+    private let addon = InstalledAddon(manifestURL: Fixture.manifest, name: Redacted("Debrid"), version: "1.0.0", isRemovable: true)
 
     @Test func installsOneManifestAtATime() {
         var state = AddonsFeature.State()

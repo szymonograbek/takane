@@ -12,7 +12,7 @@ struct CorePlaybackTracker: PlaybackTracker {
     #endif
 
     func begin(_ candidate: StreamCandidate) {
-        send(.load(.player(selection: candidate.tracking.payload)))
+        send(.load(.player(selection: candidate.tracking.payload.rawValue)))
     }
 
     func progress(_ position: Duration, of duration: Duration) {
@@ -118,14 +118,14 @@ private extension CorePlaybackTracker {
 
     static func answer(for candidate: StreamCandidate, in player: PlayerState) -> Answer {
         guard let selected = player.selected, let source = candidate.source,
-              selected.stream.source == .url(source.url), selected.streamRequest?.path.id == candidate.item.rawValue
+              selected.stream.source == .url(source.url.rawValue), selected.streamRequest?.path.id == candidate.item.rawValue
         else { return .otherSelection }
         guard let video = player.nextVideo, let id = PlayableID(video.id) else { return .selected(nil) }
         let show = player.metaItem?.content?.readyContent
         return .selected(UpNext(
             video: id,
-            show: show?.name ?? "",
-            title: video.title,
+            show: Redacted(show?.name ?? ""),
+            title: Redacted(video.title),
             thumbnail: video.thumbnail.flatMap(URL.init(string:)),
             backdrop: show?.background.flatMap(URL.init(string:)),
             stream: nextCandidate(for: id, in: player)
@@ -161,7 +161,7 @@ private extension StreamItemState {
                 if track.embedded {
                     Int(track.id).map { .builtIn(TrackChoices.Track(number: $0, language: track.language)) }
                 } else {
-                    URL(string: track.id).map { .addon($0, language: track.language) }
+                    URL(string: track.id).map { .addon(Redacted($0), language: track.language) }
                 }
             }
             return TrackChoices(
@@ -175,7 +175,7 @@ private extension StreamItemState {
             subtitleTrack = switch newValue.subtitles {
             case nil: nil
             case .builtIn(let track): SubtitleTrack(id: String(track.number), embedded: true, language: track.language)
-            case .addon(let url, let language): SubtitleTrack(id: url.absoluteString, embedded: false, language: language)
+            case .addon(let url, let language): SubtitleTrack(id: url.rawValue.absoluteString, embedded: false, language: language)
             }
             playbackSpeed = newValue.speed?.rawValue
         }

@@ -18,7 +18,7 @@ struct StreamsScreen: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: 60))
         columns {
             VStack(alignment: .leading, spacing: 12) {
-                Text(request.title).font(.title2).bold().lineLimit(2)
+                Text(request.title.rawValue).font(.title2).bold().lineLimit(2)
                 if case .episode(_, let season, let episode) = request.video {
                     Text("Season \(season), Episode \(episode)").foregroundStyle(Palette.secondary)
                 }
@@ -75,7 +75,7 @@ extension StreamsScreen {
 private struct StreamList: View {
     @Environment(AppContext.self) private var app
     let sections: [StreamSection]
-    let title: String
+    let title: Redacted<String>
     let resumeFrom: Duration
     /// Streams often arrive after the screen opens; focus then moves to the first one.
     @FocusState private var focused: StreamCandidate.ID?
@@ -140,8 +140,8 @@ private struct StreamRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(candidate.name ?? "Stream").font(.callout).bold().lineLimit(2)
-            if let detail = candidate.description ?? candidate.filename {
+            Text(candidate.name?.rawValue ?? "Stream").font(.callout).bold().lineLimit(2)
+            if let detail = candidate.description?.rawValue ?? candidate.filename?.rawValue {
                 Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(3)
             }
         }
@@ -151,7 +151,7 @@ private struct StreamRow: View {
 
 extension StreamsRequest {
     /// "Twin Peaks · S1 E3", or the movie's name.
-    var playerTitle: String {
+    var playerTitle: Redacted<String> {
         video.playerTitle(title)
     }
 }
@@ -164,10 +164,10 @@ extension StreamsFeature.State {
         return results.sources.compactMap { source in
             switch source.candidates {
             case .loading:
-                return StreamSection(addon: source.addon, addonName: source.addonName, streams: .loading)
+                return StreamSection(addon: source.addon, addonName: source.addonName.rawValue, streams: .loading)
             case .loaded(let candidates):
                 let playable = candidates.filter { $0.source != nil }
-                return playable.isEmpty ? nil : StreamSection(addon: source.addon, addonName: source.addonName, streams: .loaded(playable))
+                return playable.isEmpty ? nil : StreamSection(addon: source.addon, addonName: source.addonName.rawValue, streams: .loaded(playable))
             case .failed:
                 return nil
             }
