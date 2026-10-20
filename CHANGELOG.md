@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/szymonograbek/takane/compare/v1.1.2...v1.1.3) (2026-10-20)
+
+
+### Bug Fixes
+
+* **features:** use a plain deinit in featurestore to avoid a swift 6.3 crash ([5d4c16c](https://github.com/szymonograbek/takane/commit/5d4c16c20b7cad9020d44b66f1bd804bcd208d65))
+* **features:** use a plain deinit in featurestore to avoid a swift 6.3 crash ([356202d](https://github.com/szymonograbek/takane/commit/356202d7912c847f3dab9756ab1d6dcbffbc3ba6))
+
 ## [1.1.2](https://github.com/szymonograbek/takane/compare/v1.1.1...v1.1.2) (2026-10-20)
 
 
