@@ -5,8 +5,10 @@ struct StreamsFeatureTests {
         StreamResults(
             item: item,
             sources: [
-                StreamSource(addon: Fixture.manifest, addonName: "Debrid", candidates: .loaded([Fixture.candidate(), Fixture.candidate(index: 1)])),
-                StreamSource(addon: Fixture.otherManifest, addonName: "Other", candidates: complete ? .failed(.addonFailed(reason: "500")) : .loading),
+                StreamSource(addon: Fixture.manifest, addonName: Redacted("Debrid"), candidates: .loaded([Fixture.candidate(), Fixture.candidate(index: 1)])),
+                StreamSource(
+                    addon: Fixture.otherManifest, addonName: Redacted("Other"), candidates: complete ? .failed(.addonFailed(reason: "500")) : .loading
+                ),
             ],
             isComplete: complete
         )
@@ -17,7 +19,7 @@ struct StreamsFeatureTests {
         #expect(StreamsFeature.reduce(&state, .lookUp(Fixture.movie)) == [.watch(Fixture.movie)])
         #expect(state.message == "Loading…")
         _ = StreamsFeature.reduce(&state, .resultsChanged(results(Fixture.movie, complete: false)))
-        #expect(state.loadedSources.map(\.addonName) == ["Debrid"])
+        #expect(state.loadedSources.map(\.addonName) == [Redacted("Debrid")])
         #expect(state.isLookingUp)
         _ = StreamsFeature.reduce(&state, .resultsChanged(results(Fixture.movie, complete: true)))
         #expect(state.message == "2 streams from 1 add-ons")

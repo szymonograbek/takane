@@ -12,7 +12,7 @@ struct VideoFingerprintTests {
         return bytes
     }()
 
-    private static let source = PlaybackSource(url: URL(string: "https://debrid.example/movie.mkv").require(), headers: ["X-Token": "secret"])
+    private static let source = PlaybackSource(url: Redacted(URL(string: "https://debrid.example/movie.mkv").require()), headers: ["X-Token": "secret"])
 
     /// Answers `Range: bytes=a-b` from `file`, as a server that supports ranges does.
     private static func ranges(_ request: URLRequest) -> HTTPStub.Response {

@@ -42,12 +42,12 @@ private struct Hero: View {
                     LinearGradient(colors: [.clear, Palette.canvas], startPoint: .center, endPoint: .bottom)
                 }
             VStack(alignment: .leading, spacing: 16) {
-                TitleMark(name: preview.name, logo: preview.logo)
+                TitleMark(name: preview.name.rawValue, logo: preview.logo)
                 if let year = preview.releaseInfo {
-                    Text(year).font(.caption).foregroundStyle(Palette.secondary)
+                    Text(year.rawValue).font(.caption).foregroundStyle(Palette.secondary)
                 }
                 if let description = preview.description {
-                    Text(description).font(.callout).lineLimit(2).frame(maxWidth: 760, alignment: .leading)
+                    Text(description.rawValue).font(.callout).lineLimit(2).frame(maxWidth: 760, alignment: .leading)
                 }
                 HStack(spacing: 24) {
                     if let playable = preview.playable {
@@ -179,6 +179,7 @@ extension CatalogRow {
     /// "Popular Movies": the catalog's name with its type, since add-ons reuse names across types.
     var title: String {
         let type = id.type.pluralName
+        let name = name.rawValue
         return name.localizedCaseInsensitiveContains(type) ? name : "\(name) \(type)"
     }
 }

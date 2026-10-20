@@ -1,7 +1,8 @@
 /// An add-on in the user's profile.
 struct InstalledAddon: Identifiable, Hashable, Sendable {
     let manifestURL: ManifestURL
-    let name: String
+    /// Names the add-on the user chose, which release logs keep private.
+    let name: Redacted<String>
     let version: String
     /// False for add-ons the provider keeps installed, such as its official catalog.
     let isRemovable: Bool

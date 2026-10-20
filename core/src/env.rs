@@ -52,16 +52,11 @@ impl Env for AppleEnv {
                 .await
                 .map_err(|_| EnvError::Fetch("host dropped the request".to_owned()))?;
             match outcome {
-                FetchOutcome::TransportError(message) => {
-                    tracing::warn!(url = %request.url, %message, "fetch failed");
-                    Err(EnvError::Fetch(message))
-                }
+                FetchOutcome::TransportError(message) => Err(EnvError::Fetch(message)),
                 FetchOutcome::Response { status, .. } if !(200..300).contains(&status) => {
-                    tracing::warn!(url = %request.url, status, "fetch got unexpected status");
                     Err(EnvError::Fetch(format!("Unexpected HTTP status code {status}")))
                 }
-                FetchOutcome::Response { status, body } => {
-                    tracing::debug!(url = %request.url, status, bytes = body.len(), "fetch done");
+                FetchOutcome::Response { body, .. } => {
                     let mut deserializer = serde_json::Deserializer::from_slice(&body);
                     serde_path_to_error::deserialize(&mut deserializer).map_err(|error| {
                         tracing::warn!(url = %request.url, %error, "fetch response did not match the expected shape");
@@ -80,7 +75,7 @@ impl Env for AppleEnv {
         let key = key.to_owned();
         blocking(move || {
             let value = storage::read(&key)?;
-            tracing::debug!(key, found = value.is_some(), "storage read");
+            tracing::trace!(key, found = value.is_some(), "storage read");
             value
                 .map(|value| serde_json::from_str(&value))
                 .transpose()
@@ -95,7 +90,7 @@ impl Env for AppleEnv {
             Err(error) => return future::err(EnvError::from(error)).boxed_env(),
         };
         blocking(move || {
-            tracing::debug!(key, bytes = value.as_ref().map(String::len), "storage write");
+            tracing::trace!(key, bytes = value.as_ref().map(String::len), "storage write");
             storage::write(&key, value.as_deref())
         })
     }

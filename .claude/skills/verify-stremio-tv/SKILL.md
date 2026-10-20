@@ -83,6 +83,8 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
 | `player.upNext.play`, `player.upNext.dismiss` | the up next card's Play Now (Choose Stream when the next episode has no matching stream) and Cancel; the card shows near an episode's end while the controls are hidden, with Play Now focused |
 | `settings.account`, `settings.addons`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows |
+| `about.shareLogs` | Share Logs on Settings › About |
+| `shareLogs.screen`, `shareLogs.window`, `shareLogs.url`, `shareLogs.key`, `shareLogs.retry` | Share Logs: the screen, its time range button (`Last Hour` by default; opens Last 15 Minutes, Last Hour, Last 6 Hours, Last 24 Hours, Last 7 Days), the address to fetch the logs from, the log key (release builds only), and Try Again when sharing failed |
 | `playback.audioLanguage`, `playback.secondAudioLanguage`, `playback.seekStep`, `playback.upNextNotice`, `playback.autoplayNext`, `playback.hideSpoilers` | Settings › Playback rows; Second Language shows only when an audio language is set; Skip Interval opens a list of 5, 10, 15 and 30 seconds; Up Next Card opens a list of Off and 10, 20, 35 and 60 seconds before the end; Autoplay Next Episode and Hide Spoilers are toggles |
 | `subtitles.language`, `subtitles.secondLanguage` | Settings › Subtitles language rows; Second Language shows only when a language is set |
 | `subtitles.size`, `subtitles.font`, `subtitles.bold`, `subtitles.fileStyling`, `subtitles.textColor`, `subtitles.outlineColor`, `subtitles.backgroundColor`, `subtitles.opacity`, `subtitles.position`, `subtitles.reset` | Settings › Subtitles style rows; each but the Bold and Use File Styling toggles and Reset opens a list of choices |
@@ -93,7 +95,7 @@ Feature recipes with exact steps: `features/README.md`.
 
 ## Evidence
 
-`$T evidence <name>` writes to `build/verify/<run-id>/`: `<name>.png` (simulator screenshot, 3840×2160), `<name>.ax.jsonl` (raw accessibility tree, one JSON node per line), and `app.log` (Swift, Rust and AetherEngine logs; long tokens are masked). Capture before and after each user action that matters.
+`$T evidence <name>` writes to `build/verify/<run-id>/`: `<name>.png` (simulator screenshot, 3840×2160), `<name>.ax.jsonl` (raw accessibility tree, one JSON node per line), and `app.log` (Swift, Rust and AetherEngine logs; debug builds mask nothing, so treat it as holding credentials). Capture before and after each user action that matters.
 
 Proof standards:
 

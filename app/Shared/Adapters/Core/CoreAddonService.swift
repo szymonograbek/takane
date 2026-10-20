@@ -14,7 +14,7 @@ struct CoreAddonService: AddonService {
             return addon
         }
         Log.core.info("installing addon from \(manifest)")
-        let url = manifest.url
+        let url = manifest.url.rawValue
         let descriptor: Addon
         do {
             descriptor = try await runtime.request(
@@ -51,14 +51,14 @@ struct CoreAddonService: AddonService {
         } catch {
             throw .rejected(reason: "\(error)")
         }
-        guard let addon = profile.addons.first(where: { $0.transportUrl == manifest.url }) else { return }
+        guard let addon = profile.addons.first(where: { $0.transportUrl == manifest.url.rawValue }) else { return }
         Log.core.info("uninstalling \(addon.manifest.name)")
         do {
             try await runtime.request(
                 .ctx(.uninstallAddon(descriptor: addon.descriptor)), to: nil, observing: .ctx,
                 as: CtxState.self, timeout: .seconds(10)
             ) { ctx -> Probe<Void, AddonError> in
-                ctx.profile.addons.contains { $0.transportUrl == manifest.url } ? .pending : .done(())
+                ctx.profile.addons.contains { $0.transportUrl == manifest.url.rawValue } ? .pending : .done(())
             }
         } catch {
             throw Self.addonError(error, stage: "add-on removal")
@@ -97,7 +97,7 @@ private extension Addon {
 
 extension CoreRuntime {
     /// Installed add-ons' names by transport URL, for labelling their answers.
-    func addonNames() -> [URL: String] {
+    func addonNames() -> [URL: Redacted<String>] {
         do {
             let ctx = try state(.ctx, as: CtxState.self)
             return Dictionary(ctx.profile.addons.map { ($0.transportUrl, $0.manifest.name) }) { first, _ in first }

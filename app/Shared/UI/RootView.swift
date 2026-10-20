@@ -35,61 +35,58 @@ struct RootView: View {
     }
 }
 
-/// Where a tab's navigation stack can go.
-enum Route: Hashable {
-    case details(MetaPreview)
-    case streams(StreamsRequest)
-    case genre(GenreFilter)
-}
-
-/// What the streams screen looks up, and how it labels and resumes it.
-struct StreamsRequest: Hashable {
-    let video: PlayableID
-    let title: String
-    let backdrop: URL?
+private enum MainTab: String {
+    case home = "Home", library = "Library", calendar = "Calendar", search = "Search", settings = "Settings"
 }
 
 private struct MainTabs: View {
+    @State private var tab = MainTab.home
+
     var body: some View {
-        TabView {
-            Tab("Home", systemImage: "house") {
-                NavigationStack {
-                    HomeScreen().withRoutes()
-                }
+        TabView(selection: $tab) {
+            Tab("Home", systemImage: "house", value: .home) {
+                RouteStack { HomeScreen() }
             }
-            Tab("Library", systemImage: "books.vertical") {
-                NavigationStack {
-                    LibraryScreen().withRoutes()
-                }
+            Tab("Library", systemImage: "books.vertical", value: .library) {
+                RouteStack { LibraryScreen() }
             }
-            Tab("Calendar", systemImage: "calendar") {
-                NavigationStack {
-                    CalendarScreen().withRoutes()
-                }
+            Tab("Calendar", systemImage: "calendar", value: .calendar) {
+                RouteStack { CalendarScreen() }
             }
-            Tab(role: .search) {
-                NavigationStack {
-                    SearchScreen().withRoutes()
-                }
+            Tab(value: .search, role: .search) {
+                RouteStack { SearchScreen() }
             }
-            Tab("Settings", systemImage: "gearshape") {
+            Tab("Settings", systemImage: "gearshape", value: .settings) {
                 SettingsScreen()
             }
         }
+        .onChange(of: tab) { _, tab in Log.ui.info("tab → \(tab.rawValue)") }
         #if os(macOS)
         .tabViewStyle(.sidebarAdaptable)
         #endif
     }
 }
 
-extension View {
-    /// The screens a title can lead to, for any tab's stack.
-    func withRoutes() -> some View {
-        navigationDestination(for: Route.self) { route in
-            switch route {
-            case .details(let preview): DetailsScreen(preview: preview)
-            case .streams(let request): StreamsScreen(request: request)
-            case .genre(let filter): GenreScreen(filter: filter)
+/// A tab's navigation stack: the screens a title can lead to, each push and pop logged.
+private struct RouteStack<Root: View>: View {
+    @ViewBuilder let root: () -> Root
+    @State private var path: [Route] = []
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            root().navigationDestination(for: Route.self) { route in
+                switch route {
+                case .details(let preview): DetailsScreen(preview: preview)
+                case .streams(let request): StreamsScreen(request: request)
+                case .genre(let filter): GenreScreen(filter: filter)
+                }
+            }
+        }
+        .onChange(of: path) { old, new in
+            if new.count > old.count, let pushed = new.last {
+                Log.ui.info("push \(pushed)")
+            } else {
+                Log.ui.info("pop to \(new.last.map(String.init(describing:)) ?? "root")")
             }
         }
     }

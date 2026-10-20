@@ -86,6 +86,8 @@ enum Metrics {
     /// The choices a `ChoiceMenu` opens.
     static let choiceMenuWidth: CGFloat = 560
     static let welcomeLogoSize: CGFloat = 300
+    /// A QR code a phone scans from across the room.
+    static let qrCodeSize: CGFloat = 440
     static let progressHeight: CGFloat = 5
     /// The player's progress bar while it has focus.
     static let focusedProgressHeight: CGFloat = 14
@@ -112,6 +114,7 @@ enum Metrics {
     static let playerPanelPadding: CGFloat = 12
     static let choiceMenuWidth: CGFloat = 260
     static let welcomeLogoSize: CGFloat = 160
+    static let qrCodeSize: CGFloat = 220
     static let progressHeight: CGFloat = 5
     static let focusedProgressHeight: CGFloat = 9
     static let swatchSize: CGFloat = 14

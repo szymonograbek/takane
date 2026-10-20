@@ -12,7 +12,7 @@ struct PlayerControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Spacer()
-            Text(session.title.isEmpty ? session.candidate.name ?? "" : session.title)
+            Text(session.title.rawValue.isEmpty ? session.candidate.name?.rawValue ?? "" : session.title.rawValue)
                 .font(.title3).bold()
             if session.isLive {
                 LiveBadge()
@@ -133,7 +133,7 @@ struct PlayerControls: View {
                 let name = languageName(group.language)
                 return PanelSection(title: name, rows: group.files.enumerated().map { index, file in
                     .choice(
-                        file.label ?? "\(name) \(index + 1)",
+                        file.label?.rawValue ?? "\(name) \(index + 1)",
                         isSelected: session.subtitleChoice == .addon(file.id), .chooseSubtitles(.addon(file.id))
                     )
                 })
@@ -148,12 +148,12 @@ struct PlayerControls: View {
     /// An add-on's files open on their own page; until it has some, the row says why not.
     private func addonRow(_ source: SubtitleSource, choice: PlayerFeature.SubtitleChoice) -> PanelRow {
         switch source.subtitles {
-        case .loading: return .note(source.addonName, detail: "Loading…")
-        case .failed: return .note(source.addonName, detail: "Unavailable")
-        case .loaded(let files) where files.isEmpty: return .note(source.addonName, detail: "None Found")
+        case .loading: return .note(source.addonName.rawValue, detail: "Loading…")
+        case .failed: return .note(source.addonName.rawValue, detail: "Unavailable")
+        case .loaded(let files) where files.isEmpty: return .note(source.addonName.rawValue, detail: "None Found")
         case .loaded:
             let isChosen = if case .addon(let id) = choice { id.addon == source.addon } else { false }
-            return .link(source.addonName, isSelected: isChosen, opens: .addonSubtitles(source.addon))
+            return .link(source.addonName.rawValue, isSelected: isChosen, opens: .addonSubtitles(source.addon))
         }
     }
 
@@ -321,6 +321,7 @@ extension MediaTrack {
     /// "English · 5.1 · eac3", "Polish (Forced)", or the track number when the stream says nothing.
     var label: String {
         let language = language.map(languageName)
+        let title = title?.rawValue
         var name = [title, language].compactMap(\.self).first ?? "Track \(id.number)"
         if let language, let title, !title.localizedCaseInsensitiveContains(language) { name = "\(language) · \(title)" }
         if isForced { name += " (Forced)" }

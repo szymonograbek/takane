@@ -13,9 +13,9 @@ struct CoreLibraryWireTests {
     // The literals are the ones core/src/lib.rs parses as core actions.
     @Test func libraryActionsHaveTheShapesCoreParses() throws {
         let show = MetaPreview(
-            media: MediaID("tt0944947").require(), type: .series, name: "Game of Thrones",
+            media: MediaID("tt0944947").require(), type: .series, name: Redacted("Game of Thrones"),
             poster: URL(string: "https://images.example/poster.jpg"), posterShape: .poster,
-            background: nil, logo: nil, releaseInfo: "2011–2019", description: "Left out."
+            background: nil, logo: nil, releaseInfo: Redacted("2011–2019"), description: Redacted("Left out.")
         )
 
         #expect(try encoded(.load(.libraryWithFilters(LibraryRequest(LibraryFilter(type: nil, sort: .recentlyWatched)))), to: .library) == json(#"""
@@ -96,8 +96,8 @@ struct CoreLibraryWireTests {
         let episodes = try #require(state.upcomingEpisodes(from: start)?.value)
 
         #expect(episodes.map(\.video.rawValue) == ["tt0944947:8:1", "tt0944947:8:2"])
-        #expect(episodes.map(\.name) == ["Tonight", "Later"])
-        #expect(episodes.first?.show.name == "Game of Thrones")
+        #expect(episodes.map(\.name.rawValue) == ["Tonight", "Later"])
+        #expect(episodes.first?.show.name.rawValue == "Game of Thrones")
         #expect(episodes.first?.released == (try Date("2026-10-19T20:00:00Z", strategy: .iso8601)))
     }
 

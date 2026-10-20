@@ -68,7 +68,6 @@ fn runtime() -> Result<&'static Runtime<AppleEnv, AppModel>, String> {
 fn dispatch(request: &[u8]) -> Result<(), String> {
     let request: DispatchRequest = serde_json::from_slice(request)
         .map_err(|error| format!("invalid dispatch request: {error}"))?;
-    tracing::debug!(field = ?request.field, action = ?request.action, "dispatch");
     runtime()?.dispatch(RuntimeAction {
         field: request.field,
         action: request.action,

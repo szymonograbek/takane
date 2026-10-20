@@ -5,10 +5,10 @@ import Foundation
 extension MediaTrack {
     /// `track` as listed by the engine, whose `id` is the container's stream index. `file` is the
     /// subtitle file it was added from, which the engine does not list.
-    init(_ track: TrackInfo, kind: TrackKind, selected: Int?, file: URL?) {
+    init(_ track: TrackInfo, kind: TrackKind, selected: Int?, file: Redacted<URL>?) {
         self.init(
             id: ID(kind: kind, number: track.id),
-            title: Self.title(of: track),
+            title: Self.title(of: track).map(Redacted.init),
             language: track.language,
             codec: track.codec.isEmpty ? nil : track.codec,
             channelCount: kind == .audio && track.channels > 0 ? track.channels : nil,
@@ -53,7 +53,7 @@ extension SubtitleRun {
     /// `run` without its size, which is in the script's own units.
     init(_ run: SubtitleTextRun) {
         self.init(
-            text: run.text,
+            text: Redacted(run.text),
             isBold: run.isBold,
             isItalic: run.isItalic,
             isUnderlined: run.isUnderlined,

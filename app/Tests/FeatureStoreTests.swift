@@ -14,14 +14,14 @@ private final class FakeEngine: PlaybackEngine {
     }
 
     func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) {
-        commands.append("load \(source.url.lastPathComponent) from \(start) \(languages.subtitles?.primary.code ?? "-")")
+        commands.append("load \(source.url.rawValue.lastPathComponent) from \(start) \(languages.subtitles?.primary.code ?? "-")")
     }
     func setPaused(_ paused: Bool) { commands.append("paused \(paused)") }
     func seek(by offset: Duration) { commands.append("seek \(offset)") }
     func seek(to position: Duration) { commands.append("seek to \(position)") }
     func select(_ track: MediaTrack.ID) { commands.append("select \(track.number)") }
     func turnOffSubtitles() { commands.append("subtitles off") }
-    func addSubtitles(_ file: URL, title: String, language: String) { commands.append("add \(file.lastPathComponent)") }
+    func addSubtitles(_ file: Redacted<URL>, title: String, language: String) { commands.append("add \(file.rawValue.lastPathComponent)") }
     func setSpeed(_ speed: PlaybackSpeed) { commands.append("speed \(speed.rawValue)") }
     func stop() { commands.append("stop") }
     func diagnostics() -> [String: String] { [:] }
@@ -31,7 +31,7 @@ private final class FakeEngine: PlaybackEngine {
 private final class FakeTracker: PlaybackTracker {
     let reports = AsyncStream<String>.makeStream()
 
-    func begin(_ candidate: StreamCandidate) { reports.continuation.yield("begin \(candidate.filename ?? "")") }
+    func begin(_ candidate: StreamCandidate) { reports.continuation.yield("begin \(candidate.filename?.rawValue ?? "")") }
     func progress(_ position: Duration, of duration: Duration) { reports.continuation.yield("progress \(position)") }
     func seek(to position: Duration, of duration: Duration) { reports.continuation.yield("seek \(position)") }
     func paused(_ paused: Bool) { reports.continuation.yield("paused \(paused)") }
@@ -104,7 +104,7 @@ private struct NoStreams: StreamService {
 }
 
 private struct OneSubtitleSource: SubtitleService {
-    static let source = SubtitleSource(addon: Fixture.manifest, addonName: "Subtitles", subtitles: .loaded([]))
+    static let source = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitles"), subtitles: .loaded([]))
 
     func subtitles(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<[SubtitleSource]> {
         AsyncStream { $0.yield([Self.source]) }

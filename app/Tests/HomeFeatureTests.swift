@@ -4,7 +4,7 @@ import Testing
 struct HomeFeatureTests {
     private func row(_ id: String, items: Remote<[MetaPreview], CatalogError>, canLoadMore: Bool = true) -> CatalogRow {
         CatalogRow(
-            id: CatalogID(addon: Fixture.manifest, type: .movie, id: id), addonName: "Cinemeta", name: id,
+            id: CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted(id)), addonName: Redacted("Cinemeta"), name: Redacted(id),
             items: items, canLoadMore: canLoadMore
         )
     }
@@ -28,7 +28,7 @@ struct HomeFeatureTests {
 
     @Test func onlyAMovieInContinueWatchingIsMarkedWatched() {
         let movie = ContinueWatchingItem(
-            media: Fixture.movie.media, type: .movie, name: "Movie", poster: nil, background: nil,
+            media: Fixture.movie.media, type: .movie, name: Redacted("Movie"), poster: nil, background: nil,
             video: Fixture.movie, reason: .partway(offset: .seconds(600), duration: .seconds(6_000))
         )
         let series = Fixture.continueWatching(video: Fixture.episode, offset: .seconds(600))

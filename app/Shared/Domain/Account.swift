@@ -2,21 +2,22 @@ import Foundation
 
 enum Account: Hashable, Sendable {
     case anonymous
-    case signedIn(email: String)
+    case signedIn(email: Redacted<String>)
 }
 
 /// An email address as typed: trimmed, with text on both sides of a single "@".
-struct EmailAddress: Hashable, Sendable, CustomStringConvertible {
-    let rawValue: String
+struct EmailAddress: Hashable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+    let address: Redacted<String>
 
     init?(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = trimmed.split(separator: "@", omittingEmptySubsequences: false)
         guard parts.count == 2, parts.allSatisfy({ !$0.isEmpty }), !trimmed.contains(where: \.isWhitespace) else { return nil }
-        rawValue = trimmed
+        address = Redacted(trimmed)
     }
 
-    var description: String { rawValue }
+    var description: String { address.description }
+    var debugDescription: String { description }
 }
 
 /// A non-empty password. Its descriptions are redacted, so it never reaches a log.
@@ -34,9 +35,9 @@ struct Password: Hashable, Sendable, CustomStringConvertible, CustomDebugStringC
 
 /// A code the user confirms on another device to sign this one in.
 struct LinkCode: Hashable, Sendable {
-    let code: String
-    /// The page where the code is confirmed. A QR code of it skips typing the code.
-    let link: URL
+    let code: Redacted<String>
+    /// The page where the code is confirmed. A QR code of it skips typing the code, so it carries the code.
+    let link: Redacted<URL>
 }
 
 enum AccountError: Error, Equatable, Sendable {

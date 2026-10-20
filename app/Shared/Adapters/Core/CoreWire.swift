@@ -79,7 +79,7 @@ struct CtxState: Decodable, Sendable {
 
 struct Profile: Decodable, Sendable {
     struct Auth: Decodable, Sendable {
-        struct User: Decodable, Sendable { let email: String }
+        struct User: Decodable, Sendable { let email: Redacted<String> }
         let user: User
     }
 
@@ -92,8 +92,9 @@ struct Profile: Decodable, Sendable {
 /// An installed or remote addon. `descriptor` is core's full JSON, sent back as-is on install.
 struct Addon: Decodable, Sendable, Identifiable {
     struct Manifest: Decodable, Sendable {
-        let id: String
-        let name: String
+        /// Both name the add-on, which release logs keep private.
+        let id: Redacted<String>
+        let name: Redacted<String>
         let version: String
         let catalogs: [Catalog]
     }
@@ -360,7 +361,7 @@ struct LinkState: Decodable, Sendable {
     }
 
     struct AuthKey: Decodable, Sendable {
-        let authKey: String
+        let authKey: Redacted<String>
     }
 
     let code: Loadable<Code>?

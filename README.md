@@ -91,6 +91,30 @@ Takane has no server of its own and collects no analytics. It talks only to:
 
 Your account, add-ons and history stay with Stremio, the same as in Stremio's own apps.
 
+## Reporting a problem
+
+Open an issue on [GitHub Issues](https://github.com/szymonograbek/takane/issues/new). Say what you did, what you expected and what happened instead, and attach Takane's logs.
+
+To get the logs:
+
+1. On your Apple TV, go to Settings › About › Share Logs.
+2. Choose how far back the logs go, from the last 15 minutes to the last 7 days. Pick a range that covers when the problem happened.
+3. Scan the QR code with your phone, or type the address shown into a browser on a computer. The phone or computer must be on the same network as the Apple TV.
+4. The browser downloads a `.log` file. Attach it to your issue.
+
+The address works only while Share Logs is open. Leaving the screen stops sharing.
+
+The logs are safe to share. Before anything is written to them, Takane replaces your personal data with short codes, such as `#k3f9qa`:
+
+- your email, sign-in codes and account keys
+- every web address, including add-on and stream links, where debrid keys live
+- the names of your add-ons and streams, so nobody can tell which add-ons or debrid services you use
+- what you watch and look for: titles and their ids, episode names, file names and searches
+
+A code stays the same within a log, so a log can show you played the same episode twice without naming it. What remains is what helps fix the problem: which screens you opened and what you pressed, and how playback went. If you want to, say in your issue which title it was.
+
+Share Logs also shows your log key. Sending it to the developer is optional: it lets them see the titles and add-ons behind the codes, never your debrid keys. Send it privately and never post it in the issue.
+
 ## Contributing
 
 To build Takane from source, see [DEVELOPERS.md](DEVELOPERS.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).

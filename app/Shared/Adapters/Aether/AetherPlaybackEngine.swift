@@ -19,7 +19,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private var loading: Task<Void, Never>?
     private var reported = Reported()
     /// Subtitle files added to the current load, by the engine's id for the track.
-    private var externalFiles: [Int: URL] = [:]
+    private var externalFiles: [Int: Redacted<URL>] = [:]
     /// The seek in flight, from its `.began` until it ends. Meanwhile the clock can still read the
     /// pre-seek position: before the engine's host takes the clock over, and after AVPlayer misses its
     /// landing deadline. Core would count that as watched, so only the target gets through.
@@ -28,7 +28,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
 
     init() throws(PlaybackError) {
         // Lines arrive from the engine's own threads; `Log` queues its writes.
-        EngineLog.handler = { @Sendable line in Log.player.debug(line) }
+        EngineLog.handler = { @Sendable line in Log.player.debug(RedactedMask.engineLine(line)) }
         (events, continuation) = AsyncStream.makeStream(of: PlaybackEvent.self)
         do {
             player = try AetherEngine()
@@ -48,14 +48,14 @@ final class AetherPlaybackEngine: PlaybackEngine {
         loading?.cancel()
         reported = Reported()
         externalFiles = [:]
-        let url = source.url
+        let url = source.url.rawValue
         let startPosition = start > .zero ? start / .seconds(1) : nil
         let options = LoadOptions(
             httpHeaders: source.headers,
             preferredAudioLanguages: languages.audio?.inPreferenceOrder.map(\.code) ?? [],
             preferredSubtitleLanguages: languages.subtitles?.inPreferenceOrder.map(\.code) ?? []
         )
-        Log.player.info("load \(url.absoluteString) from \(startPosition ?? 0)s headers=\(source.headers.keys.sorted())")
+        Log.player.info("load \(source.url) from \(startPosition ?? 0)s headers=\(source.headers.keys.sorted())")
         loading = Task { [player] in
             do {
                 try await player.load(url: url, startPosition: startPosition, options: options)
@@ -94,9 +94,9 @@ final class AetherPlaybackEngine: PlaybackEngine {
         player.clearSubtitle()
     }
 
-    func addSubtitles(_ file: URL, title: String, language: String) {
-        Log.player.info("add subtitles \(file.absoluteString) \(language)")
-        let track = player.addExternalSubtitleTrack(ExternalSubtitleTrack(url: file, name: title, language: language))
+    func addSubtitles(_ file: Redacted<URL>, title: String, language: String) {
+        Log.player.info("add subtitles \(file) \(language)")
+        let track = player.addExternalSubtitleTrack(ExternalSubtitleTrack(url: file.rawValue, name: title, language: language))
         externalFiles[track.id] = file
         player.selectSubtitleTrack(index: track.id)
     }

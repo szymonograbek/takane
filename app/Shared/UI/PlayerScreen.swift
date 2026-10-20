@@ -353,7 +353,7 @@ private struct UpNextCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.headerSpacing) {
-            Artwork(url: next.thumbnail, title: next.title)
+            Artwork(url: next.thumbnail, title: next.title.rawValue)
                 .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardWidth * 9 / 16)
                 .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
@@ -381,9 +381,10 @@ private struct UpNextCard: View {
 
     /// "S1 E4 · The Big Day", or the episode number alone when it has no title.
     private var episodeName: String {
-        guard case .episode(_, let season, let episode) = next.video else { return next.title }
+        let title = next.title.rawValue
+        guard case .episode(_, let season, let episode) = next.video else { return title }
         let number = "S\(season) E\(episode)"
-        return next.title.isEmpty ? number : "\(number) · \(next.title)"
+        return title.isEmpty ? number : "\(number) · \(title)"
     }
 }
 

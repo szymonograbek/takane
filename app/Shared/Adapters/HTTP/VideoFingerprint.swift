@@ -30,12 +30,12 @@ extension URLSession {
     /// The bytes in `range` and the file's total size, from a `206` response's `Content-Range`.
     /// Any other response is a failure, read no further: a server ignoring `Range` sends the whole file.
     private func bytes(_ range: Range<UInt64>, of source: PlaybackSource) async throws(HTTPFailure) -> (Data, size: UInt64) {
-        var request = URLRequest(url: source.url)
+        var request = URLRequest(url: source.url.rawValue)
         for (name, value) in source.headers {
             request.setValue(value, forHTTPHeaderField: name)
         }
         request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
-        let url = source.url.absoluteString
+        let url = source.url
         Log.network.debug("→ GET \(url) bytes \(range)")
         let stream: AsyncBytes
         let response: URLResponse

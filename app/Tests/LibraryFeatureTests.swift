@@ -42,7 +42,7 @@ struct LibraryFeatureTests {
 
 struct CalendarFeatureTests {
     private let episode = UpcomingEpisode(
-        show: Fixture.preview("tt0944947", type: .series), video: Fixture.episode, name: "Winter Is Coming", released: .distantFuture
+        show: Fixture.preview("tt0944947", type: .series), video: Fixture.episode, name: Redacted("Winter Is Coming"), released: .distantFuture
     )
 
     @Test func appearingReloadsAndKeepsTheEpisodesShownUntilTheAnswer() {
@@ -88,7 +88,7 @@ struct ReleaseScheduleTests {
         return UpcomingEpisode(
             show: Fixture.preview("tt0944947", type: .series),
             video: PlayableID("tt0944947:1:\(number)").require(),
-            name: "Episode \(number)",
+            name: Redacted("Episode \(number)"),
             released: calendar.date(bySettingHour: hour, minute: 30, second: 0, of: day).require()
         )
     }

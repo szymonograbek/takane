@@ -89,7 +89,7 @@ struct CoreLibraryService: LibraryService {
         guard let media = MediaID(item.id), let type = ContentType(item.type) else { return nil }
         let poster = item.poster.flatMap(URL.init(string:))
         return MetaPreview(
-            media: media, type: type, name: item.name, poster: poster, posterShape: PosterShape(core: item.posterShape),
+            media: media, type: type, name: Redacted(item.name), poster: poster, posterShape: PosterShape(core: item.posterShape),
             background: poster.flatMap(background), logo: nil, releaseInfo: nil, description: nil
         )
     }
@@ -103,7 +103,7 @@ struct CoreLibraryService: LibraryService {
         return ContinueWatchingItem(
             media: media,
             type: type,
-            name: item.name,
+            name: Redacted(item.name),
             poster: poster,
             background: poster.flatMap(background),
             video: item.state.videoId.flatMap(PlayableID.init) ?? .movie(media),

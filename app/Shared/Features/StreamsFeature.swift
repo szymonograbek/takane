@@ -47,7 +47,7 @@ enum StreamsFeature: Feature {
 extension StreamsFeature.State {
     struct LoadedSource: Identifiable, Equatable, Sendable {
         let addon: ManifestURL
-        let addonName: String
+        let addonName: Redacted<String>
         let candidates: [StreamCandidate]
 
         var id: ManifestURL { addon }

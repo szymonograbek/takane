@@ -53,8 +53,19 @@ final class FeatureStore<F: Feature> {
         effects.values.forEach { $0.cancel() }
     }
 
+    /// Sends what the user did, so a log shows each action the screen reported.
     func send(_ event: F.Event) {
+        Log.ui.info("\(F.self) ← \(Log.summary(of: event))")
+        reduce(event)
+    }
+
+    /// Reduces any event: what the user did, or an effect's answer.
+    private func reduce(_ event: F.Event) {
+        let before = Log.caseName(of: state)
         let effects = F.reduce(&state, event)
+        if let before, let after = Log.caseName(of: state), before != after {
+            Log.features.debug("\(F.self) \(before) → \(after)")
+        }
         Log.features.trace("\(F.self) \(event) → \(state)")
         effects.forEach(run)
         waiters = waiters.filter { _, isResolved in !isResolved(state) }
@@ -96,7 +107,7 @@ final class FeatureStore<F: Feature> {
         }
         let dependencies = dependencies
         effects[id] = Task { [weak self] in
-            await F.run(effect, dependencies) { event in self?.send(event) }
+            await F.run(effect, dependencies) { event in self?.reduce(event) }
             self?.effects[id] = nil
         }
     }

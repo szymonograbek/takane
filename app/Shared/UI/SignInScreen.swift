@@ -1,4 +1,3 @@
-import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 /// Sign-in by code: confirm it on a phone or computer, no typing on the remote.
@@ -52,13 +51,13 @@ private struct LinkCodeView: View {
 
     var body: some View {
         HStack(spacing: 60) {
-            QRCode(text: code.link.absoluteString)
+            QRCode(text: code.link.rawValue.absoluteString)
                 .frame(width: 300, height: 300)
             VStack(alignment: .leading, spacing: 16) {
                 Text("Scan with your phone, or go to").foregroundStyle(Palette.secondary)
-                Text(code.link.host() ?? code.link.absoluteString).font(.headline)
+                Text(code.link.rawValue.host() ?? code.link.rawValue.absoluteString).font(.headline)
                 Text("and enter").foregroundStyle(Palette.secondary)
-                Text(code.code)
+                Text(code.code.rawValue)
                     .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
                     .kerning(12)
                     .accessibilityIdentifier("signIn.code")
@@ -67,29 +66,6 @@ private struct LinkCodeView: View {
                     .foregroundStyle(Palette.secondary)
             }
         }
-    }
-}
-
-/// A QR code drawn crisp at any size.
-private struct QRCode: View {
-    let text: String
-
-    var body: some View {
-        if let image = Self.image(for: text) {
-            Image(decorative: image, scale: 1)
-                .interpolation(.none)
-                .resizable()
-                .padding(16)
-                .background(.white, in: .rect(cornerRadius: 16, style: .continuous))
-        }
-    }
-
-    private static func image(for text: String) -> CGImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(text.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage else { return nil }
-        return CIContext().createCGImage(output, from: output.extent)
     }
 }
 

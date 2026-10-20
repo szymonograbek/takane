@@ -13,7 +13,7 @@ struct IdentifierTests {
     }
 
     @Test func acceptsOnlyHTTPManifests() {
-        #expect(ManifestURL(" https://addon.example/manifest.json ")?.description == "https://addon.example/manifest.json")
+        #expect(ManifestURL(" https://addon.example/manifest.json ")?.url.rawValue.absoluteString == "https://addon.example/manifest.json")
         #expect(ManifestURL("ftp://addon.example/manifest.json") == nil)
         #expect(ManifestURL("manifest.json") == nil)
     }
