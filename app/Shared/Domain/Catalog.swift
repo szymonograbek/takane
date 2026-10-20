@@ -4,6 +4,7 @@ import Foundation
 struct ContentType: Hashable, Sendable, CustomStringConvertible {
     static let movie = ContentType(known: "movie")
     static let series = ContentType(known: "series")
+    static let liveTV = ContentType(known: "tv")
 
     let rawValue: String
 
@@ -45,6 +46,15 @@ struct MetaPreview: Identifiable, Hashable, Sendable {
     let description: String?
 
     var id: MediaID { media }
+
+    /// What plays a title that is one video, a movie or a live channel. Nil for a title of episodes.
+    var playable: PlayableID? {
+        switch type {
+        case .movie: .movie(media)
+        case .liveTV: .liveChannel(media)
+        default: nil
+        }
+    }
 }
 
 enum CatalogError: Error, Equatable, Sendable {
@@ -211,9 +221,8 @@ extension TitleDetails {
         videos.filter { $0.season == season }.sorted { ($0.episode ?? 0) < ($1.episode ?? 0) }
     }
 
-    /// What Play starts: the movie, or the first episode of the first regular season.
+    /// What Play starts: the movie, the live channel, or the first episode of the first regular season.
     var firstPlayable: PlayableID? {
-        if preview.type == .movie { return .movie(preview.media) }
-        return seasons.first.flatMap { episodes(in: $0).first?.playable }
+        preview.playable ?? seasons.first.flatMap { episodes(in: $0).first?.playable }
     }
 }

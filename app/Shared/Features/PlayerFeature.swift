@@ -127,10 +127,11 @@ enum PlayerFeature: Feature {
             case .opening, .ended: return []
             }
 
-        case (.active(let session), .jump(let direction)):
+        // A live channel plays where its broadcast is: nothing to seek to.
+        case (.active(let session), .jump(let direction)) where !session.isLive:
             return update(&state, session) { $0.endScan() + [.seek(by: $0.seekStep.duration * direction.sign)] }
 
-        case (.active(let session), .timeline(let event)):
+        case (.active(let session), .timeline(let event)) where !session.isLive:
             return update(&state, session) { $0.apply(event) }
 
         case (.active(let session), .select(let track)):
@@ -186,7 +187,7 @@ enum PlayerFeature: Feature {
              (.failed, .select), (.failed, .chooseSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
              (.idle, .subtitlesFound), (.failed, .subtitlesFound), (.idle, .timeline), (.failed, .timeline),
              (.idle, .preferencesRead), (.failed, .preferencesRead), (.idle, .remembered), (.failed, .remembered),
-             (.idle, .upNext), (.failed, .upNext),
+             (.idle, .upNext), (.failed, .upNext), (.active, .jump), (.active, .timeline),
              (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .preferencesRead), (.active, .skip), (.active, .remembered):
             return []
         }
@@ -338,6 +339,10 @@ extension PlayerFeature.Session {
     mutating func read(_ preferences: Preferences) {
         seekStep = preferences.seekStep
         upNextBehavior = preferences.upNext
+    }
+
+    var isLive: Bool {
+        if case .liveChannel = candidate.item { true } else { false }
     }
 
     /// The stream's own subtitle tracks, without files added from add-ons.

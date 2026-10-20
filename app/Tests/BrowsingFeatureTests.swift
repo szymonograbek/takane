@@ -65,6 +65,11 @@ struct BrowsingFeatureTests {
         #expect(details.firstPlayable == PlayableID("tt1:1:1"))
     }
 
+    @Test func playStartsALiveChannelItself() {
+        let details = Fixture.details(Fixture.preview("fox-sports", type: .liveTV))
+        #expect(details.firstPlayable == Fixture.channel)
+    }
+
     @Test func searchDropsResultsForAnOlderQuery() {
         var state = SearchFeature.State()
         #expect(SearchFeature.reduce(&state, .queryChanged(text)) == [.search(text)])

@@ -94,6 +94,7 @@ extension PlayableID {
         switch self {
         case .movie: "movie"
         case .episode: "series"
+        case .liveChannel: "tv"
         }
     }
 }

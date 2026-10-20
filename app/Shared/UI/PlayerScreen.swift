@@ -43,7 +43,8 @@ struct PlayerScreen: View {
                 StreakBadge(streak: session.streak)
             }
             if controls == .hidden {
-                RemoteSurface(focus: $focus, interacted: poke, stepped: peek)
+                // A live channel does not seek, so its arrows only show the controls.
+                RemoteSurface(focus: $focus, interacted: poke, stepped: state.session?.isLive == true ? poke : peek)
             }
             if let session = state.session {
                 if controls.isVisible {

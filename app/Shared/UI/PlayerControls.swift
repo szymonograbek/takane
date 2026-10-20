@@ -14,19 +14,23 @@ struct PlayerControls: View {
             Spacer()
             Text(session.title.isEmpty ? session.candidate.name ?? "" : session.title)
                 .font(.title3).bold()
-            TimelineBar(session: session, focus: focus, interacted: interacted)
-                .disabled(panel != nil)
-            HStack {
-                Text(session.displayedPosition.clock)
-                Spacer()
-                if let scan = session.scan {
-                    Label("\(scan.rate.rawValue)×", systemImage: scan.direction == .forward ? "forward.fill" : "backward.fill")
-                        .foregroundStyle(Palette.text)
+            if session.isLive {
+                LiveBadge()
+            } else {
+                TimelineBar(session: session, focus: focus, interacted: interacted)
+                    .disabled(panel != nil)
+                HStack {
+                    Text(session.displayedPosition.clock)
+                    Spacer()
+                    if let scan = session.scan {
+                        Label("\(scan.rate.rawValue)×", systemImage: scan.direction == .forward ? "forward.fill" : "backward.fill")
+                            .foregroundStyle(Palette.text)
+                    }
+                    Spacer()
+                    Text("−" + (session.duration - session.displayedPosition).clock)
                 }
-                Spacer()
-                Text("−" + (session.duration - session.displayedPosition).clock)
+                .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             }
-            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             HStack(spacing: 20) {
                 transportButtons
                 Spacer()
@@ -63,15 +67,19 @@ struct PlayerControls: View {
     private var transportButtons: some View {
         let seconds = session.seekStep.seconds
         return HStack(spacing: 20) {
-            control("Back \(seconds) Seconds", systemImage: "gobackward.\(seconds)") { app.player.send(.jump(.backward)) }
-                .focused(focus, equals: .back)
+            if !session.isLive {
+                control("Back \(seconds) Seconds", systemImage: "gobackward.\(seconds)") { app.player.send(.jump(.backward)) }
+                    .focused(focus, equals: .back)
+            }
             control(session.phase == .paused ? "Play" : "Pause", systemImage: session.phase == .paused ? "play.fill" : "pause.fill") {
                 app.player.send(.togglePause)
             }
             .focused(focus, equals: .playPause)
             .accessibilityIdentifier("player.playPause")
-            control("Forward \(seconds) Seconds", systemImage: "goforward.\(seconds)") { app.player.send(.jump(.forward)) }
-                .focused(focus, equals: .forward)
+            if !session.isLive {
+                control("Forward \(seconds) Seconds", systemImage: "goforward.\(seconds)") { app.player.send(.jump(.forward)) }
+                    .focused(focus, equals: .forward)
+            }
         }
     }
 
@@ -166,6 +174,20 @@ struct PlayerControls: View {
             }
         }
         return groups
+    }
+}
+
+/// Takes the progress line's place for a live channel, which has no timeline to move along.
+private struct LiveBadge: View {
+    var body: some View {
+        Text("LIVE")
+            .font(.caption).bold()
+            .foregroundStyle(Palette.text)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(Palette.red, in: .capsule)
+            .accessibilityLabel("Live")
+            .accessibilityIdentifier("player.live")
     }
 }
 

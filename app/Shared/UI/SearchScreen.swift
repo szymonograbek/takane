@@ -154,11 +154,12 @@ private struct GenreShelf: View {
 }
 
 extension ContentType {
-    /// "Movies", "Series", or the add-on's own type name.
+    /// "Movies", "Series", "Channels" (live TV), or the add-on's own type name.
     var pluralName: String {
         switch self {
         case .movie: "Movies"
         case .series: "Series"
+        case .liveTV: "Channels"
         default: rawValue.capitalized
         }
     }

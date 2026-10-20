@@ -172,6 +172,16 @@ struct PlayerTimelineTests {
         #expect(PlayerFeature.reduce(&state, .jump(.forward)) == [.seek(by: .seconds(15))])
     }
 
+    @Test func aLiveChannelNeitherJumpsNorScans() {
+        var session = PlayerFeature.Session(candidate: Fixture.candidate(item: Fixture.channel))
+        session.phase = .playing
+        var state = PlayerFeature.State.active(session)
+        #expect(PlayerFeature.reduce(&state, .jump(.forward)).isEmpty)
+        #expect(step(.backward, after: 0, in: &state).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .timeline(.hold(.forward))).isEmpty)
+        #expect(state == .active(session))
+    }
+
     @Test func aStreakEndsAfterASecondOrOnATurn() {
         var state = playing()
         _ = step(.backward, after: 0, in: &state)

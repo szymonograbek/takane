@@ -59,7 +59,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `signIn.code` | the link code on Sign In with Stremio |
 | `signIn.password`, `signIn.email`, `signIn.passwordField`, `signIn.submit`, `signIn.error` | email sign-in |
 | `home.screen` | Home's scroll view |
-| `hero.play`, `hero.details` | hero buttons (Play only for movies) |
+| `hero.play`, `hero.details` | hero buttons (Play only for movies and live channels) |
 | `continueWatching.item` | each Continue Watching card; label `<name>, <time left>`, or `<name>, New episode` for a show with new episodes |
 | `poster.<imdb id>` | each poster in Home rows and search results |
 | `search.recent`, `search.clearRecent` | on Search before anything is typed: each recent search (label is the query; selecting it runs it) and Clear, which confirms before forgetting them all |
@@ -78,6 +78,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · <decoder>`, such as `libavcodec H264 (SW)` |
 | `player.subtitle` | the text subtitle on screen; its label is the cue's text. Bitmap subtitles have no element |
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
+| `player.live` | the LIVE badge that replaces the progress bar, times and skip buttons on a live channel (type `tv`) |
 | `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls |
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
 | `player.upNext.play`, `player.upNext.dismiss` | the up next card's Play Now (Choose Stream when the next episode has no matching stream) and Cancel; the card shows near an episode's end while the controls are hidden, with Play Now focused |
