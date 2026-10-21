@@ -142,7 +142,7 @@ private struct AccountSettings: View {
                     NavigationLink("Sign In with Stremio") { SignInScreen() }
                         .accessibilityIdentifier("account.signIn")
                 }
-            case .signedIn(let email):
+            case .signedIn(let email, _):
                 ValueRow(title: "Email", value: email.rawValue)
                 Button("Sign Out", role: .destructive) { confirmingSignOut = true }
                     .accessibilityIdentifier("account.signOut")

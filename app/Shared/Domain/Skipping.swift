@@ -26,12 +26,45 @@ struct SkipSegment: Hashable, Sendable {
     let confidence: Double
 }
 
+extension SkipSegment {
+    /// Clamps `start` and `end` to `stream`, because stored timestamps can fall outside it.
+    /// Nil when nothing is left between them.
+    init?(kind: SegmentKind, start: Duration, end: Duration, within stream: ClosedRange<Duration>, fit: SegmentFit, confidence: Double) {
+        let start = min(max(start, stream.lowerBound), stream.upperBound)
+        let end = min(max(end, stream.lowerBound), stream.upperBound)
+        guard start < end else { return nil }
+        self.init(kind: kind, range: start..<end, fit: fit, confidence: confidence)
+    }
+}
+
 struct SkipSegments: Hashable, Sendable {
     let item: PlayableID
     /// At most one per kind, ordered by start.
     let segments: [SkipSegment]
     /// Typical intro length for the season, for a "skip ~Xs" offer when this episode has no intro yet.
     let introLengthEstimate: Duration?
+}
+
+/// The database the player asks for parts to skip.
+enum SkipSegmentSource: String, CaseIterable, Hashable, Sendable {
+    /// Stremio's own, for Stremio Premium accounts.
+    case stremio
+    case introDB
+    case skipDB
+
+    /// The source without Stremio Premium.
+    static let defaults = SkipSegmentSource.introDB
+
+    static func available(hasPremium: Bool) -> [SkipSegmentSource] {
+        hasPremium ? allCases : allCases.filter { $0 != .stremio }
+    }
+
+    /// The source to use given the one stored, if any: Stremio's when nothing is stored and the
+    /// account has Premium, and the source without Premium in place of one no longer available.
+    static func resolved(_ stored: SkipSegmentSource?, hasPremium: Bool) -> SkipSegmentSource {
+        if let stored, available(hasPremium: hasPremium).contains(stored) { return stored }
+        return hasPremium ? .stremio : defaults
+    }
 }
 
 enum SkipSegmentError: Error, Equatable, Sendable {

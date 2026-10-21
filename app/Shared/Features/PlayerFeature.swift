@@ -5,7 +5,7 @@ enum PlayerFeature: Feature {
     struct Dependencies: Sendable {
         let engine: any PlaybackEngine
         let tracker: any PlaybackTracker
-        let skipSegments: any SkipSegmentService
+        let skipSegments: @Sendable (SkipSegmentSource) -> any SkipSegmentService
         let preferences: any PreferencesService
         let subtitles: any SubtitleService
     }
@@ -44,6 +44,8 @@ enum PlayerFeature: Feature {
         var subtitles: [SubtitleCue] = []
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
+        /// Where to find `segments`, from the preferences.
+        var skipSegmentSource = SkipSegmentSource.defaults
         var scan: Scan?
         var streak: StepStreak?
         var restore = Restore.awaiting
@@ -105,7 +107,7 @@ enum PlayerFeature: Feature {
         case turnOffSubtitles
         case addSubtitles(AddonSubtitle)
         case setSpeed(PlaybackSpeed)
-        case findSegments(PlayableID, duration: Duration)
+        case findSegments(PlayableID, duration: Duration, from: SkipSegmentSource)
         case stop
         case report(Report)
     }
@@ -243,7 +245,7 @@ enum PlayerFeature: Feature {
             session.duration = duration
             guard session.segments == nil, duration > .zero else { return [] }
             session.segments = .loading
-            return [.findSegments(session.candidate.item, duration: duration)]
+            return [.findSegments(session.candidate.item, duration: duration, from: session.skipSegmentSource)]
         case .paused(let paused):
             switch session.phase {
             case .playing where paused: session.phase = .paused
@@ -308,9 +310,9 @@ extension PlayerFeature {
             engine.addSubtitles(subtitle.url, title: subtitle.label?.rawValue ?? subtitle.language, language: subtitle.language)
         case .setSpeed(let speed):
             engine.setSpeed(speed)
-        case .findSegments(let item, let duration):
+        case .findSegments(let item, let duration, let source):
             do {
-                let found = try await dependencies.skipSegments.segments(for: item, duration: duration)
+                let found = try await dependencies.skipSegments(source).segments(for: item, duration: duration)
                 send(.segmentsFound(item, .success(found.segments)))
             } catch {
                 send(.segmentsFound(item, .failure(error)))
@@ -335,10 +337,11 @@ extension PlayerFeature {
 }
 
 extension PlayerFeature.Session {
-    /// Takes the seek step and up next behavior from the preferences.
+    /// Takes the seek step, up next behavior and skip segment source from the preferences.
     mutating func read(_ preferences: Preferences) {
         seekStep = preferences.seekStep
         upNextBehavior = preferences.upNext
+        skipSegmentSource = preferences.skipSegmentSource
     }
 
     var isLive: Bool {

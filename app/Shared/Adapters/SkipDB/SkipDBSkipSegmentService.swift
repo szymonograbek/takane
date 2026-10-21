@@ -68,10 +68,10 @@ private struct SkipDBResponse: Decodable {
     func segments(for item: PlayableID, within stream: ClosedRange<Duration>) -> SkipSegments {
         let found: [SkipSegment] = SegmentKind.allCases.compactMap { kind in
             guard let segment = segment(of: kind) else { return nil }
-            let start = Duration.milliseconds(segment.startMs).clamped(to: stream)
-            let end = Duration.milliseconds(segment.endMs).clamped(to: stream)
-            guard start < end else { return nil }
-            return SkipSegment(kind: kind, range: start..<end, fit: Self.fit(segment.match), confidence: segment.confidence)
+            return SkipSegment(
+                kind: kind, start: .milliseconds(segment.startMs), end: .milliseconds(segment.endMs), within: stream,
+                fit: Self.fit(segment.match), confidence: segment.confidence
+            )
         }
         return SkipSegments(
             item: item,
@@ -95,11 +95,5 @@ private struct SkipDBResponse: Decodable {
         case "agnostic": .unknown
         default: .uncertain
         }
-    }
-}
-
-private extension Duration {
-    func clamped(to range: ClosedRange<Duration>) -> Duration {
-        min(max(self, range.lowerBound), range.upperBound)
     }
 }

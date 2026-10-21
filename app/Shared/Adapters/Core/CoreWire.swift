@@ -79,14 +79,31 @@ struct CtxState: Decodable, Sendable {
 
 struct Profile: Decodable, Sendable {
     struct Auth: Decodable, Sendable {
-        struct User: Decodable, Sendable { let email: Redacted<String> }
         let user: User
+    }
+
+    struct User: Decodable, Sendable {
+        let email: Redacted<String>
+        /// RFC 3339. When Stremio Premium ends, nil for an account that never had it.
+        let premiumExpire: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case email
+            case premiumExpire = "premium_expire"
+        }
     }
 
     let auth: Auth?
     let addons: [Addon]
     /// core's `Settings`, kept whole so an update sends back every key it did not change.
     let settings: JSONValue
+
+    /// Whether the account's Stremio Premium runs past now, the check core makes before asking for
+    /// Stremio's skip times.
+    var hasPremium: Bool {
+        guard let end = auth?.user.premiumExpire.flatMap(Date.init(core:)) else { return false }
+        return end > .now
+    }
 }
 
 /// An installed or remote addon. `descriptor` is core's full JSON, sent back as-is on install.

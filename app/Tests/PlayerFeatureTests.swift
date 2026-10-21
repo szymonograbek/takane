@@ -342,8 +342,19 @@ struct PlayerControlsTests {
     @Test func segmentsAreLookedUpOnceTheDurationIsKnown() {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_000)))) == [.findSegments(Fixture.movie, duration: .seconds(3_000))])
+        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_000)))) == [
+            .findSegments(Fixture.movie, duration: .seconds(3_000), from: .introDB),
+        ])
         #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_001)))).isEmpty)
+    }
+
+    @Test func segmentsComeFromTheSourceInThePreferences() {
+        var state = PlayerFeature.State.idle
+        _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
+        _ = PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(), Fixture.preferences(skipSegmentSource: .skipDB)))
+        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_000)))) == [
+            .findSegments(Fixture.movie, duration: .seconds(3_000), from: .skipDB),
+        ])
     }
 
     @Test func skippingJumpsToTheEndOfTheSegmentPlayingNow() {
