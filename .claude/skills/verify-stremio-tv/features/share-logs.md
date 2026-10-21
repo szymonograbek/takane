@@ -27,5 +27,4 @@ Preconditions:
 
 ## Gotchas
 
-- `focus` may report the About and Share Logs rows by their labels instead of their ids; the press still lands on them.
 - Archived sessions live in `Library/Caches/Logs/sessions/` beside `app.log`. To prove the time range filters, add a file there whose lines and modification time are two hours old: Last Hour leaves it out, Last 6 Hours includes it.

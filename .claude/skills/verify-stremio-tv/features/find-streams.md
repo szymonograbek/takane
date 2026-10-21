@@ -4,7 +4,7 @@ Home shows a hero, Continue Watching and one row per add-on catalog. Search find
 
 ## Sub-features
 
-- `home-rows` lists catalog rows titled with their type ("Popular Movies").
+- `home-rows` lists catalog rows titled with their type ("Popular Movies"; a `tv` catalog reads "Channels", such as "Pluto TV Channels"). A live channel in the hero gets Play, like a movie.
 - `search` shows results grouped by type as the user types.
 - `recent-searches` shows the last searches before anything is typed; selecting one runs it, Clear forgets them all. Steps of typing a longer search ("bre" for "breaking bad") are left out.
 - `search-suggestions` offers up to four recent searches that continue what is typed, the typed part dimmed.
@@ -28,7 +28,7 @@ Preconditions:
 - **Suggestions.** With `night of the living dead` in the history, fill the search field with `nig`: the suggestions list `night of the living dead`; selecting it fills the field.
 - **Genres.** On a fresh Search (empty field), `$T focus search.genre down 4` lands on the first movie genre (`Action`). `$T select`, wait up to 10 s: `genre.screen` shows posters and `$T focused` prints a `poster.<imdb id>`. `$T remote menu` goes back to Search.
 - **Back to the field.** From a result or a genre, `$T remote menu` scrolls Search back up with the search field focused (`$T focused` prints its prompt, `Movies and series`) and the query kept; a second `$T remote menu` focuses the tab bar.
-- **Details.** `$T focus poster.tt0063350 down 3`, `$T select`, wait 6 s. `$T focused` prints `details.play`.
+- **Details.** `$T focus poster.tt0063350 down 3`, `$T select`. While Details loads, `loading.cancel` has focus; poll `$T focused` until it prints `details.play` (up to 15 s) before pressing anything, or the presses land on Play. The description (`details.description`) sits above the buttons: up from Play, select opens the full text with `details.descriptionDone`.
 - **Streams.** `$T select`, wait up to 15 s. Focus moves to the first `streams.row`; the screenshot shows `AIOStreams | ElfHosted` rows.
 - **No streams.** Without the debrid add-on, the same steps show "No Playable Streams".
 

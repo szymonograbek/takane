@@ -21,7 +21,7 @@ T=.claude/skills/verify-stremio-tv/scripts/tv.sh
 $T launch
 ```
 
-`launch` builds the tvOS simulator app (`scripts/build-app.sh tvos-sim`), boots or creates the "Stremio Apple TV" simulator (`scripts/tvos-simulator.sh`), installs, and opens the app through agent-device session `stremio-tv-verify`. It passes `-STREMIO_STORAGE_DIRECTORY <container>/tmp/verify-<run-id>`, so core starts on an empty profile (default add-ons only). Ready means `doctor` passes: the core status reads Ready and the log shows the app opened this run's profile. `launch` runs `doctor` itself and exits non-zero when not ready.
+`launch` builds the tvOS simulator app (`scripts/build-app.sh tvos-sim`), boots or creates the "Stremio Apple TV" simulator (`scripts/tvos-simulator.sh`), installs, and opens the app through agent-device session `stremio-tv-verify`. It passes `-STREMIO_STORAGE_DIRECTORY <container>/tmp/verify-<run-id>`, so core starts on an empty profile (default add-ons only), and `-STREMIO_MUTE 1`, so playback is silent. Ready means Welcome shows and `doctor` passes. `launch` waits for Welcome, runs `doctor` itself and exits non-zero when not ready.
 
 One run at a time: `launch` refuses while `build/verify/current.env` exists. Never drive a session you did not launch.
 
@@ -33,7 +33,7 @@ First build after a clean checkout compiles the Rust bridge for three targets (a
 $T doctor
 ```
 
-Read-only. Checks the simulator is booted, the app is foreground with `core.ready` visible, and the app log shows `starting bridge, storage at …verify-<run-id>` (proves this run's fresh profile, not the user's). Prints the evidence directory. Run it first whenever anything looks off.
+Read-only. Checks the simulator is booted, Takane is the foreground app with a readable accessibility tree (on any screen, the player included), and the app log shows `starting bridge, storage at …verify-<run-id>` (proves this run's fresh profile, not the user's). Prints the evidence directory. Run it first whenever anything looks off. After agent-device reports `main thread execution timed out` or `still finishing a previous command`, doctor fails until the runner drains; wait about 20 s and run it again. Menu on the tab bar of a tab's root screen sends the app to the background; `agent-device open com.ograbek.stremio-tv --platform ios --target tv --udid <udid> --session stremio-tv-verify` brings it back with its state.
 
 ## Drive
 
@@ -45,7 +45,7 @@ $T select                                                # remote select
 $T type <id> <dir> <text>                                # focus, type, confirm keyboard "done"
 $T type-env <id> <dir> STREMIO_SMOKE_ADDON_URL           # same, text from env/.env.smoke
 $T text <id>                                             # read an element's text
-$T focused                                               # id (or label) of the focused element
+$T focused                                               # id of the focused element (a list row's inner id), else its label
 $T wait-text "<exact label>" [secs]
 $T remote <menu|left|right|up|down|home>
 $T evidence <name>
@@ -79,7 +79,8 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.subtitle` | the text subtitle on screen; its label is the cue's text. Bitmap subtitles have no element |
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
 | `player.live` | the LIVE badge that replaces the progress bar, times and skip buttons on a live channel (type `tv`) |
-| `player.playPause`, `player.subtitles`, `player.audio`, `player.speed`, `player.skip` | player controls |
+| `player.playPause`, `player.subtitles`, `player.audio`, `player.speed` | player controls; back and forward have no identifier (`focused` prints their symbol, such as `goforward.30`) |
+| `player.skip` | Skip Intro, Recap, Credits or Preview: shows while the controls are hidden during a segment with SkipDB data |
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
 | `player.upNext.play`, `player.upNext.dismiss` | the up next card's Play Now (Choose Stream when the next episode has no matching stream) and Cancel; the card shows near an episode's end while the controls are hidden, with Play Now focused |
 | `settings.account`, `settings.addons`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows |
@@ -89,7 +90,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `subtitles.language`, `subtitles.secondLanguage` | Settings › Subtitles language rows; Second Language shows only when a language is set |
 | `subtitles.size`, `subtitles.font`, `subtitles.bold`, `subtitles.fileStyling`, `subtitles.textColor`, `subtitles.outlineColor`, `subtitles.backgroundColor`, `subtitles.opacity`, `subtitles.position`, `subtitles.reset` | Settings › Subtitles style rows; each but the Bold and Use File Styling toggles and Reset opens a list of choices |
 | `subtitles.preview` | the live preview on Settings › Subtitles and on each style list, where it shows the focused choice |
-| `addons.install`, `addons.manifestURL`, `addons.status`, `addons.row` | Settings › Add-ons |
+| `addons.install`, `addons.manifestURL`, `addons.submit`, `addons.status`, `addons.row` | Settings › Add-ons; `addons.submit` is the Install button under the field, `addons.status` exists only while it has a message |
 
 Feature recipes with exact steps: `features/README.md`.
 
@@ -125,6 +126,6 @@ Copies the final app log into the run directory, closes the agent-device session
 ## Limits
 
 - macOS UI is not driven by this skill. agent-device's macOS backend uses XCTest automation, which asks for a one-time system permission. Use `scripts/smoke.sh` on macOS until that permission is granted and a recipe is proven.
-- agent-device's tvOS remote has no play/pause button. The player maps select to pause/resume, so use `select`.
+- agent-device's tvOS remote has no play/pause button. Select on `player.playPause` or the focused progress bar pauses and resumes; on the bare video it only shows the controls.
 - agent-device's normal `snapshot`/`is`/`get` fail once the stream list is on screen ("node escaped its cumulative clip"). `tv.sh` reads raw snapshots for that reason; do the same in ad-hoc commands (`agent-device snapshot -i --raw --session stremio-tv-verify`).
 - The simulator plays on the software route (`libavcodec … (SW)`). Hardware decoding, HDR, Dolby Vision and passthrough need a real Apple TV.

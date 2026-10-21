@@ -20,13 +20,12 @@ Preconditions:
 - `$T launch` just ran (it clears the onboarding flag).
 
 - **Welcome.** `$T focused` prints `welcome.signIn`. Run `$T evidence onboarding-welcome`.
-- **Link code.** `$T select`, wait 4 s, `$T text signIn.code` prints a 4-character code. The log shows `dispatch → link` and repeated `ReadData` every 3 s.
-- **Password error.** `$T select` (focus starts on Use Email and Password Instead), `$T type signIn.email up nobody-takane-test@example.com`, `$T type signIn.passwordField down wrong-password-123`, `$T focus signIn.submit down`, `$T select`, wait 6 s. `$T text signIn.error` prints `User not found`. `grep -c wrong-password-123 "$log"` prints `0`.
-- **Continue.** From a fresh launch, `$T focus welcome.continue right`, `$T select`. Within 8 s `$T focused` prints `house` and Home shows the hero and rows.
+- **Link code.** `$T select`, wait 4 s, `$T text signIn.code` prints a 4-character code. The log shows `dispatch →` lines with `"field":"link"`: a `Load` of the `Link` model, then `ReadData` every 3 s.
+- **Password error.** `$T select` (focus starts on Use Email and Password Instead), `$T type signIn.email up nobody-takane-test@example.com`. The password keyboard opens at once (see Gotchas): fill its focused `TextView` from a raw snapshot (`agent-device fill @<ref> wrong-password-123 --session stremio-tv-verify`), press down until `$T focused` prints `done`, `$T select`. Then `$T focus signIn.submit down`, `$T select`, wait 6 s. `$T text signIn.error` prints `User not found`. `grep -c wrong-password-123 "$log"` prints `0`; the sign-in dispatch logs as `<credentials redacted>`.
+- **Continue.** From Welcome (`$T remote menu` twice from the email screen), `$T focus welcome.continue right`, `$T select`. Within 8 s `$T focused` prints `house` and Home shows the hero and rows.
 
 ## Gotchas
 
-- After the email keyboard's done, tvOS opens the password keyboard straight away (the fields are a username/password pair), so `$T type signIn.passwordField …` finds no focused field. Fill the open keyboard's field from a raw snapshot instead, or type the password first.
-
+- After the email keyboard's done, tvOS opens the password keyboard straight away (the fields are a username/password pair), so `$T type signIn.passwordField …` finds no focused field. Fill the open keyboard's field from a raw snapshot instead.
 - A real sign-in needs a Stremio account confirming the code on another device; this recipe stops at the code.
 - Core's auth error event echoes the request; the adapter redacts `password`, `token` and `authKey` before logging. A non-zero password grep is a regression.

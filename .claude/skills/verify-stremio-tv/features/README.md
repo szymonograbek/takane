@@ -34,6 +34,6 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Find streams](./find-streams.md) covers Home, Search and Details leading to the stream list.
 - [Playback](./playback.md) covers the player: controls, speed, subtitles, audio, seek, timeline scrubbing and stop.
 - [Continue watching](./continue-watching.md) covers the Home row and resuming from the saved position.
-- [Playback settings](./playback-settings.md) covers preferred subtitle and audio languages.
+- [Playback settings](./playback-settings.md) covers Settings › Playback (audio languages, skip interval, Up Next card, autoplay, hide spoilers) and Settings › Subtitles (languages, style, reset).
 - [Library and calendar](./library-calendar.md) covers Add to Library on Details, the Library tab and the Calendar tab.
 - [Share logs](./share-logs.md) covers Settings › About › Share Logs: the link, its time range and stopping on leave.
