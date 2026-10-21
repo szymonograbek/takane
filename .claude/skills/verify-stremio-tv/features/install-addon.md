@@ -21,10 +21,10 @@ Preconditions:
 - Fresh run from `$T launch`; AIOStreams is not installed.
 - `STREMIO_SMOKE_ADDON_URL` available.
 
-- **Open.** `$T focus welcome.continue right`, `$T select`, `$T focus gearshape right`, press down twice, `$T select`, `$T select` (Install Add-on).
-- **Type URL.** Run `$T type-env addons.manifestURL down STREMIO_SMOKE_ADDON_URL`. Confirming the keyboard submits the install.
+- **Open.** `$T focus welcome.continue right`, `$T select`, `$T focus gearshape right`, `$T focus settings.addons down`, `$T select`, `$T select` (Install Add-on).
+- **Type URL.** Run `$T type-env addons.manifestURL down STREMIO_SMOKE_ADDON_URL`. Confirming the keyboard submits the install; `addons.submit` (Install, below the field) does the same.
 - **Listed.** Within 15 s the screen is back on the list with focus on Install Add-on; press down 7 times and `$T focused` prints `AIOStreams | ElfHosted, 2.36.0`. After `$T remote menu`, `$T text settings.addons` reads `Add-ons, 7 installed`.
-- **Remove.** Selecting a row does nothing. Long-press the focused AIOStreams row (`agent-device longpress <x> <y> 1500 --session stremio-tv-verify` at the row's center, in points) for a context menu with Remove, which opens "Remove AIOStreams | ElfHosted?" with Cancel focused.
+- **Remove.** Selecting a row does nothing. Long-press the focused AIOStreams row (`agent-device tv-remote longpress select --duration-ms 1500 --session stremio-tv-verify`) for a context menu with Remove; `$T select` opens "Remove AIOStreams | ElfHosted?" with **Remove** focused, so a second select uninstalls. `$T remote menu` cancels. The footer reads "To remove an add-on, press and hold it."
 - **Persisted.** Run `source build/verify/current.env; grep -o '"name":"AIOStreams[^"]*"' "$storage/profile.json"`. Prints `"name":"AIOStreams | ElfHosted"`.
 - **Error path.** In Install Add-on, type `https://example.invalid/manifest.json`, wait 3 s, then `$T text addons.status`. It starts `The add-on's manifest could not be loaded:`.
 - **Proof.** Run `$T evidence install-addon`.
@@ -35,4 +35,5 @@ Preconditions:
 - Reading `addons.status` while the keyboard is still closing returns empty; wait a few seconds.
 - The keyboard's done button is below the keys; the helper presses down until it is focused.
 - Installing an already-installed URL succeeds immediately without a network call.
+- The install status is app-wide: reopening Install Add-on shows the last install's status (`Installed AIOStreams | ElfHosted`, or the last error) over an empty field. Read `addons.status` only after typing in this visit.
 - The add-on version (2.36.0) is the server's; update the label if AIOStreams upgrades.
