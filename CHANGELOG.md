@@ -5,17 +5,13 @@
 
 ### Features
 
-* **aether:** mute playback with STREMIO_MUTE for smoke runs ([7001823](https://github.com/szymonograbek/takane/commit/70018232fb0e11456c58c8a36adb6f3bafa540db))
 * **aether:** mute playback with STREMIO_MUTE for smoke runs ([c6b3dec](https://github.com/szymonograbek/takane/commit/c6b3dec8c70d2c49e2d5d2f852d4df550438bbfa))
 
 
 ### Bug Fixes
 
-* **features:** start install add-on screen without stale status ([1ffc275](https://github.com/szymonograbek/takane/commit/1ffc2759dcb27239ebe960330d25aa38b0b73bf4))
 * **features:** start install add-on screen without stale status ([0e88397](https://github.com/szymonograbek/takane/commit/0e88397ac315b31edc2485f10d91e75185ce715c))
-* **scripts:** fix verify harness and resync its feature map ([06314a9](https://github.com/szymonograbek/takane/commit/06314a90faeffa759077407f0f144b237d6c05f3))
 * **scripts:** fix verify harness and resync its feature map ([fa3814e](https://github.com/szymonograbek/takane/commit/fa3814e041e9d398b1bf47680baca882f14dc63b))
-* **ui:** focus an add-on's subtitle page once its rows are drawn ([458f9bd](https://github.com/szymonograbek/takane/commit/458f9bdc9d748ed9bdaf966bcc45931f536515c5))
 * **ui:** focus an add-on's subtitle page once its rows are drawn ([a73f92e](https://github.com/szymonograbek/takane/commit/a73f92e9cb8f5fe43afdbf1285440140050e7a5f))
 
 ## [1.2.0](https://github.com/szymonograbek/takane/compare/v1.1.3...v1.2.0) (2026-10-20)
@@ -23,9 +19,7 @@
 
 ### Features
 
-* **features:** play live tv channels from add-ons ([fcfe2c0](https://github.com/szymonograbek/takane/commit/fcfe2c077ff96ef5b04e8f33f0b3e6d28fb738e3))
 * **features:** play live tv channels from add-ons ([b9d948b](https://github.com/szymonograbek/takane/commit/b9d948b309dd5c571a11b22071b07e7ad7a4ab4a))
-* **ui:** share redacted logs over the local network ([794da46](https://github.com/szymonograbek/takane/commit/794da4655791d4a8353a8446778a1aeb61ca7c41))
 * **ui:** share redacted logs over the local network ([12c8759](https://github.com/szymonograbek/takane/commit/12c8759c8b500eeb76bd8f4452ea9ca98f2b3616))
 * **ui:** shorten the log key and hide it until shown ([86308ef](https://github.com/szymonograbek/takane/commit/86308ef5de29bc8908b931702fbb4407b2f18d48))
 
@@ -39,7 +33,6 @@
 
 ### Bug Fixes
 
-* **features:** use a plain deinit in featurestore to avoid a swift 6.3 crash ([5d4c16c](https://github.com/szymonograbek/takane/commit/5d4c16c20b7cad9020d44b66f1bd804bcd208d65))
 * **features:** use a plain deinit in featurestore to avoid a swift 6.3 crash ([356202d](https://github.com/szymonograbek/takane/commit/356202d7912c847f3dab9756ab1d6dcbffbc3ba6))
 
 ## [1.1.2](https://github.com/szymonograbek/takane/compare/v1.1.1...v1.1.2) (2026-10-20)
@@ -47,7 +40,6 @@
 
 ### Bug Fixes
 
-* **core:** require a sendable metatype in observe for xcode 26 ([0268c85](https://github.com/szymonograbek/takane/commit/0268c85d194fca869be7e923cdfd1400f5a7564f))
 * **core:** require a sendable metatype in observe for xcode 26 ([203f948](https://github.com/szymonograbek/takane/commit/203f9484216cd27737ab1f95925d1dc347462d29))
 
 ## [1.1.1](https://github.com/szymonograbek/takane/compare/v1.1.0...v1.1.1) (2026-10-19)
@@ -55,7 +47,6 @@
 
 ### Bug Fixes
 
-* **ui:** bring the tab bar back on library after a scrolled push ([09e647a](https://github.com/szymonograbek/takane/commit/09e647a0594ea8b479a6c2929f837d48b5bf875c))
 * **ui:** bring the tab bar back on library after a scrolled push ([7bdecd1](https://github.com/szymonograbek/takane/commit/7bdecd1eb9a4c2f0f0408e8217adb28a46a925d2))
 
 ## [1.1.0](https://github.com/szymonograbek/takane/compare/v1.0.0...v1.1.0) (2026-10-19)
@@ -102,13 +93,10 @@
 * **features:** jump and scan the timeline from the remote ([f65703f](https://github.com/szymonograbek/takane/commit/f65703f11a41b6cf553f313e715e6dbc2ec7cb5c))
 * **features:** list the library and group upcoming episodes by day ([d12c45c](https://github.com/szymonograbek/takane/commit/d12c45c8dc887dbe390e2b95da47b058943a2e46))
 * **features:** offer recent searches before anything is typed ([60d0039](https://github.com/szymonograbek/takane/commit/60d0039d87dd0e1eccf1257125cc5f4d1deb28d6))
-* **features:** play add-on subtitles beside the stream's own ([f241047](https://github.com/szymonograbek/takane/commit/f2410473a18fa20616bbd8c31a239b197b4c9e94))
 * **features:** play add-on subtitles beside the stream's own ([28d9cb8](https://github.com/szymonograbek/takane/commit/28d9cb8211c7e34c30566b29f6246db30da61e89))
 * **features:** remember track and speed choices through core ([3e378cd](https://github.com/szymonograbek/takane/commit/3e378cdb27401fe05e4a4d599c43f0a5ae8e652b))
-* **scripts:** install on a paired apple tv picked interactively ([57b88e1](https://github.com/szymonograbek/takane/commit/57b88e1d071d4e6ffb8caf0a110c1e8b7e61d14b))
 * **scripts:** install on a paired apple tv picked interactively ([523f663](https://github.com/szymonograbek/takane/commit/523f66347f063f034467ee6d484ec8cf777ed66d))
 * **skipdb:** add skipdb skip segment adapter and wire it into services ([2eaceea](https://github.com/szymonograbek/takane/commit/2eaceea294082e8cd59e6042aa31e5aeb67445fc))
-* **ui:** add library and calendar tabs ([3b3588d](https://github.com/szymonograbek/takane/commit/3b3588d73818ba5fb997f86ca58b799c19c20644))
 * **ui:** add library and calendar tabs ([5c24c57](https://github.com/szymonograbek/takane/commit/5c24c57029065f59bbb55ddccab9c6b246fdaac4))
 * **ui:** add second audio language and skip interval settings ([688d747](https://github.com/szymonograbek/takane/commit/688d747adcd2bdb90d54da14b65d908bd4e02865))
 * **ui:** add subtitle settings with a live style preview ([273d5ad](https://github.com/szymonograbek/takane/commit/273d5ad5ecb5f1954a30413b1bb8e5ba004567ee))
@@ -117,22 +105,18 @@
 * **ui:** focusable progress bar with tap and hold seeking ([9f8134c](https://github.com/szymonograbek/takane/commit/9f8134cca748e58a54148a27a5154b316c108fdc))
 * **ui:** follow apple's tvos guidelines across screens and search ([d26855f](https://github.com/szymonograbek/takane/commit/d26855f6bb809aca54e9fabed0fa3e9676513c2a))
 * **ui:** give large text fewer lockups, wrapping labels and room ([7fcedc0](https://github.com/szymonograbek/takane/commit/7fcedc0b5d50df8d49a796f5e7916234e484e474))
-* **ui:** hide spoilers of unwatched episodes ([5c5c501](https://github.com/szymonograbek/takane/commit/5c5c50161fd127804491e8102f81ce55420af180))
 * **ui:** hide spoilers of unwatched episodes ([ff142c0](https://github.com/szymonograbek/takane/commit/ff142c0dc52df4baf0fc250d773ef406e65d53f5))
 * **ui:** jump and scan the timeline from the progress bar ([5caf5d6](https://github.com/szymonograbek/takane/commit/5caf5d6b09a531e67ae4ff361969feb92ba76a65))
-* **ui:** keep subtitle file styling and add its setting ([2ea8ed3](https://github.com/szymonograbek/takane/commit/2ea8ed38a067762c7f4713091306f74c7d40cae5))
 * **ui:** keep subtitle file styling and add its setting ([3aa377a](https://github.com/szymonograbek/takane/commit/3aa377a76d325ab1808ee5233d969d6ffacc54a7))
 * **ui:** keep the streams loading state focusable with a cancel button ([34b1fcc](https://github.com/szymonograbek/takane/commit/34b1fcc5620d8afaa79bc5fa452b0720a86175ce))
 * **ui:** lift posters with the borderless lockup style ([fd0c252](https://github.com/szymonograbek/takane/commit/fd0c252fd2fb27cab8cc24090921c49dd98f0c31))
 * **ui:** make sign in the welcome screen's primary, focused action ([c636df0](https://github.com/szymonograbek/takane/commit/c636df093550f3fb7299c54a37017543ed1386e1))
 * **ui:** mark titles and episodes watched from a context menu ([6d8526f](https://github.com/szymonograbek/takane/commit/6d8526ff25f21f43f163ca7acbb7c5f3063d4d50))
 * **ui:** offer the next episode with an up next card ([d9c4aec](https://github.com/szymonograbek/takane/commit/d9c4aec9930cee27922f93dd7290ef1f64afad90))
-* **ui:** redesign the app as Takane ([eba9cd4](https://github.com/szymonograbek/takane/commit/eba9cd421c4f31e03ee7df4f7d77cba8eba1c002))
 * **ui:** redesign the app as Takane ([4242ecf](https://github.com/szymonograbek/takane/commit/4242ecfbebd9fd8e228cd7f8fde6124d60b31764))
 * **ui:** size shelf lockups to the tvos grid columns ([1e47c24](https://github.com/szymonograbek/takane/commit/1e47c24748e8019707082e69affceed982baf759))
 * **ui:** strengthen text and surfaces under increase contrast ([89e29c9](https://github.com/szymonograbek/takane/commit/89e29c968542255fac89b6e3951505182294aa42))
 * **ui:** suggest recent searches that continue the query ([e299b97](https://github.com/szymonograbek/takane/commit/e299b9749814c1c2dfabf4cc5034da1c89f86c78))
-* **ui:** tidy settings spacing, labels and notes ([93ba4f8](https://github.com/szymonograbek/takane/commit/93ba4f8ac2717ccd23e5df7ddf4f9913f00f95ac))
 * **ui:** tidy settings spacing, labels and notes ([581690e](https://github.com/szymonograbek/takane/commit/581690e26355df255051510a5532edf566f6526a))
 
 
