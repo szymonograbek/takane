@@ -118,3 +118,7 @@ Share Logs also shows a log key. You don't need it to report a problem. Keep it 
 ## Contributing
 
 To build Takane from source, see [DEVELOPERS.md](DEVELOPERS.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Takane is licensed under [GPL-3.0](LICENSE). The Takane name and logo are not; see [TRADEMARKS.md](TRADEMARKS.md).
