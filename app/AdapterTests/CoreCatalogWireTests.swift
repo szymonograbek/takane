@@ -7,7 +7,7 @@ struct CoreCatalogWireTests {
             base: try #require(URL(string: "https://v3-cinemeta.strem.io/manifest.json")),
             path: .catalog(type: "movie", id: "top", extra: [["genre", "Action"]])
         )
-        let encoded = try JSONEncoder().encode(DispatchRequest(action: .load(.catalogWithFilters(request)), field: .discover))
+        let encoded = try JSONEncoder().encode(DispatchRequest.core(.load(.catalogWithFilters(request)), to: .discover))
 
         // The literal core/src/lib.rs parses as a core action.
         let expected = #"""
@@ -19,7 +19,16 @@ struct CoreCatalogWireTests {
         #expect(try JSONDecoder().decode(JSONValue.self, from: encoded) == JSONDecoder().decode(JSONValue.self, from: Data(expected.utf8)))
     }
 
-    @Test func ctxCarriesSearchHistoryAndCatalogExtras() throws {
+    @Test func addonSwitchEncodesTheShapeTheBridgeParses() throws {
+        let url = try #require(URL(string: "https://example.com/manifest.json"))
+        let encoded = try JSONEncoder().encode(DispatchRequest.bridge(.setAddonEnabled(transportURL: url, isEnabled: false)))
+
+        // The literal core/src/lib.rs parses as a bridge request.
+        let expected = #"{"setAddonEnabled":{"transportUrl":"https://example.com/manifest.json","enabled":false}}"#
+        #expect(try JSONDecoder().decode(JSONValue.self, from: encoded) == JSONDecoder().decode(JSONValue.self, from: Data(expected.utf8)))
+    }
+
+    @Test func ctxCarriesSearchHistoryDisabledAddonsAndCatalogExtras() throws {
         let json = #"""
         {
             "profile": {
@@ -39,13 +48,16 @@ struct CoreCatalogWireTests {
                     }
                 }]
             },
-            "searchHistory": ["breaking bad", "twin peaks"]
+            "searchHistory": ["breaking bad", "twin peaks"],
+            "disabledAddons": ["https://off.example/manifest.json"]
         }
         """#
         let state = try JSONDecoder().decode(CtxState.self, from: Data(json.utf8))
         let catalogs = try #require(state.profile.addons.first).manifest.catalogs
 
         #expect(state.searchHistory == ["breaking bad", "twin peaks"])
+        #expect(state.disabledAddons == [try #require(URL(string: "https://off.example/manifest.json"))])
+        #expect(state.enabledAddons.map(\.transportUrl.absoluteString) == ["https://v3-cinemeta.strem.io/manifest.json"])
         #expect(catalogs.map { $0.extra.map(\.name) } == [["genre", "skip"], ["search", "skip"]])
         #expect(catalogs.map { $0.extra.map(\.isRequired) } == [[false, false], [true, false]])
         #expect(catalogs[0].extra[0].options == ["Action", "Drama"])

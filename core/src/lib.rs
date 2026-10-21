@@ -23,14 +23,27 @@ use stremio_core::runtime::{EnvError, Runtime, RuntimeAction};
 use crate::env::AppleEnv;
 use crate::fetch::FetchOutcome;
 use crate::host::{SBBytes, SBHost, SBOwnedBytes};
-use crate::model::{AppModel, AppModelField};
+use crate::model::{AppModel, AppModelField, SetAddonEnabled};
 
 static RUNTIME: OnceLock<Runtime<AppleEnv, AppModel>> = OnceLock::new();
 
+/// What `sb_dispatch` accepts: a core action for one model field or all (`null`), or a request
+/// the bridge handles itself.
 #[derive(Deserialize, Debug)]
-struct DispatchRequest {
-    action: Action,
-    field: Option<AppModelField>,
+#[serde(untagged)]
+enum DispatchRequest {
+    Core {
+        action: Box<Action>,
+        field: Option<AppModelField>,
+    },
+    Bridge(BridgeRequest),
+}
+
+/// Requests about what core does not know, as `{"<name>": <args>}`.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+enum BridgeRequest {
+    SetAddonEnabled(SetAddonEnabled),
 }
 
 fn initialize(host: SBHost, storage_directory: PathBuf) -> Result<(), String> {
@@ -68,10 +81,15 @@ fn runtime() -> Result<&'static Runtime<AppleEnv, AppModel>, String> {
 fn dispatch(request: &[u8]) -> Result<(), String> {
     let request: DispatchRequest = serde_json::from_slice(request)
         .map_err(|error| format!("invalid dispatch request: {error}"))?;
-    runtime()?.dispatch(RuntimeAction {
-        field: request.field,
-        action: request.action,
-    });
+    let runtime = runtime()?;
+    let action = match request {
+        DispatchRequest::Core { action, field } => RuntimeAction { field, action: *action },
+        DispatchRequest::Bridge(BridgeRequest::SetAddonEnabled(request)) => runtime
+            .model()
+            .map_err(|error| format!("model lock poisoned: {error}"))?
+            .set_addon_enabled(request),
+    };
+    runtime.dispatch(action);
     Ok(())
 }
 
@@ -121,7 +139,8 @@ pub unsafe extern "C" fn sb_initialize(
     report(result, error_out)
 }
 
-/// Dispatches `{"action": <core Action>, "field": <model field or null>}`.
+/// Dispatches `{"action": <core Action>, "field": <model field or null>}`, or a bridge request
+/// such as `{"setAddonEnabled": {"transportUrl": <url>, "enabled": <bool>}}`.
 ///
 /// # Safety
 /// `request` must be valid for reads; `error_out` as in [`report`].
@@ -231,7 +250,23 @@ mod tests {
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);
-            assert!(parsed.is_ok(), "{request}\n{:?}", parsed.err());
+            assert!(matches!(parsed, Ok(DispatchRequest::Core { .. })), "{request}\n{parsed:?}");
+        }
+    }
+
+    /// These literals are what the Swift `BridgeRequest` encoder produces.
+    #[test]
+    fn swift_bridge_request_shapes_parse_as_bridge_requests() {
+        let requests = [
+            r#"{"setAddonEnabled":{"transportUrl":"https://example.com/manifest.json","enabled":false}}"#,
+            r#"{"setAddonEnabled":{"transportUrl":"https://example.com/manifest.json","enabled":true}}"#,
+        ];
+        for request in requests {
+            let parsed = serde_json::from_str::<DispatchRequest>(request);
+            assert!(
+                matches!(parsed, Ok(DispatchRequest::Bridge(BridgeRequest::SetAddonEnabled(_)))),
+                "{request}\n{parsed:?}"
+            );
         }
     }
 
@@ -272,6 +307,6 @@ mod tests {
             "action": {"action": "Ctx", "args": {"action": "UpdateSettings", "args": settings}},
         });
         let parsed = serde_json::from_value::<DispatchRequest>(request);
-        assert!(parsed.is_ok(), "{:?}", parsed.err());
+        assert!(matches!(parsed, Ok(DispatchRequest::Core { .. })), "{parsed:?}");
     }
 }

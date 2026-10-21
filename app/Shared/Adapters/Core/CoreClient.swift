@@ -53,21 +53,21 @@ final class CoreClient: Sendable {
         return CoreClient(host: host, changes: changes, events: events)
     }
 
-    func dispatch(_ action: CoreAction, to field: CoreField? = nil) throws(CoreError) {
-        let request: Data
+    func dispatch(_ request: DispatchRequest) throws(CoreError) {
+        let json: Data
         do {
-            request = try JSONEncoder.core.encode(DispatchRequest(action: action, field: field))
+            json = try JSONEncoder.core.encode(request)
         } catch {
             throw .encoding(error)
         }
-        if action.isSensitive {
-            Log.core.debug("dispatch → \(field?.rawValue ?? "null") <credentials redacted>")
+        if request.isSensitive {
+            Log.core.debug("dispatch → <credentials redacted>")
         } else {
-            let json = try? JSONDecoder().decode(JSONValue.self, from: request)
-            Log.core.debug("dispatch → \(json.map { RedactedMask.json($0).compactDescription } ?? "<undecodable>")")
+            let value = try? JSONDecoder().decode(JSONValue.self, from: json)
+            Log.core.debug("dispatch → \(value.map { RedactedMask.json($0).compactDescription } ?? "<undecodable>")")
         }
         try Self.callBridge { error in
-            request.withSBBytes { sb_dispatch($0, error) }
+            json.withSBBytes { sb_dispatch($0, error) }
         }
     }
 
@@ -299,12 +299,5 @@ private extension JSONValue {
         case .null, .bool, .number, .string:
             self
         }
-    }
-}
-
-extension CoreAction {
-    /// Carries a password or token, so logs show only its name.
-    var isSensitive: Bool {
-        if case .ctx(.authenticate) = self { true } else { false }
     }
 }

@@ -1,11 +1,11 @@
 import Foundation
 
-/// Add-ons as core's profile holds them.
+/// Add-ons as core's profile holds them, each on or off on this device as the bridge holds it.
 struct CoreAddonService: AddonService {
     let runtime: CoreRuntime
 
     func installed() -> AsyncStream<[InstalledAddon]> {
-        runtime.observe(.ctx, as: CtxState.self) { $0.profile.addons.compactMap(\.installed) }
+        runtime.observe(.ctx, as: CtxState.self) { $0.installedAddons }
     }
 
     func install(_ manifest: ManifestURL) async throws(AddonError) -> InstalledAddon {
@@ -18,7 +18,7 @@ struct CoreAddonService: AddonService {
         let descriptor: Addon
         do {
             descriptor = try await runtime.request(
-                .load(.addonDetails(transportURL: url)), to: .addonDetails, observing: .addonDetails,
+                .core(.load(.addonDetails(transportURL: url)), to: .addonDetails), observing: .addonDetails,
                 as: AddonDetailsState.self, timeout: .seconds(30)
             ) { details -> Probe<Addon, AddonError> in
                 guard let remote = details.remoteAddon, remote.transportUrl == url else { return .pending }
@@ -34,10 +34,10 @@ struct CoreAddonService: AddonService {
         Log.core.info("manifest loaded: \(descriptor.manifest.id) \(descriptor.manifest.name) \(descriptor.manifest.version)")
         do {
             return try await runtime.request(
-                .ctx(.installAddon(descriptor: descriptor.descriptor)), to: nil, observing: .ctx,
+                .core(.ctx(.installAddon(descriptor: descriptor.descriptor)), to: nil), observing: .ctx,
                 as: CtxState.self, timeout: .seconds(10)
             ) { ctx -> Probe<InstalledAddon, AddonError> in
-                ctx.profile.addons.lazy.compactMap(\.installed).first { $0.manifestURL == manifest }.map(Probe.done) ?? .pending
+                ctx.installedAddons.first { $0.manifestURL == manifest }.map(Probe.done) ?? .pending
             }
         } catch {
             throw Self.addonError(error, stage: "addon installed")
@@ -55,7 +55,7 @@ struct CoreAddonService: AddonService {
         Log.core.info("uninstalling \(addon.manifest.name)")
         do {
             try await runtime.request(
-                .ctx(.uninstallAddon(descriptor: addon.descriptor)), to: nil, observing: .ctx,
+                .core(.ctx(.uninstallAddon(descriptor: addon.descriptor)), to: nil), observing: .ctx,
                 as: CtxState.self, timeout: .seconds(10)
             ) { ctx -> Probe<Void, AddonError> in
                 ctx.profile.addons.contains { $0.transportUrl == manifest.url.rawValue } ? .pending : .done(())
@@ -65,10 +65,25 @@ struct CoreAddonService: AddonService {
         }
     }
 
+    func setEnabled(_ manifest: ManifestURL, _ isEnabled: Bool) async throws(AddonError) {
+        let url = manifest.url.rawValue
+        Log.core.info("switching \(manifest) \(isEnabled ? "on" : "off") on this device")
+        do {
+            try await runtime.request(
+                .bridge(.setAddonEnabled(transportURL: url, isEnabled: isEnabled)), observing: .ctx,
+                as: CtxState.self, timeout: .seconds(10)
+            ) { ctx -> Probe<Void, AddonError> in
+                ctx.disabledAddons.contains(url) == isEnabled ? .pending : .done(())
+            }
+        } catch {
+            throw Self.addonError(error, stage: "add-on switch")
+        }
+    }
+
     private func installedAddon(_ manifest: ManifestURL) throws(AddonError) -> InstalledAddon? {
         do {
             let ctx = try runtime.state(.ctx, as: CtxState.self)
-            return ctx.profile.addons.lazy.compactMap(\.installed).first { $0.manifestURL == manifest }
+            return ctx.installedAddons.first { $0.manifestURL == manifest }
         } catch {
             throw .rejected(reason: "\(error)")
         }
@@ -83,15 +98,18 @@ struct CoreAddonService: AddonService {
     }
 }
 
-private extension Addon {
-    var installed: InstalledAddon? {
-        guard let manifestURL = ManifestURL(transportUrl) else {
-            Log.core.warning("addon \(manifest.id) has an unsupported transport URL")
-            return nil
+private extension CtxState {
+    var installedAddons: [InstalledAddon] {
+        profile.addons.compactMap { addon in
+            guard let manifestURL = ManifestURL(addon.transportUrl) else {
+                Log.core.warning("addon \(addon.manifest.id) has an unsupported transport URL")
+                return nil
+            }
+            return InstalledAddon(
+                manifestURL: manifestURL, name: addon.manifest.name, version: addon.manifest.version,
+                isRemovable: !(addon.flags?.isProtected ?? false), isEnabled: !disabledAddons.contains(addon.transportUrl)
+            )
         }
-        return InstalledAddon(
-            manifestURL: manifestURL, name: manifest.name, version: manifest.version, isRemovable: !(flags?.isProtected ?? false)
-        )
     }
 }
 

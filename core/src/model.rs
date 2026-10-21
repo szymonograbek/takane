@@ -1,8 +1,11 @@
 //! The stremio-core models this app runs, and how they are created from storage.
 
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex, PoisonError};
+
 use chrono::{DateTime, Duration, Utc};
 use futures::try_join;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use stremio_core::constants::{
     DISMISSED_EVENTS_STORAGE_KEY, LIBRARY_RECENT_STORAGE_KEY, LIBRARY_STORAGE_KEY,
     NOTIFICATIONS_STORAGE_KEY, PROFILE_STORAGE_KEY, SEARCH_HISTORY_STORAGE_KEY,
@@ -19,7 +22,10 @@ use stremio_core::models::library_with_filters::{LibraryWithFilters, NotRemovedF
 use stremio_core::models::link::Link;
 use stremio_core::models::meta_details::MetaDetails;
 use stremio_core::models::player::Player;
-use stremio_core::runtime::{Effects, Env, EnvError};
+use stremio_core::runtime::msg::{Action, Internal, Msg};
+use stremio_core::runtime::{
+    Effect, Effects, Env, EnvError, Model, RuntimeAction, Update, UpdateWithCtx,
+};
 use stremio_core::types::api::LinkAuthKey;
 use stremio_core::types::events::DismissedEventsBucket;
 use stremio_core::types::library::LibraryBucket;
@@ -29,31 +35,147 @@ use stremio_core::types::resource::{MetaItem, MetaItemPreview, PosterShape, Vide
 use stremio_core::types::search_history::SearchHistoryBucket;
 use stremio_core::types::server_urls::ServerUrlsBucket;
 use stremio_core::types::streams::StreamsBucket;
-use stremio_core::Model;
+use url::Url;
 
 use crate::env::AppleEnv;
 
-/// Add a field here to expose another core model to the app.
-#[derive(Model, Clone)]
-#[model(AppleEnv)]
-pub struct AppModel {
-    pub ctx: Ctx,
-    pub continue_watching_preview: ContinueWatchingPreview,
-    pub addon_details: AddonDetails,
+/// Where the add-ons switched off on this device are saved. Core never reads it, so the choice
+/// stays off the account.
+const DISABLED_ADDONS_STORAGE_KEY: &str = "disabled_addons";
+
+/// Lists the core models besides `ctx` once. It defines `Models`, with a field per model, and
+/// `AppModelField`, which names `ctx` and each model as the app does (`"meta_details"`).
+macro_rules! models {
+    ($($(#[$attribute:meta])* $field:ident: $model:ty => $variant:ident,)*) => {
+        /// The core models besides `ctx`. Each sees only the add-ons enabled on this device.
+        #[derive(Clone, Default)]
+        struct Models {
+            $($(#[$attribute])* $field: $model,)*
+        }
+
+        #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+        #[serde(rename_all = "snake_case")]
+        pub enum AppModelField {
+            Ctx,
+            $($variant,)*
+        }
+
+        impl Models {
+            /// Runs `msg` through every model, or only the one `only` names.
+            fn update(&mut self, msg: &Msg, ctx: &Ctx, only: Option<&AppModelField>, changes: &mut Changes) {
+                $(if only.is_none_or(|field| *field == AppModelField::$variant) {
+                    changes.record(
+                        AppModelField::$variant,
+                        UpdateWithCtx::<AppleEnv>::update(&mut self.$field, msg, ctx),
+                    );
+                })*
+            }
+        }
+    };
+}
+
+// Add a line here to expose another core model to the app.
+models! {
+    continue_watching_preview: ContinueWatchingPreview => ContinueWatchingPreview,
+    addon_details: AddonDetails => AddonDetails,
     /// Home rows: every installed catalog without a required extra.
-    pub board: CatalogsWithExtra,
+    board: CatalogsWithExtra => Board,
     /// Catalogs that support the `search` extra, loaded with the query.
-    pub search: CatalogsWithExtra,
+    search: CatalogsWithExtra => Search,
     /// One catalog of one add-on with its extras, such as a genre.
-    pub discover: CatalogWithFilters<MetaItemPreview>,
-    pub meta_details: MetaDetails,
-    pub player: Player,
+    discover: CatalogWithFilters<MetaItemPreview> => Discover,
+    meta_details: MetaDetails => MetaDetails,
+    player: Player => Player,
     /// Sign-in by code: a code to confirm on another device, then the auth key it grants.
-    pub link: Link<LinkAuthKey>,
+    link: Link<LinkAuthKey> => Link,
     /// The titles in the library, one type or all, sorted and paged.
-    pub library: LibraryWithFilters<NotRemovedFilter>,
+    library: LibraryWithFilters<NotRemovedFilter> => Library,
     /// The library's shows with their videos, from add-ons that list videos by id.
-    pub calendar: Calendar,
+    calendar: Calendar => Calendar,
+}
+
+/// The core models the app runs, and the add-ons switched off on this device.
+#[derive(Clone)]
+pub struct AppModel {
+    ctx: Ctx,
+    models: Models,
+    disabled_addons: DisabledAddons,
+    /// `set_addon_enabled` requests the next update applies.
+    addon_requests: Arc<Mutex<Vec<SetAddonEnabled>>>,
+}
+
+/// Switching one add-on on or off on this device, as the app sends it.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAddonEnabled {
+    transport_url: Url,
+    enabled: bool,
+}
+
+/// Transport URLs of the add-ons switched off on this device. Core never sees them: `ctx` keeps
+/// every installed add-on, so syncing, installing and removing work as before, and only the other
+/// models run without these.
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+struct DisabledAddons(BTreeSet<Url>);
+
+impl DisabledAddons {
+    /// Whether the set changed.
+    fn apply(&mut self, request: SetAddonEnabled) -> bool {
+        if request.enabled {
+            self.0.remove(&request.transport_url)
+        } else {
+            self.0.insert(request.transport_url)
+        }
+    }
+
+    /// Saves in the background, in order with core's own storage writes.
+    fn save(&self) {
+        let write = AppleEnv::set_storage(DISABLED_ADDONS_STORAGE_KEY, Some(self));
+        AppleEnv::exec_sequential(async move {
+            if let Err(error) = write.await {
+                tracing::error!(error = %error.message(), "saving the disabled add-ons failed");
+            }
+        });
+    }
+}
+
+/// What an update changed: the effects to run and the fields to report.
+#[derive(Default)]
+struct Changes {
+    effects: Vec<Effect>,
+    fields: Vec<AppModelField>,
+}
+
+impl Changes {
+    fn record(&mut self, field: AppModelField, effects: Effects) {
+        if effects.has_changed && !self.fields.contains(&field) {
+            self.fields.push(field);
+        }
+        self.effects.extend(effects);
+    }
+}
+
+impl Model<AppleEnv> for AppModel {
+    type Field = AppModelField;
+
+    fn update(&mut self, msg: &Msg) -> (Vec<Effect>, Vec<AppModelField>) {
+        let mut changes = self.apply_addon_requests();
+        changes.record(AppModelField::Ctx, Update::<AppleEnv>::update(&mut self.ctx, msg));
+        self.update_models(msg, None, &mut changes);
+        (changes.effects, changes.fields)
+    }
+
+    fn update_field(&mut self, msg: &Msg, field: &AppModelField) -> (Vec<Effect>, Vec<AppModelField>) {
+        let mut changes = self.apply_addon_requests();
+        match field {
+            AppModelField::Ctx => {
+                changes.record(AppModelField::Ctx, Update::<AppleEnv>::update(&mut self.ctx, msg))
+            }
+            model => self.update_models(msg, Some(model), &mut changes),
+        }
+        (changes.effects, changes.fields)
+    }
 }
 
 impl AppModel {
@@ -69,6 +191,7 @@ impl AppModel {
             notifications,
             search_history,
             dismissed_events,
+            disabled_addons,
         ) = try_join!(
             AppleEnv::get_storage::<Profile>(PROFILE_STORAGE_KEY),
             AppleEnv::get_storage::<LibraryBucket>(LIBRARY_RECENT_STORAGE_KEY),
@@ -78,13 +201,16 @@ impl AppModel {
             AppleEnv::get_storage::<NotificationsBucket>(NOTIFICATIONS_STORAGE_KEY),
             AppleEnv::get_storage::<SearchHistoryBucket>(SEARCH_HISTORY_STORAGE_KEY),
             AppleEnv::get_storage::<DismissedEventsBucket>(DISMISSED_EVENTS_STORAGE_KEY),
+            AppleEnv::get_storage::<DisabledAddons>(DISABLED_ADDONS_STORAGE_KEY),
         )?;
 
         let profile = profile.unwrap_or_default();
+        let disabled_addons = disabled_addons.unwrap_or_default();
         let uid = profile.uid();
         tracing::info!(
             authenticated = profile.auth.is_some(),
             addons = profile.addons.len(),
+            disabled_addons = disabled_addons.0.len(),
             "profile loaded"
         );
         let mut library = LibraryBucket::new(uid.clone(), vec![]);
@@ -108,49 +234,93 @@ impl AppModel {
         );
         let model = AppModel {
             ctx,
-            continue_watching_preview,
-            addon_details: Default::default(),
-            board: Default::default(),
-            search: Default::default(),
-            discover: Default::default(),
-            meta_details: Default::default(),
-            player: Default::default(),
-            link: Default::default(),
-            library: Default::default(),
-            calendar: Default::default(),
+            models: Models { continue_watching_preview, ..Default::default() },
+            disabled_addons,
+            addon_requests: Default::default(),
         };
         Ok((model, continue_watching_effects))
     }
 
+    /// Queues switching an add-on on or off on this device and returns the action that applies it.
+    ///
+    /// Core's runtime dispatches only core actions and keeps its model lock private, so the
+    /// request waits in `addon_requests` and every update applies the waiting ones first. The
+    /// returned action, `Unload` aimed at `ctx`, which ctx ignores, makes that update happen now.
+    pub fn set_addon_enabled(&self, request: SetAddonEnabled) -> RuntimeAction<AppleEnv, AppModel> {
+        self.addon_requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(request);
+        RuntimeAction { field: Some(AppModelField::Ctx), action: Action::Unload }
+    }
+
+    /// Applies the waiting `set_addon_enabled` requests. A change is saved, and the models
+    /// select again with the add-ons now enabled, as they do when the profile's add-ons change.
+    fn apply_addon_requests(&mut self) -> Changes {
+        let requests = std::mem::take(
+            &mut *self.addon_requests.lock().unwrap_or_else(PoisonError::into_inner),
+        );
+        let mut changes = Changes::default();
+        let mut changed = false;
+        for request in requests {
+            changed |= self.disabled_addons.apply(request);
+        }
+        if changed {
+            self.disabled_addons.save();
+            changes.fields.push(AppModelField::Ctx);
+            self.update_models(&Msg::Internal(Internal::ProfileChanged), None, &mut changes);
+        }
+        changes
+    }
+
+    /// Runs `msg` through the models, all or the one `only` names, while `ctx` holds only the
+    /// add-ons enabled on this device. The full list is back before anything else reads `ctx`.
+    fn update_models(&mut self, msg: &Msg, only: Option<&AppModelField>, changes: &mut Changes) {
+        let enabled = self
+            .ctx
+            .profile
+            .addons
+            .iter()
+            .filter(|addon| !self.disabled_addons.0.contains(&addon.transport_url))
+            .cloned()
+            .collect();
+        let installed = std::mem::replace(&mut self.ctx.profile.addons, enabled);
+        self.models.update(msg, &self.ctx, only, changes);
+        self.ctx.profile.addons = installed;
+    }
+
     pub fn state_json(&self, field: &AppModelField) -> serde_json::Result<Vec<u8>> {
+        let models = &self.models;
         match field {
-            AppModelField::Ctx => serde_json::to_vec(&CtxState::new(&self.ctx)),
-            AppModelField::ContinueWatchingPreview => serde_json::to_vec(&self.continue_watching_preview),
-            AppModelField::AddonDetails => serde_json::to_vec(&self.addon_details),
-            AppModelField::Board => serde_json::to_vec(&self.board),
-            AppModelField::Search => serde_json::to_vec(&self.search),
-            AppModelField::Discover => serde_json::to_vec(&self.discover),
-            AppModelField::MetaDetails => serde_json::to_vec(&MetaDetailsState::new(&self.meta_details)),
-            AppModelField::Player => serde_json::to_vec(&self.player),
-            AppModelField::Link => serde_json::to_vec(&self.link),
-            AppModelField::Library => serde_json::to_vec(&self.library),
-            AppModelField::Calendar => serde_json::to_vec(&CalendarState::new(&self.calendar, AppleEnv::now())),
+            AppModelField::Ctx => serde_json::to_vec(&CtxState::new(&self.ctx, &self.disabled_addons)),
+            AppModelField::ContinueWatchingPreview => serde_json::to_vec(&models.continue_watching_preview),
+            AppModelField::AddonDetails => serde_json::to_vec(&models.addon_details),
+            AppModelField::Board => serde_json::to_vec(&models.board),
+            AppModelField::Search => serde_json::to_vec(&models.search),
+            AppModelField::Discover => serde_json::to_vec(&models.discover),
+            AppModelField::MetaDetails => serde_json::to_vec(&MetaDetailsState::new(&models.meta_details)),
+            AppModelField::Player => serde_json::to_vec(&models.player),
+            AppModelField::Link => serde_json::to_vec(&models.link),
+            AppModelField::Library => serde_json::to_vec(&models.library),
+            AppModelField::Calendar => serde_json::to_vec(&CalendarState::new(&models.calendar, AppleEnv::now())),
         }
     }
 }
 
-/// Core's `Ctx` plus the queries searched, which core keeps out of its serialized state.
+/// Core's `Ctx` plus the queries searched, which core keeps out of its serialized state, and the
+/// add-ons switched off on this device, which core does not know about.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CtxState<'a> {
     #[serde(flatten)]
     ctx: &'a Ctx,
     search_history: Vec<&'a str>,
+    disabled_addons: &'a DisabledAddons,
 }
 
 impl<'a> CtxState<'a> {
-    fn new(ctx: &'a Ctx) -> Self {
-        CtxState { ctx, search_history: recent_searches(&ctx.search_history) }
+    fn new(ctx: &'a Ctx, disabled_addons: &'a DisabledAddons) -> Self {
+        CtxState { ctx, search_history: recent_searches(&ctx.search_history), disabled_addons }
     }
 }
 
@@ -263,7 +433,126 @@ impl<'a> UpcomingShow<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{executor, storage};
+    use stremio_core::runtime::Runtime;
+    use stremio_core::types::addon::Descriptor;
     use stremio_watched_bitfield::WatchedBitField;
+
+    const ONE: &str = "https://one.example/manifest.json";
+    const TWO: &str = "https://two.example/manifest.json";
+
+    fn addon(transport_url: &str) -> Descriptor {
+        serde_json::from_value(serde_json::json!({
+            "transportUrl": transport_url,
+            "manifest": {
+                "id": transport_url,
+                "version": "1.0.0",
+                "name": "Example",
+                "types": ["movie"],
+                "resources": ["catalog"],
+                "catalogs": [{"type": "movie", "id": "top"}],
+            },
+        }))
+        .unwrap()
+    }
+
+    fn model_with(addons: Vec<Descriptor>) -> AppModel {
+        AppModel {
+            ctx: Ctx::new(
+                Profile { addons, ..Default::default() },
+                LibraryBucket::default(),
+                StreamsBucket::default(),
+                ServerUrlsBucket::new::<AppleEnv>(None),
+                NotificationsBucket::new::<AppleEnv>(None, vec![]),
+                SearchHistoryBucket::default(),
+                DismissedEventsBucket::default(),
+            ),
+            models: Models::default(),
+            disabled_addons: DisabledAddons::default(),
+            addon_requests: Default::default(),
+        }
+    }
+
+    fn set_enabled(model: &AppModel, transport_url: &str, enabled: bool) -> RuntimeAction<AppleEnv, AppModel> {
+        model.set_addon_enabled(SetAddonEnabled { transport_url: transport_url.parse().unwrap(), enabled })
+    }
+
+    /// The add-ons the board lists catalogs of, which are the ones core asks for them.
+    fn board_addons(runtime: &Runtime<AppleEnv, AppModel>) -> Vec<String> {
+        let model = runtime.model().unwrap();
+        let mut addons: Vec<String> = model
+            .models
+            .board
+            .catalogs
+            .iter()
+            .filter_map(|catalog| catalog.first())
+            .map(|page| page.request.base.to_string())
+            .collect();
+        addons.dedup();
+        addons
+    }
+
+    fn ctx_state(runtime: &Runtime<AppleEnv, AppModel>) -> serde_json::Value {
+        serde_json::from_slice(&runtime.model().unwrap().state_json(&AppModelField::Ctx).unwrap()).unwrap()
+    }
+
+    fn installed_addons(ctx: &serde_json::Value) -> Vec<&str> {
+        ctx["profile"]["addons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|addon| addon["transportUrl"].as_str().unwrap())
+            .collect()
+    }
+
+    /// What the next launch reads, once the writes queued before it have finished.
+    fn saved_disabled_addons() -> serde_json::Value {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        executor::spawn_sequential(async move { sender.send(()).unwrap() });
+        receiver.recv().unwrap();
+        futures::executor::block_on(AppleEnv::get_storage(DISABLED_ADDONS_STORAGE_KEY))
+            .unwrap()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_disabled_addon_gets_no_board_requests_until_enabled_again() {
+        storage::install_temporary();
+        let model = model_with(vec![addon(ONE), addon(TWO)]);
+        let (runtime, _events) = Runtime::<AppleEnv, AppModel>::new(model, vec![], 1000);
+        let load_board = serde_json::from_value(serde_json::json!({
+            "action": "Load",
+            "args": {"model": "CatalogsWithExtra", "args": {"type": null, "extra": []}},
+        }))
+        .unwrap();
+        runtime.dispatch(RuntimeAction { field: Some(AppModelField::Board), action: load_board });
+        assert_eq!(board_addons(&runtime), [ONE, TWO]);
+
+        let disable = set_enabled(&runtime.model().unwrap(), ONE, false);
+        runtime.dispatch(disable);
+        assert_eq!(board_addons(&runtime), [TWO]);
+        let ctx = ctx_state(&runtime);
+        assert_eq!(installed_addons(&ctx), [ONE, TWO]);
+        assert_eq!(ctx["disabledAddons"], serde_json::json!([ONE]));
+        assert_eq!(saved_disabled_addons(), serde_json::json!([ONE]));
+
+        let enable = set_enabled(&runtime.model().unwrap(), ONE, true);
+        runtime.dispatch(enable);
+        assert_eq!(board_addons(&runtime), [ONE, TWO]);
+        assert_eq!(ctx_state(&runtime)["disabledAddons"], serde_json::json!([]));
+        assert_eq!(saved_disabled_addons(), serde_json::json!([]));
+    }
+
+    #[test]
+    fn enabling_an_enabled_addon_changes_nothing() {
+        let mut model = model_with(vec![addon(ONE)]);
+        let RuntimeAction { field, action } = set_enabled(&model, ONE, true);
+
+        let (effects, fields) = model.update_field(&Msg::Action(action), &field.unwrap());
+
+        assert!(effects.is_empty());
+        assert_eq!(fields, []);
+    }
 
     #[test]
     fn recent_searches_are_most_recent_first() {

@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// The installed add-ons; removing one and installing one by manifest URL.
+/// The installed add-ons; switching one off on this device, removing one and installing one by
+/// manifest URL.
 struct AddonSettings: View {
     @Environment(AppContext.self) private var app
     @State private var removing: InstalledAddon?
 
     var body: some View {
         let state = app.addons.state
-        let note = if case .failed(_, let error) = state.removal { error.message } else { Self.removeHint }
+        let note = if case .failed(_, let error) = state.change { error.message } else { Self.hint }
         SettingsPage(title: "Add-ons") {
             SettingsSymbol(name: "puzzlepiece.extension")
         } rows: {
@@ -17,13 +18,16 @@ struct AddonSettings: View {
             }
             SettingsSection(title: "Installed", note: note) {
                 ForEach(state.installed) { addon in
-                    ValueRow(title: addon.name.rawValue, value: addon.version)
-                        .accessibilityIdentifier("addons.row")
-                        .contextMenu {
-                            if addon.isRemovable {
-                                Button("Remove", systemImage: "trash", role: .destructive) { removing = addon }
-                            }
+                    Toggle(isOn: Binding { addon.isEnabled } set: { app.addons.send(.setEnabled(addon.manifestURL, $0)) }) {
+                        Text(addon.name.rawValue)
+                        Text(addon.version)
+                    }
+                    .accessibilityIdentifier("addons.row")
+                    .contextMenu {
+                        if addon.isRemovable {
+                            Button("Remove", systemImage: "trash", role: .destructive) { removing = addon }
                         }
+                    }
                 }
             }
         }
@@ -36,9 +40,9 @@ struct AddonSettings: View {
     }
 
     #if os(tvOS)
-    private static let removeHint = "To remove an add-on, press and hold it."
+    private static let hint = "Turning an add-on off affects this Apple TV only. To remove one, press and hold it."
     #else
-    private static let removeHint = "To remove an add-on, Control-click it."
+    private static let hint = "Turning an add-on off affects this Mac only. To remove one, Control-click it."
     #endif
 }
 

@@ -57,13 +57,13 @@ final class CoreRuntime: Sendable {
     }
 
     func dispatch(_ action: CoreAction, to field: CoreField? = nil) throws(CoreError) {
-        try client.dispatch(action, to: field)
+        try client.dispatch(.core(action, to: field))
     }
 
     /// Dispatches an action nothing waits on; a rejection is logged.
     func dispatchLogged(_ action: CoreAction, to field: CoreField? = nil) {
         do {
-            try client.dispatch(action, to: field)
+            try client.dispatch(.core(action, to: field))
         } catch {
             Log.core.error("dispatch to \(field?.rawValue ?? "ctx") failed: \(error)")
         }
@@ -91,12 +91,11 @@ final class CoreRuntime: Sendable {
         })
     }
 
-    /// Dispatches `action` to `target` and waits until `probe` accepts a state of `field`.
+    /// Dispatches `request` and waits until `probe` accepts a state of `field`.
     /// The current state is probed first, so a probe must check it answers this request,
     /// not an earlier one.
     func request<State: Decodable & Sendable, Value: Sendable, Failure: Error & Sendable>(
-        _ action: CoreAction,
-        to target: CoreField?,
+        _ request: DispatchRequest,
         observing field: CoreField,
         as type: State.Type = State.self,
         timeout: Duration,
@@ -105,7 +104,7 @@ final class CoreRuntime: Sendable {
         // Subscribing before dispatching means no change is missed.
         let states = states(field, as: State.self)
         do {
-            try dispatch(action, to: target)
+            try client.dispatch(request)
         } catch {
             throw .rejected(error)
         }

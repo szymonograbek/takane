@@ -139,6 +139,7 @@ targets:
       - path: app/Shared/Adapters/Core/CoreWirePlayer.swift
       - path: app/Shared/Adapters/Core/CoreWireLibrary.swift
       - path: app/Shared/Adapters/Core/CoreAction.swift
+      - path: app/Shared/Adapters/Core/CoreDispatchRequest.swift
       - path: app/Shared/Adapters/Core/CoreResources.swift
       - path: app/Shared/Adapters/Core/CoreUpcomingEpisodes.swift
       - path: app/Tests/Fixtures.swift

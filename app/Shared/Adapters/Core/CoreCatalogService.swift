@@ -45,7 +45,7 @@ struct CoreCatalogService: CatalogService {
 
     func genres() -> AsyncStream<[CatalogGenres]> {
         runtime.observe(.ctx, as: CtxState.self) { state in
-            state.profile.addons.flatMap { addon in
+            state.enabledAddons.flatMap { addon in
                 addon.manifest.catalogs.compactMap { catalog -> CatalogGenres? in
                     // A catalog that requires the extra lists other values under it, such as Cinemeta's years.
                     guard let addonURL = ManifestURL(addon.transportUrl), let type = ContentType(catalog.type),
@@ -73,7 +73,7 @@ struct CoreCatalogService: CatalogService {
         let metaPath = ResourcePath.meta(type: type.rawValue, id: media.rawValue)
         do {
             return try await runtime.request(
-                .load(.metaDetails(metaPath: metaPath, streamPath: nil)), to: .metaDetails, observing: .metaDetails,
+                .core(.load(.metaDetails(metaPath: metaPath, streamPath: nil)), to: .metaDetails), observing: .metaDetails,
                 as: MetaDetailsState.self, timeout: .seconds(30)
             ) { details -> Probe<TitleDetails, DetailsError> in
                 guard details.selected?.metaPath == metaPath else { return .pending }

@@ -24,7 +24,7 @@ struct CoreAccountService: AccountService {
         let loaded = OSAllocatedUnfairLock(initialState: false)
         do {
             return try await runtime.request(
-                .load(.link), to: .link, observing: .link, as: LinkState.self, timeout: .seconds(20)
+                .core(.load(.link), to: .link), observing: .link, as: LinkState.self, timeout: .seconds(20)
             ) { state -> Probe<LinkCode, AccountError> in
                 switch state.code {
                 case .loading:

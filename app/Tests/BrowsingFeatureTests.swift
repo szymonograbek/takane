@@ -162,12 +162,12 @@ struct BrowsingFeatureTests {
     }
 
     @Test func onlyRemovableAddonsAreRemoved() {
-        let official = InstalledAddon(manifestURL: Fixture.otherManifest, name: Redacted("Cinemeta"), version: "3", isRemovable: false)
-        let debrid = InstalledAddon(manifestURL: Fixture.manifest, name: Redacted("Debrid"), version: "1", isRemovable: true)
+        let official = InstalledAddon(manifestURL: Fixture.otherManifest, name: Redacted("Cinemeta"), version: "3", isRemovable: false, isEnabled: true)
+        let debrid = InstalledAddon(manifestURL: Fixture.manifest, name: Redacted("Debrid"), version: "1", isRemovable: true, isEnabled: true)
         var state = AddonsFeature.State(installed: [official, debrid])
         #expect(AddonsFeature.reduce(&state, .uninstall(official.manifestURL)).isEmpty)
         #expect(AddonsFeature.reduce(&state, .uninstall(debrid.manifestURL)) == [.uninstall(debrid.manifestURL)])
         _ = AddonsFeature.reduce(&state, .uninstallFinished(debrid.manifestURL, .failure(.rejected(reason: "offline"))))
-        #expect(state.removal == .failed(debrid.manifestURL, .rejected(reason: "offline")))
+        #expect(state.change == .failed(debrid.manifestURL, .rejected(reason: "offline")))
     }
 }

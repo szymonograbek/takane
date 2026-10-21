@@ -1,4 +1,5 @@
-/// The installed add-ons, installing new ones by manifest URL and removing them.
+/// The installed add-ons, installing new ones by manifest URL, removing them and switching them on
+/// or off on this device.
 enum AddonsFeature: Feature {
     struct Dependencies: Sendable {
         let addons: any AddonService
@@ -11,16 +12,18 @@ enum AddonsFeature: Feature {
         case failed(ManifestURL, AddonError)
     }
 
-    enum Removal: Equatable, Sendable {
+    /// A change to an installed add-on. One runs at a time.
+    enum Change: Equatable, Sendable {
         case idle
         case removing(ManifestURL)
+        case switching(ManifestURL, isEnabled: Bool)
         case failed(ManifestURL, AddonError)
     }
 
     struct State: Equatable, Sendable {
         var installed: [InstalledAddon] = []
         var install = Install.idle
-        var removal = Removal.idle
+        var change = Change.idle
     }
 
     enum Event: Sendable {
@@ -32,6 +35,9 @@ enum AddonsFeature: Feature {
         case installFinished(ManifestURL, Result<InstalledAddon, AddonError>)
         case uninstall(ManifestURL)
         case uninstallFinished(ManifestURL, Result<Void, AddonError>)
+        /// Switches the add-on on or off on this device only.
+        case setEnabled(ManifestURL, Bool)
+        case setEnabledFinished(ManifestURL, Bool, Result<Void, AddonError>)
     }
 
     enum Effect: Equatable, Sendable {
@@ -39,30 +45,37 @@ enum AddonsFeature: Feature {
         case observeInstalled
         case install(ManifestURL)
         case uninstall(ManifestURL)
+        case setEnabled(ManifestURL, Bool)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
         switch event {
-        case .uninstall, .uninstallFinished: reduceRemoval(&state, event)
+        case .uninstall, .uninstallFinished, .setEnabled, .setEnabledFinished: reduceChange(&state, event)
         case .installedChanged, .installOpened, .install, .installFinished: reduceInstall(&state, event)
         }
     }
 
-    private static func reduceRemoval(_ state: inout State, _ event: Event) -> [Effect] {
-        switch (state.removal, event) {
-        case (.removing, .uninstall):
+    private static func reduceChange(_ state: inout State, _ event: Event) -> [Effect] {
+        switch (state.change, event) {
+        case (.removing, .uninstall), (.removing, .setEnabled), (.switching, .uninstall), (.switching, .setEnabled):
             return []
         case (.idle, .uninstall(let manifest)), (.failed, .uninstall(let manifest)):
             guard state.installed.contains(where: { $0.manifestURL == manifest && $0.isRemovable }) else { return [] }
-            state.removal = .removing(manifest)
+            state.change = .removing(manifest)
             return [.uninstall(manifest)]
+        case (.idle, .setEnabled(let manifest, let isEnabled)), (.failed, .setEnabled(let manifest, let isEnabled)):
+            guard state.installed.contains(where: { $0.manifestURL == manifest && $0.isEnabled != isEnabled }) else { return [] }
+            state.change = .switching(manifest, isEnabled: isEnabled)
+            return [.setEnabled(manifest, isEnabled)]
         case (.removing(let pending), .uninstallFinished(let manifest, let result)) where pending == manifest:
-            switch result {
-            case .success: state.removal = .idle
-            case .failure(let error): state.removal = .failed(manifest, error)
-            }
+            state.change = Change(finished: manifest, result)
             return []
-        case (_, .uninstallFinished), (_, .installedChanged), (_, .installOpened), (_, .install), (_, .installFinished):
+        case (.switching(let pending, let pendingIsEnabled), .setEnabledFinished(let manifest, let isEnabled, let result))
+            where pending == manifest && pendingIsEnabled == isEnabled:
+            state.change = Change(finished: manifest, result)
+            return []
+        case (_, .uninstallFinished), (_, .setEnabledFinished),
+             (_, .installedChanged), (_, .installOpened), (_, .install), (_, .installFinished):
             return []
         }
     }
@@ -86,7 +99,7 @@ enum AddonsFeature: Feature {
             case .failure(let error): state.install = .failed(manifest, error)
             }
             return []
-        case (_, .installFinished), (_, .uninstall), (_, .uninstallFinished):
+        case (_, .installFinished), (_, .uninstall), (_, .uninstallFinished), (_, .setEnabled), (_, .setEnabledFinished):
             return []
         }
     }
@@ -112,6 +125,22 @@ enum AddonsFeature: Feature {
             } catch {
                 send(.uninstallFinished(manifest, .failure(error)))
             }
+        case .setEnabled(let manifest, let isEnabled):
+            do {
+                try await dependencies.addons.setEnabled(manifest, isEnabled)
+                send(.setEnabledFinished(manifest, isEnabled, .success(())))
+            } catch {
+                send(.setEnabledFinished(manifest, isEnabled, .failure(error)))
+            }
+        }
+    }
+}
+
+private extension AddonsFeature.Change {
+    init(finished manifest: ManifestURL, _ result: Result<Void, AddonError>) {
+        switch result {
+        case .success: self = .idle
+        case .failure(let error): self = .failed(manifest, error)
         }
     }
 }

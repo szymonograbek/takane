@@ -147,8 +147,7 @@ mod tests {
 
     #[test]
     fn sequential_writes_of_one_key_persist_in_order() {
-        let directory = tempfile::tempdir().unwrap();
-        storage::install(directory.path().to_owned()).unwrap();
+        storage::install_temporary();
         let padding = "x".repeat(1 << 10);
         let writes = 1000;
         let values: Vec<String> = (0..writes).map(|index| format!("{index}{padding}")).collect();
