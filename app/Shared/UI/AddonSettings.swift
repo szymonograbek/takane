@@ -21,6 +21,7 @@ struct AddonSettings: View {
                     Toggle(isOn: Binding { addon.isEnabled } set: { app.addons.send(.setEnabled(addon.manifestURL, $0)) }) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(addon.name.rawValue)
+                            Spacer()
                             Text(addon.version).foregroundStyle(.secondary)
                         }
                     }
