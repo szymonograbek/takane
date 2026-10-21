@@ -9,7 +9,6 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 stremio-core = { git = "https://github.com/Stremio/stremio-core", rev = "c4806e8614452fd49d5dbb22db74afa88959b554", features = [
-    "derive",
     "env-future-send",
 ] }
 

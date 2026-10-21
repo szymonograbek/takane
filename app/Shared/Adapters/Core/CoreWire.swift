@@ -75,6 +75,13 @@ struct CtxState: Decodable, Sendable {
     let profile: Profile
     /// Queries most recent first. The bridge adds it, since core leaves its search history out of the state.
     let searchHistory: [String]
+    /// Transport URLs of the add-ons switched off on this device. The bridge adds it, since core does not know about it.
+    let disabledAddons: Set<URL>
+
+    /// The installed add-ons this device uses.
+    var enabledAddons: [Addon] {
+        profile.addons.filter { !disabledAddons.contains($0.transportUrl) }
+    }
 }
 
 struct Profile: Decodable, Sendable {

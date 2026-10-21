@@ -120,21 +120,6 @@ enum CoreAction: Sendable {
     }
 }
 
-/// The JSON document `sb_dispatch` accepts.
-struct DispatchRequest: Encodable {
-    let action: CoreAction
-    let field: CoreField?
-
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(action, forKey: .action)
-        // core expects an explicit null when no field is targeted.
-        try container.encode(field, forKey: .field)
-    }
-
-    private enum CodingKeys: String, CodingKey { case action, field }
-}
-
 // MARK: - Encoding
 
 /// `{"action": name}` or `{"action": name, "args": args}`.

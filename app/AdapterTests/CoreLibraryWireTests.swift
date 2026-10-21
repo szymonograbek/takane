@@ -7,7 +7,7 @@ struct CoreLibraryWireTests {
     }
 
     private func encoded(_ action: CoreAction, to field: CoreField?) throws -> JSONValue {
-        try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(DispatchRequest(action: action, field: field)))
+        try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(DispatchRequest.core(action, to: field)))
     }
 
     // The literals are the ones core/src/lib.rs parses as core actions.

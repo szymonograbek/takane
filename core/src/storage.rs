@@ -17,6 +17,19 @@ pub fn install(directory: PathBuf) -> Result<(), EnvError> {
         .map_err(|_| EnvError::Other("storage directory already set".to_owned()))
 }
 
+/// Installs one temporary directory for the whole test process, so every test that writes can
+/// call it. Tests share the directory, so each writes its own keys.
+#[cfg(test)]
+pub fn install_temporary() {
+    static TEMPORARY: OnceLock<tempfile::TempDir> = OnceLock::new();
+    DIRECTORY.get_or_init(|| {
+        TEMPORARY
+            .get_or_init(|| tempfile::tempdir().expect("temporary directory"))
+            .path()
+            .to_owned()
+    });
+}
+
 fn path_for(key: &str) -> PathBuf {
     let directory = DIRECTORY.get().expect("storage is installed before the runtime starts");
     file_path(directory, key)
