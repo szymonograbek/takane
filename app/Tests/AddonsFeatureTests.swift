@@ -32,4 +32,30 @@ struct AddonsFeatureTests {
         #expect(state.install.message == "The add-on's manifest could not be loaded: 404")
         #expect(AddonsFeature.reduce(&state, .install(Fixture.manifest)) == [.install(Fixture.manifest)])
     }
+
+    @Test func openingStartsCleanAfterSuccess() {
+        var state = AddonsFeature.State()
+        _ = AddonsFeature.reduce(&state, .install(Fixture.manifest))
+        _ = AddonsFeature.reduce(&state, .installFinished(Fixture.manifest, .success(addon)))
+        #expect(AddonsFeature.reduce(&state, .installOpened).isEmpty)
+        #expect(state.install == .idle)
+        #expect(state.install.message == nil)
+    }
+
+    @Test func openingStartsCleanAfterFailure() {
+        var state = AddonsFeature.State()
+        _ = AddonsFeature.reduce(&state, .install(Fixture.manifest))
+        _ = AddonsFeature.reduce(&state, .installFinished(Fixture.manifest, .failure(.manifestUnavailable(reason: "404"))))
+        #expect(AddonsFeature.reduce(&state, .installOpened).isEmpty)
+        #expect(state.install == .idle)
+    }
+
+    @Test func openingKeepsAnInstallInFlightAndItsOutcome() {
+        var state = AddonsFeature.State()
+        _ = AddonsFeature.reduce(&state, .install(Fixture.manifest))
+        #expect(AddonsFeature.reduce(&state, .installOpened).isEmpty)
+        #expect(state.install == .installing(Fixture.manifest))
+        _ = AddonsFeature.reduce(&state, .installFinished(Fixture.manifest, .success(addon)))
+        #expect(state.install == .installed(addon))
+    }
 }

@@ -71,6 +71,7 @@ private struct InstallAddonScreen: View {
         .padding(Metrics.screenPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.canvas.ignoresSafeArea())
+        .onAppear { app.addons.send(.installOpened) }
         .onChange(of: install) { _, install in
             if case .installed = install { dismiss() }
         }
