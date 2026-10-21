@@ -92,6 +92,7 @@ struct PlaybackSettings: View {
         let preferences = app.preferences.state.preferences
         let seekStep = preferences?.seekStep ?? .defaults
         let upNext = preferences?.upNext ?? .defaults
+        let skipSegmentSource = preferences?.skipSegmentSource ?? .defaults
         SettingsPage(title: "Playback") {
             SettingsSymbol(name: "play.rectangle")
         } rows: {
@@ -115,6 +116,20 @@ struct PlaybackSettings: View {
                     LabeledContent("Skip Interval", value: seekStep.name)
                 }
                 .accessibilityIdentifier("playback.seekStep")
+            }
+            SettingsSection(title: "Skip Intro", note: "Where the player finds intros, recaps and credits to skip.") {
+                NavigationLink {
+                    ChoiceList(
+                        title: "Skip Data", symbol: "forward.frame",
+                        choices: SkipSegmentSource.available(hasPremium: app.account.state.account.hasPremium).map { (name: $0.name, value: $0) },
+                        selection: skipSegmentSource
+                    ) {
+                        app.preferences.send(.setSkipSegmentSource($0))
+                    }
+                } label: {
+                    LabeledContent("Skip Data", value: skipSegmentSource.name)
+                }
+                .accessibilityIdentifier("playback.skipSegmentSource")
             }
             SettingsSection(title: "Next Episode", note: "Autoplay needs a matching stream from the same add-on.") {
                 NavigationLink {
@@ -152,6 +167,16 @@ private extension SeekStep {
 
 private extension UpNextNotice {
     var name: String { self == .off ? "Off" : "\(rawValue) Seconds Before End" }
+}
+
+private extension SkipSegmentSource {
+    var name: String {
+        switch self {
+        case .stremio: "Stremio Premium"
+        case .introDB: "IntroDB"
+        case .skipDB: "SkipDB"
+        }
+    }
 }
 
 /// A language row and, once a language is chosen, a row for the one to fall back on. Choosing

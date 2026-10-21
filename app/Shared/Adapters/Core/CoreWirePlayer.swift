@@ -28,11 +28,50 @@ struct PlayerState: Decodable, Sendable {
     let nextStream: Stream?
     /// What was saved for the selected video, or carried over from an earlier one of the same title.
     let streamState: StreamItemState?
+    /// Stremio's skip times for the selected episode, which core asks for by itself for Stremio
+    /// Premium accounts.
+    let introOutro: IntroOutro?
 
     /// Whether core has `candidate`, playing from `source`, selected.
     func plays(_ candidate: StreamCandidate, from source: PlaybackSource) -> Bool {
         guard let selected else { return false }
         return selected.stream.source == .url(source.url.rawValue) && selected.subtitlesPath?.id == candidate.item.rawValue
+    }
+}
+
+/// core's `IntroOutro`, in milliseconds, fitted by core to the duration the player reported.
+struct IntroOutro: Decodable, Equatable, Sendable {
+    struct Intro: Decodable, Equatable, Sendable {
+        let from: UInt64
+        let to: UInt64
+        /// The intro's length on another cut, set when that cut's length differs from this stream's
+        /// and core scaled the times to it.
+        let duration: UInt64?
+    }
+
+    let intro: Intro?
+    /// Where the credits start.
+    let outro: UInt64?
+}
+
+extension PlayerState {
+    /// Stremio's skip times once core holds them for `item`, nil before. Core gives no confidence;
+    /// the player does not weigh it, so the segments carry 1.
+    func skipSegments(for item: PlayableID, within stream: ClosedRange<Duration>) -> SkipSegments? {
+        guard let introOutro, selected?.streamRequest?.path.id == item.rawValue else { return nil }
+        let intro = introOutro.intro.flatMap { intro in
+            // An intro scaled from another cut is a guess at this one's.
+            SkipSegment(
+                kind: .intro, start: .milliseconds(intro.from), end: .milliseconds(intro.to), within: stream,
+                fit: intro.duration == nil ? .matched : .unknown, confidence: 1
+            )
+        }
+        // Core keeps the credits as far from the end as on the cut they were taken on.
+        let outro = introOutro.outro.flatMap { start in
+            SkipSegment(kind: .outro, start: .milliseconds(start), end: stream.upperBound, within: stream, fit: .matched, confidence: 1)
+        }
+        let found = [intro, outro].compactMap(\.self).sorted { $0.range.lowerBound < $1.range.lowerBound }
+        return SkipSegments(item: item, segments: found, introLengthEstimate: nil)
     }
 }
 

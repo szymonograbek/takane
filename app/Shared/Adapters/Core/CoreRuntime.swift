@@ -165,6 +165,11 @@ final class CoreRuntime: Sendable {
         return stream
     }
 
+    /// Rereads `field` for its streams, for a transform that also reads something core does not hold.
+    func refresh(_ field: CoreField) {
+        notify([field])
+    }
+
     private func notify(_ fields: [CoreField]) {
         let affected = subscribers.withLock { subscribers in
             subscribers.values.filter { fields.contains($0.field) }

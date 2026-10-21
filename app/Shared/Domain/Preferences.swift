@@ -20,6 +20,8 @@ struct Preferences: Hashable, Sendable {
     /// Whether a title's unwatched episodes keep their still blurred and their overview hidden.
     var hidesSpoilers: Bool
     var upNext: UpNextBehavior
+    /// Kept on this device, not synced.
+    var skipSegmentSource: SkipSegmentSource
 }
 
 /// How the player leads from an episode into the next.
@@ -64,7 +66,7 @@ enum PreferencesError: Error, Equatable, Sendable {
     case rejected(reason: String)
 }
 
-/// The user's settings, synced with the account when signed in.
+/// The user's settings, synced with the account when signed in unless a setting says otherwise.
 protocol PreferencesService: Sendable {
     /// The preferences now, then after every change.
     func preferences() -> AsyncStream<Preferences>

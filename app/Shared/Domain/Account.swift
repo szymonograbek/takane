@@ -2,7 +2,12 @@ import Foundation
 
 enum Account: Hashable, Sendable {
     case anonymous
-    case signedIn(email: Redacted<String>)
+    case signedIn(email: Redacted<String>, hasPremium: Bool)
+
+    /// Whether the account has an active Stremio Premium subscription.
+    var hasPremium: Bool {
+        if case .signedIn(_, let hasPremium) = self { hasPremium } else { false }
+    }
 }
 
 /// An email address as typed: trimmed, with text on both sides of a single "@".

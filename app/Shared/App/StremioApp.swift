@@ -55,7 +55,7 @@ struct Services: Sendable {
     let engine: any PlaybackEngine
     /// The view `engine` renders video into.
     let videoSurface: @MainActor @Sendable () -> AnyView
-    let skipSegments: any SkipSegmentService
+    let skipSegments: @Sendable (SkipSegmentSource) -> any SkipSegmentService
     let subtitles: any SubtitleService
     let logSharing: any LogSharing
 
@@ -84,7 +84,13 @@ struct Services: Sendable {
             tracker: CorePlaybackTracker(runtime: core),
             engine: engine,
             videoSurface: { AnyView(engine.surface()) },
-            skipSegments: SkipDBSkipSegmentService(),
+            skipSegments: { source in
+                switch source {
+                case .stremio: CoreSkipSegmentService(runtime: core)
+                case .introDB: IntroDBSkipSegmentService()
+                case .skipDB: SkipDBSkipSegmentService()
+                }
+            },
             subtitles: CoreSubtitleService(runtime: core),
             logSharing: LocalLogServer()
         )

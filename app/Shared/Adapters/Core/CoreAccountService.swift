@@ -15,7 +15,7 @@ struct CoreAccountService: AccountService {
 
     func account() -> AsyncStream<Account> {
         runtime.observe(.ctx, as: CtxState.self) { ctx in
-            ctx.profile.auth.map { .signedIn(email: $0.user.email) } ?? .anonymous
+            ctx.profile.auth.map { .signedIn(email: $0.user.email, hasPremium: ctx.profile.hasPremium) } ?? .anonymous
         }
     }
 

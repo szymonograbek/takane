@@ -55,7 +55,7 @@ struct FeatureStoreTests {
         let store = FeatureStore<PlayerFeature>(
             .idle,
             dependencies: PlayerFeature.Dependencies(
-                engine: engine, tracker: tracker, skipSegments: NoSegments(), preferences: FixedPreferences(),
+                engine: engine, tracker: tracker, skipSegments: { _ in NoSegments() }, preferences: FixedPreferences(),
                 subtitles: OneSubtitleSource()
             ),
             start: [.listen]
@@ -120,7 +120,10 @@ private struct NoSegments: SkipSegmentService {
 private struct FixedPreferences: PreferencesService {
     func preferences() -> AsyncStream<Preferences> {
         let languages = TrackLanguages(audio: nil, subtitles: PreferredLanguages(primary: Language("pol").require(), fallback: nil))
-        return AsyncStream { $0.yield(Preferences(languages: languages, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false, upNext: .defaults)) }
+        let preferences = Preferences(
+            languages: languages, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false, upNext: .defaults, skipSegmentSource: .defaults
+        )
+        return AsyncStream { $0.yield(preferences) }
     }
 
     func update(_ preferences: Preferences) throws(PreferencesError) {}

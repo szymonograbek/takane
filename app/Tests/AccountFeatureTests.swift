@@ -50,14 +50,14 @@ struct AccountFeatureTests {
 
     @Test func signingInEndsTheFlow() {
         var state = AccountFeature.State(signIn: .linking(.loaded(code)))
-        _ = AccountFeature.reduce(&state, .accountChanged(.signedIn(email: Redacted("anna@example.com"))))
-        #expect(state == AccountFeature.State(account: .signedIn(email: Redacted("anna@example.com")), signIn: .idle))
+        _ = AccountFeature.reduce(&state, .accountChanged(.signedIn(email: Redacted("anna@example.com"), hasPremium: false)))
+        #expect(state == AccountFeature.State(account: .signedIn(email: Redacted("anna@example.com"), hasPremium: false), signIn: .idle))
     }
 
     @Test func signingOutNeedsAnAccount() {
         var state = AccountFeature.State()
         #expect(AccountFeature.reduce(&state, .signOut).isEmpty)
-        state.account = .signedIn(email: Redacted("anna@example.com"))
+        state.account = .signedIn(email: Redacted("anna@example.com"), hasPremium: false)
         #expect(AccountFeature.reduce(&state, .signOut) == [.signOut])
     }
 

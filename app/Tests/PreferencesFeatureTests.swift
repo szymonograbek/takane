@@ -11,7 +11,9 @@ struct PreferencesFeatureTests {
 
     private var loaded: PreferencesFeature.State {
         PreferencesFeature.State(
-            preferences: Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: .defaults)
+            preferences: Preferences(
+                languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: .defaults, skipSegmentSource: .introDB
+            )
         )
     }
 
@@ -22,6 +24,7 @@ struct PreferencesFeatureTests {
         #expect(PreferencesFeature.reduce(&state, .setSubtitleStyle(.defaults)).isEmpty)
         #expect(PreferencesFeature.reduce(&state, .setSeekStep(.thirty)).isEmpty)
         #expect(PreferencesFeature.reduce(&state, .setHidesSpoilers(true)).isEmpty)
+        #expect(PreferencesFeature.reduce(&state, .setSkipSegmentSource(.skipDB)).isEmpty)
     }
 
     @Test func choosingTheCurrentValueChangesNothing() {
@@ -31,6 +34,7 @@ struct PreferencesFeatureTests {
         #expect(PreferencesFeature.reduce(&state, .setSubtitleStyle(.defaults)).isEmpty)
         #expect(PreferencesFeature.reduce(&state, .setSeekStep(.ten)).isEmpty)
         #expect(PreferencesFeature.reduce(&state, .setHidesSpoilers(false)).isEmpty)
+        #expect(PreferencesFeature.reduce(&state, .setSkipSegmentSource(.introDB)).isEmpty)
     }
 
     @Test func eachEditSavesThePreferencesWithIt() {
@@ -45,7 +49,8 @@ struct PreferencesFeatureTests {
                 subtitleStyle: .defaults,
                 seekStep: .ten,
                 hidesSpoilers: false,
-                upNext: .defaults
+                upNext: .defaults,
+                skipSegmentSource: .introDB
             )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleLanguages(PreferredLanguages(primary: english, fallback: polish))) == [
@@ -54,30 +59,51 @@ struct PreferencesFeatureTests {
                 subtitleStyle: .defaults,
                 seekStep: .ten,
                 hidesSpoilers: false,
-                upNext: .defaults
+                upNext: .defaults,
+                skipSegmentSource: .introDB
             )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleLanguages(nil)) == [
             .update(Preferences(
-                languages: TrackLanguages(audio: nil, subtitles: nil), subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: .defaults
+                languages: TrackLanguages(audio: nil, subtitles: nil), subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: .defaults,
+                skipSegmentSource: .introDB
             )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSubtitleStyle(bold)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: bold, seekStep: .ten, hidesSpoilers: false, upNext: .defaults)),
+            .update(Preferences(
+                languages: englishSubtitles, subtitleStyle: bold, seekStep: .ten, hidesSpoilers: false, upNext: .defaults, skipSegmentSource: .introDB
+            )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setSeekStep(.thirty)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false, upNext: .defaults)),
+            .update(Preferences(
+                languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .thirty, hidesSpoilers: false, upNext: .defaults, skipSegmentSource: .introDB
+            )),
         ])
         #expect(PreferencesFeature.reduce(&state, .setHidesSpoilers(true)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: true, upNext: .defaults)),
+            .update(Preferences(
+                languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: true, upNext: .defaults, skipSegmentSource: .introDB
+            )),
         ])
         let off = UpNextBehavior(notice: .off, autoplay: true)
         #expect(PreferencesFeature.reduce(&state, .setUpNextNotice(.off)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: off)),
+            .update(Preferences(
+                languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: off, skipSegmentSource: .introDB
+            )),
         ])
         let manual = UpNextBehavior(notice: .thirtyFiveSeconds, autoplay: false)
         #expect(PreferencesFeature.reduce(&state, .setAutoplaysNext(false)) == [
-            .update(Preferences(languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: manual)),
+            .update(Preferences(
+                languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: manual, skipSegmentSource: .introDB
+            )),
+        ])
+    }
+
+    @Test func choosingASkipSegmentSourceSavesIt() {
+        var state = loaded
+        #expect(PreferencesFeature.reduce(&state, .setSkipSegmentSource(.skipDB)) == [
+            .update(Preferences(
+                languages: englishSubtitles, subtitleStyle: .defaults, seekStep: .ten, hidesSpoilers: false, upNext: .defaults, skipSegmentSource: .skipDB
+            )),
         ])
     }
 

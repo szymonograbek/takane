@@ -87,7 +87,8 @@ Takane has no server of its own and collects no analytics. It talks only to:
 
 - Stremio, to sign in and sync your library, progress and settings.
 - The add-ons you installed, for catalogs, titles, streams and subtitles.
-- [SkipDB](https://skipdb.tv), which receives the IMDb id of what you play (and the season and episode) to find intro and credits times.
+- [IntroDB](https://introdb.app), by default, or [SkipDB](https://skipdb.tv) if you pick it in Settings › Playback. Either receives the IMDb id of what you play (and the season and episode) to find intro and credits times.
+- With Stremio Premium, Stremio's own skip times are the default instead. For an episode, Stremio then receives the file's OpenSubtitles hash and a hash of the stream's name.
 
 Your account, add-ons and history stay with Stremio, the same as in Stremio's own apps.
 

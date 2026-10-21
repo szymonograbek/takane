@@ -156,6 +156,6 @@ private extension AccountFeature.State {
 
 extension Account {
     var email: Redacted<String>? {
-        if case .signedIn(let email) = self { email } else { nil }
+        if case .signedIn(let email, _) = self { email } else { nil }
     }
 }

@@ -19,6 +19,7 @@ enum PreferencesFeature: Feature {
         case setHidesSpoilers(Bool)
         case setUpNextNotice(UpNextNotice)
         case setAutoplaysNext(Bool)
+        case setSkipSegmentSource(SkipSegmentSource)
         case updateFailed(PreferencesError)
     }
 
@@ -48,6 +49,8 @@ enum PreferencesFeature: Feature {
             return change(state) { $0.upNext.notice = notice }
         case .setAutoplaysNext(let autoplay):
             return change(state) { $0.upNext.autoplay = autoplay }
+        case .setSkipSegmentSource(let source):
+            return change(state) { $0.skipSegmentSource = source }
         case .updateFailed(let error):
             state.failure = error
             return []

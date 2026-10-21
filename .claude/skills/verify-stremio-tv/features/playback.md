@@ -39,4 +39,4 @@ Preconditions:
 - The controls hide 5 s after the last press while playing, and arrows then skip one interval on the bare video instead. Each `$T focus` step reads a snapshot (about 1 s), so a long focus walk can outlast them. Pause first (select on `player.playPause`): the controls then stay up.
 - The session picks a subtitle track in the profile's language at load, so subtitles may already show before the panel is opened.
 - The player keeps the speed and tracks chosen for a title, so the next stream of it starts at that speed.
-- Skip Intro needs an episode with SkipDB data and is not covered here.
+- Skip Intro needs an episode with data in the source Settings › Playback › Skip Data names (Stremio Premium, IntroDB or SkipDB) and is not covered here.
