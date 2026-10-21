@@ -25,6 +25,9 @@ enum AddonsFeature: Feature {
 
     enum Event: Sendable {
         case installedChanged([InstalledAddon])
+        /// The install screen opened. It starts clean unless an install is still in flight, which
+        /// keeps reporting there.
+        case installOpened
         case install(ManifestURL)
         case installFinished(ManifestURL, Result<InstalledAddon, AddonError>)
         case uninstall(ManifestURL)
@@ -41,7 +44,7 @@ enum AddonsFeature: Feature {
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
         switch event {
         case .uninstall, .uninstallFinished: reduceRemoval(&state, event)
-        case .installedChanged, .install, .installFinished: reduceInstall(&state, event)
+        case .installedChanged, .installOpened, .install, .installFinished: reduceInstall(&state, event)
         }
     }
 
@@ -59,7 +62,7 @@ enum AddonsFeature: Feature {
             case .failure(let error): state.removal = .failed(manifest, error)
             }
             return []
-        case (_, .uninstallFinished), (_, .installedChanged), (_, .install), (_, .installFinished):
+        case (_, .uninstallFinished), (_, .installedChanged), (_, .installOpened), (_, .install), (_, .installFinished):
             return []
         }
     }
@@ -69,7 +72,10 @@ enum AddonsFeature: Feature {
         case (_, .installedChanged(let addons)):
             state.installed = addons
             return []
-        case (.installing, .install):
+        case (.installed, .installOpened), (.failed, .installOpened):
+            state.install = .idle
+            return []
+        case (.idle, .installOpened), (.installing, .installOpened), (.installing, .install):
             return []
         case (.idle, .install(let manifest)), (.installed, .install(let manifest)), (.failed, .install(let manifest)):
             state.install = .installing(manifest)
