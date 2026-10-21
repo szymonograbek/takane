@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0](https://github.com/szymonograbek/takane/compare/v1.2.0...v1.3.0) (2026-10-21)
+
+
+### Features
+
+* **aether:** mute playback with STREMIO_MUTE for smoke runs ([7001823](https://github.com/szymonograbek/takane/commit/70018232fb0e11456c58c8a36adb6f3bafa540db))
+* **aether:** mute playback with STREMIO_MUTE for smoke runs ([c6b3dec](https://github.com/szymonograbek/takane/commit/c6b3dec8c70d2c49e2d5d2f852d4df550438bbfa))
+
+
+### Bug Fixes
+
+* **features:** start install add-on screen without stale status ([1ffc275](https://github.com/szymonograbek/takane/commit/1ffc2759dcb27239ebe960330d25aa38b0b73bf4))
+* **features:** start install add-on screen without stale status ([0e88397](https://github.com/szymonograbek/takane/commit/0e88397ac315b31edc2485f10d91e75185ce715c))
+* **scripts:** fix verify harness and resync its feature map ([06314a9](https://github.com/szymonograbek/takane/commit/06314a90faeffa759077407f0f144b237d6c05f3))
+* **scripts:** fix verify harness and resync its feature map ([fa3814e](https://github.com/szymonograbek/takane/commit/fa3814e041e9d398b1bf47680baca882f14dc63b))
+* **ui:** focus an add-on's subtitle page once its rows are drawn ([458f9bd](https://github.com/szymonograbek/takane/commit/458f9bdc9d748ed9bdaf966bcc45931f536515c5))
+* **ui:** focus an add-on's subtitle page once its rows are drawn ([a73f92e](https://github.com/szymonograbek/takane/commit/a73f92e9cb8f5fe43afdbf1285440140050e7a5f))
+
 ## [1.2.0](https://github.com/szymonograbek/takane/compare/v1.1.3...v1.2.0) (2026-10-20)
 
 
