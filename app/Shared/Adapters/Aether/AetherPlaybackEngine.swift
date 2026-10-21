@@ -26,7 +26,8 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private var seeking: SeekEvent?
     private var observations: Set<AnyCancellable> = []
 
-    init() throws(PlaybackError) {
+    /// `muted` plays every stream silently, for automated runs.
+    init(muted: Bool) throws(PlaybackError) {
         // Lines arrive from the engine's own threads; `Log` queues its writes.
         EngineLog.handler = { @Sendable line in Log.player.debug(RedactedMask.engineLine(line)) }
         (events, continuation) = AsyncStream.makeStream(of: PlaybackEvent.self)
@@ -34,6 +35,11 @@ final class AetherPlaybackEngine: PlaybackEngine {
             player = try AetherEngine()
         } catch {
             throw .failed(reason: "\(error)")
+        }
+        if muted {
+            // The engine remembers it and applies it to every session it builds later.
+            player.volume = 0
+            Log.player.info("muted")
         }
         observe()
         Log.player.info("AetherEngine \(AetherEngine.version) ready")
