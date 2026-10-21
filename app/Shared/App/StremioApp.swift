@@ -59,6 +59,7 @@ struct Services: Sendable {
     let subtitles: any SubtitleService
     let logSharing: any LogSharing
 
+    /// `STREMIO_MUTE=1` (see `LaunchOptions`) mutes playback, so automated runs play silently.
     @MainActor
     static func live(storageDirectory: URL) async throws(StartupError) -> Services {
         let core: CoreRuntime
@@ -69,7 +70,7 @@ struct Services: Sendable {
         }
         let engine: AetherPlaybackEngine
         do {
-            engine = try AetherPlaybackEngine()
+            engine = try AetherPlaybackEngine(muted: LaunchOptions.current["STREMIO_MUTE"] == "1")
         } catch {
             throw .player(error)
         }

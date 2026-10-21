@@ -17,7 +17,8 @@
 #                                             board, search and details report none installed, then
 #                                             that installing Cinemeta fills the board
 # On tvOS it runs on the "Stremio Apple TV" simulator (created on first use) and also saves
-# a simulator screenshot taken while the stream is on screen.
+# a simulator screenshot taken while the stream is on screen. Playback is muted (STREMIO_MUTE=1),
+# so a run stays silent.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,6 +65,7 @@ if [[ "$platform" == macos ]]; then
     STREMIO_SMOKE_SUBTITLES_ADDON_URL="${STREMIO_SMOKE_SUBTITLES_ADDON_URL:-}" \
     STREMIO_SMOKE_ITEM="$item" \
     STREMIO_SMOKE_EXIT=1 \
+    STREMIO_MUTE=1 \
     STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
     EMPTY_OFFICIAL_ADDONS="$no_addons" \
     STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
@@ -89,6 +91,7 @@ SIMCTL_CHILD_STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
 SIMCTL_CHILD_STREMIO_SMOKE_SUBTITLES_ADDON_URL="${STREMIO_SMOKE_SUBTITLES_ADDON_URL:-}" \
 SIMCTL_CHILD_STREMIO_SMOKE_ITEM="$item" \
 SIMCTL_CHILD_STREMIO_SMOKE_EXIT=1 \
+SIMCTL_CHILD_STREMIO_MUTE=1 \
 SIMCTL_CHILD_STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
 SIMCTL_CHILD_EMPTY_OFFICIAL_ADDONS="$no_addons" \
 SIMCTL_CHILD_STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
