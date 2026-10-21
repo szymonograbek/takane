@@ -19,8 +19,10 @@ struct AddonSettings: View {
             SettingsSection(title: "Installed", note: note) {
                 ForEach(state.installed) { addon in
                     Toggle(isOn: Binding { addon.isEnabled } set: { app.addons.send(.setEnabled(addon.manifestURL, $0)) }) {
-                        Text(addon.name.rawValue)
-                        Text(addon.version)
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(addon.name.rawValue)
+                            Text(addon.version).foregroundStyle(.secondary)
+                        }
                     }
                     .accessibilityIdentifier("addons.row")
                     .contextMenu {
