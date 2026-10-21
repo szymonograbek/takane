@@ -102,8 +102,11 @@ struct PlayerControls: View {
         let targets = sections(for: page).flatMap(\.rows).enumerated().compactMap { index, row in
             row.focus(at: index).map { (focus: $0, isSelected: row.isSelected) }
         }
+        let target = (targets.first(where: \.isSelected) ?? targets.first)?.focus ?? page.button
         panel = page
-        focus.wrappedValue = (targets.first(where: \.isSelected) ?? targets.first)?.focus ?? page.button
+        // Once the page's rows are in place. Until then the page it replaces is drawn, whose rows
+        // share `.option` values with this one's, and whose focused row leaves with it.
+        Task { focus.wrappedValue = target }
         interacted()
     }
 
