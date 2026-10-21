@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/szymonograbek/takane/compare/v1.3.0...v1.4.0) (2026-10-21)
+
+
+### Features
+
+* **features:** choose the skip data source, defaulting to IntroDB ([#42](https://github.com/szymonograbek/takane/issues/42)) ([803d143](https://github.com/szymonograbek/takane/commit/803d143ae4f0bd8a29bcc306583c8a7680b24129))
+* **features:** switch add-ons off on this device only ([#44](https://github.com/szymonograbek/takane/issues/44)) ([44dfb5a](https://github.com/szymonograbek/takane/commit/44dfb5a14ace30f675a1e17c4e8cd8155a6fc9da))
+
 ## [1.3.0](https://github.com/szymonograbek/takane/compare/v1.2.0...v1.3.0) (2026-10-21)
 
 
