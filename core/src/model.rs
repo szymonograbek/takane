@@ -30,7 +30,7 @@ use stremio_core::types::api::LinkAuthKey;
 use stremio_core::types::events::DismissedEventsBucket;
 use stremio_core::types::library::LibraryBucket;
 use stremio_core::types::notifications::NotificationsBucket;
-use stremio_core::types::profile::Profile;
+use stremio_core::types::profile::{AuthKey, Profile};
 use stremio_core::types::resource::{MetaItem, MetaItemPreview, PosterShape, Video};
 use stremio_core::types::search_history::SearchHistoryBucket;
 use stremio_core::types::server_urls::ServerUrlsBucket;
@@ -287,6 +287,11 @@ impl AppModel {
         let installed = std::mem::replace(&mut self.ctx.profile.addons, enabled);
         self.models.update(msg, &self.ctx, only, changes);
         self.ctx.profile.addons = installed;
+    }
+
+    /// The signed-in account's API key, if any.
+    pub fn auth_key(&self) -> Option<&AuthKey> {
+        self.ctx.profile.auth_key()
     }
 
     pub fn state_json(&self, field: &AppModelField) -> serde_json::Result<Vec<u8>> {

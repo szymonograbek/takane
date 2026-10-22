@@ -10,6 +10,7 @@ mod fetch;
 mod host;
 mod logging;
 mod model;
+mod scrobble;
 mod storage;
 
 use std::path::PathBuf;
@@ -18,12 +19,13 @@ use std::sync::OnceLock;
 use futures::{future, StreamExt};
 use serde::Deserialize;
 use stremio_core::runtime::msg::Action;
-use stremio_core::runtime::{EnvError, Runtime, RuntimeAction};
+use stremio_core::runtime::{EnvError, Runtime, RuntimeAction, RuntimeEvent};
 
 use crate::env::AppleEnv;
 use crate::fetch::FetchOutcome;
 use crate::host::{SBBytes, SBHost, SBOwnedBytes};
 use crate::model::{AppModel, AppModelField, SetAddonEnabled};
+use crate::scrobble::Scrobble;
 
 static RUNTIME: OnceLock<Runtime<AppleEnv, AppModel>> = OnceLock::new();
 
@@ -59,6 +61,11 @@ fn initialize(host: SBHost, storage_directory: PathBuf) -> Result<(), String> {
         .map_err(|error: EnvError| error.message())?;
     let (runtime, events) = Runtime::<AppleEnv, AppModel>::new(model, effects.into_iter().collect(), 1000);
     executor::spawn_concurrent(events.for_each(|event| {
+        if let RuntimeEvent::CoreEvent(core_event) = &event {
+            if let Some(scrobble) = Scrobble::from_event(core_event) {
+                send_scrobble(scrobble);
+            }
+        }
         match serde_json::to_vec(&event) {
             Ok(json) => host::emit(&json),
             Err(error) => tracing::error!(%error, "runtime event failed to serialize"),
@@ -70,6 +77,21 @@ fn initialize(host: SBHost, storage_directory: PathBuf) -> Result<(), String> {
         .map_err(|_| "runtime was already initialized".to_owned())?;
     tracing::info!("stremio bridge ready");
     Ok(())
+}
+
+/// Sends `scrobble` for the signed-in account. The model lock is released before it is sent.
+fn send_scrobble(scrobble: Scrobble) {
+    let auth_key = runtime().and_then(|runtime| {
+        let model = runtime
+            .model()
+            .map_err(|error| format!("model lock poisoned: {error}"))?;
+        Ok(model.auth_key().cloned())
+    });
+    match auth_key {
+        Ok(Some(auth_key)) => scrobble.send(auth_key),
+        Ok(None) => tracing::debug!("scrobble skipped: signed out"),
+        Err(message) => tracing::warn!(%message, "scrobble skipped"),
+    }
 }
 
 fn runtime() -> Result<&'static Runtime<AppleEnv, AppModel>, String> {
