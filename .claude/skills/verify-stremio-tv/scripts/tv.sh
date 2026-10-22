@@ -7,6 +7,8 @@
 #   tv.sh sign-in                    from Welcome, sign in with STREMIO_TEST_EMAIL and STREMIO_TEST_PASSWORD
 #                                    (env or .env.smoke); launch --account runs it when the profile is signed out
 #   tv.sh doctor                     read-only health check of the current run
+#   tv.sh trakt-check                pass once Trakt shows a play or pause from this run (needs launch --account
+#                                    and Trakt linked on the account)
 #   tv.sh focus <id> <dir> [max]     press <dir> (up|down|left|right) until element <id> has focus
 #   tv.sh select                     press the remote's select button
 #   tv.sh type <id> <dir> <text>     focus <id> via <dir>, type <text>, confirm with the keyboard's done
@@ -97,8 +99,8 @@ launch)
     # Each run starts at Welcome, as on a first launch.
     xcrun simctl terminate "$udid" "$bundle_id" >/dev/null 2>&1 || true
     plutil -remove onboardingFinished "$data/Library/Preferences/$bundle_id.plist" >/dev/null 2>&1 || true
-    printf 'udid=%q\nrun_id=%q\naccount=%q\nstorage=%q\nrun_dir=%q\nlog=%q\n' \
-        "$udid" "$run_id" "$account" "$storage" "$run_dir" "$data/Library/Caches/Logs/app.log" > "$state"
+    printf 'udid=%q\nrun_id=%q\nstarted=%q\naccount=%q\nstorage=%q\nrun_dir=%q\nlog=%q\n' \
+        "$udid" "$run_id" "$(date +%s)" "$account" "$storage" "$run_dir" "$data/Library/Caches/Logs/app.log" > "$state"
     ad open "$bundle_id" --platform ios --target tv --udid "$udid" --relaunch \
         --launch-args -STREMIO_STORAGE_DIRECTORY --launch-args "$storage" \
         --launch-args -STREMIO_MUTE --launch-args 1 >/dev/null
@@ -147,6 +149,43 @@ sign-in)
     done
     echo "not signed in after 60 s; focused: $(query focused)" >&2
     exit 1
+    ;;
+trakt-check)
+    load_state
+    $account || { echo "trakt-check needs launch --account" >&2; exit 1; }
+    # The token on the Stremio account was issued to Stremio's Trakt app, so only its client id
+    # (public, in the redirect from strem.io/trakt/auth) works with it. Reads only.
+    python3 -I - "$storage/profile.json" "$started" <<'PY'
+import datetime, json, sys, time, urllib.request
+profile, started = sys.argv[1], int(sys.argv[2])
+trakt = json.load(open(profile))["auth"]["user"].get("trakt")
+if not trakt:
+    sys.exit("the account has no Trakt link")
+headers = {
+    "Authorization": "Bearer " + trakt["access_token"],
+    "trakt-api-version": "2",
+    "trakt-api-key": "0e861f52c7365efe6da5ea3e2e6641b8d25d87aca3133e8d4f7dc8487368d14b",
+    "User-Agent": "takane-verify",
+}
+def since_start(path, field):
+    request = urllib.request.Request("https://api.trakt.tv" + path, headers=headers)
+    with urllib.request.urlopen(request, timeout=20) as response:
+        items = json.load(response)
+    at = lambda item: datetime.datetime.fromisoformat(item[field].replace("Z", "+00:00")).timestamp()
+    return [item for item in items if at(item) >= started]
+for _ in range(10):
+    hits = since_start("/sync/playback?limit=10", "paused_at") + since_start("/sync/history?limit=10", "watched_at")
+    if hits:
+        for item in hits:
+            title = (item.get("show") or item.get("movie") or {}).get("title")
+            episode = item.get("episode") or {}
+            where = f" S{episode['season']}E{episode['number']}" if episode else ""
+            state = f"paused at {item['progress']:.1f}%" if "progress" in item else "watched"
+            print(f"trakt: {title}{where} {state}")
+        sys.exit(0)
+    time.sleep(3)
+sys.exit("Trakt shows nothing played since this run started")
+PY
     ;;
 focus)
     load_state
