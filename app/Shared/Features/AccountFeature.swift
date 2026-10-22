@@ -1,4 +1,4 @@
-/// The signed-in account, and signing in by code or by password.
+/// The signed-in account, signing in by code or by password, and linking Trakt.
 enum AccountFeature: Feature {
     struct Dependencies: Sendable {
         let account: any AccountService
@@ -8,6 +8,17 @@ enum AccountFeature: Feature {
     struct Attempt: Hashable, Sendable {
         let email: EmailAddress
         let number: Int
+    }
+
+    /// One wait for a Trakt link, so a late answer to an earlier wait is told apart.
+    struct TraktAttempt: Hashable, Sendable {
+        let number: Int
+    }
+
+    enum TraktLinking: Equatable, Sendable {
+        case idle
+        case waiting(TraktAttempt)
+        case failed(AccountError)
     }
 
     enum SignIn: Equatable, Sendable {
@@ -22,6 +33,8 @@ enum AccountFeature: Feature {
         var account = Account.anonymous
         var signIn = SignIn.idle
         var attempts = 0
+        var trakt = TraktLinking.idle
+        var traktAttempts = 0
     }
 
     enum Event: Sendable {
@@ -34,6 +47,11 @@ enum AccountFeature: Feature {
         /// Leaves sign-in, abandoning a code being waited on.
         case cancel
         case signOut
+        /// Waits for the account to be linked on another device, while the link is on screen.
+        case startTraktLink
+        case traktLinkFinished(TraktAttempt, Result<Void, AccountError>)
+        case stopTraktLink
+        case unlinkTrakt
     }
 
     enum Effect: Equatable, Sendable {
@@ -44,14 +62,87 @@ enum AccountFeature: Feature {
         case cancelLinkCode
         case signIn(Attempt, Password)
         case signOut
+        case awaitTraktLink(TraktAttempt)
+        /// Cancels `awaitTraktLink`, which shares its key.
+        case stopAwaitingTraktLink
+        case unlinkTrakt
+    }
+
+    private enum EffectKey { case traktLink }
+
+    static func key(_ effect: Effect) -> AnyHashable? {
+        switch effect {
+        case .awaitTraktLink, .stopAwaitingTraktLink: EffectKey.traktLink
+        case .observeAccount, .makeLinkCode, .awaitConfirmation, .cancelLinkCode, .signIn, .signOut, .unlinkTrakt: nil
+        }
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
+        switch event {
+        case .startTraktLink, .traktLinkFinished, .stopTraktLink, .unlinkTrakt:
+            return reduceTrakt(&state, event)
+        case .accountChanged, .startLinking, .linkCodeCreated, .linkFinished, .signIn, .signInFinished, .cancel, .signOut:
+            return reduceSignIn(&state, event)
+        }
+    }
+
+    private static func reduceTrakt(_ state: inout State, _ event: Event) -> [Effect] {
+        switch (state.trakt, event) {
+        case (.waiting, .startTraktLink):
+            return []
+        case (.idle, .startTraktLink), (.failed, .startTraktLink):
+            guard case .unlinked? = state.account.trakt else { return [] }
+            state.traktAttempts += 1
+            let attempt = TraktAttempt(number: state.traktAttempts)
+            state.trakt = .waiting(attempt)
+            return [.awaitTraktLink(attempt)]
+
+        case (.waiting(let pending), .traktLinkFinished(let attempt, let result)) where pending == attempt:
+            switch result {
+            case .success: state.trakt = .idle
+            case .failure(let error): state.trakt = .failed(error)
+            }
+            return []
+        case (_, .traktLinkFinished):
+            return []
+
+        case (.waiting, .stopTraktLink):
+            state.trakt = .idle
+            return [.stopAwaitingTraktLink]
+        case (.idle, .stopTraktLink), (.failed, .stopTraktLink):
+            state.trakt = .idle
+            return []
+
+        case (_, .unlinkTrakt):
+            guard state.account.trakt == .linked else { return [] }
+            return [.unlinkTrakt]
+
+        case (_, .accountChanged), (_, .startLinking), (_, .linkCodeCreated), (_, .linkFinished),
+             (_, .signIn), (_, .signInFinished), (_, .cancel), (_, .signOut):
+            return []
+        }
+    }
+
+    /// Signing in ends a sign-in in progress; signing out ends waiting for Trakt.
+    private static func accountChanged(_ state: inout State, _ account: Account) -> [Effect] {
+        state.account = account
+        switch (account, state.trakt) {
+        case (.signedIn, _):
+            state.signIn = .idle
+            return []
+        case (.anonymous, .waiting):
+            state.trakt = .idle
+            return [.stopAwaitingTraktLink]
+        case (.anonymous, .idle), (.anonymous, .failed):
+            state.trakt = .idle
+            return []
+        }
+    }
+
+    private static func reduceSignIn(_ state: inout State, _ event: Event) -> [Effect] {
         switch (state.signIn, event) {
         case (_, .accountChanged(let account)):
-            state.account = account
-            if case .signedIn = account { state.signIn = .idle }
-            return []
+            return accountChanged(&state, account)
 
         case (.signingIn, .startLinking):
             return []
@@ -108,6 +199,9 @@ enum AccountFeature: Feature {
         case (_, .signOut):
             guard case .signedIn = state.account else { return [] }
             return [.signOut]
+
+        case (_, .startTraktLink), (_, .traktLinkFinished), (_, .stopTraktLink), (_, .unlinkTrakt):
+            return []
         }
     }
 
@@ -143,6 +237,18 @@ enum AccountFeature: Feature {
             }
         case .signOut:
             service.signOut()
+        case .awaitTraktLink(let attempt):
+            do {
+                try await service.linkTrakt()
+                send(.traktLinkFinished(attempt, .success(())))
+            } catch {
+                send(.traktLinkFinished(attempt, .failure(error)))
+            }
+        case .stopAwaitingTraktLink:
+            // Starting it cancelled the wait, which shares its key.
+            break
+        case .unlinkTrakt:
+            service.unlinkTrakt()
         }
     }
 }
@@ -156,6 +262,6 @@ private extension AccountFeature.State {
 
 extension Account {
     var email: Redacted<String>? {
-        if case .signedIn(let email, _) = self { email } else { nil }
+        if case .signedIn(let email, _, _) = self { email } else { nil }
     }
 }

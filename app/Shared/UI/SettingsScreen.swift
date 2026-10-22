@@ -142,8 +142,14 @@ private struct AccountSettings: View {
                     NavigationLink("Sign In with Stremio") { SignInScreen() }
                         .accessibilityIdentifier("account.signIn")
                 }
-            case .signedIn(let email, _):
+            case .signedIn(let email, _, let trakt):
                 ValueRow(title: "Email", value: email.rawValue)
+                NavigationLink {
+                    TraktSettings()
+                } label: {
+                    LabeledContent("Trakt", value: trakt == .linked ? "Connected" : "Not Connected")
+                }
+                .accessibilityIdentifier("settings.trakt")
                 Button("Sign Out", role: .destructive) { confirmingSignOut = true }
                     .accessibilityIdentifier("account.signOut")
             }
@@ -152,6 +158,80 @@ private struct AccountSettings: View {
             Button("Sign Out") { app.account.send(.signOut) }
         } message: {
             Text("Add-ons and watch progress on this device go back to the defaults.")
+        }
+    }
+}
+
+/// Connecting Trakt by scanning a code with a phone, and disconnecting it. While the code is on
+/// screen the app waits for the account to be linked.
+private struct TraktSettings: View {
+    @Environment(AppContext.self) private var app
+    @State private var confirmingDisconnect = false
+
+    var body: some View {
+        let account = app.account
+        SettingsPage(title: "Trakt") {
+            switch (account.state.account.trakt, account.state.trakt) {
+            case (.linked, _):
+                SettingsSymbol(name: "checkmark.circle")
+            case (.unlinked, .failed(let error)):
+                ContentUnavailableView("Trakt Not Connected", systemImage: "exclamationmark.triangle", description: Text(Self.message(error)))
+            case (.unlinked(let authorization), .idle), (.unlinked(let authorization), .waiting):
+                AuthorizationCode(url: authorization.rawValue)
+            case (nil, _):
+                SettingsSymbol(name: "person.crop.circle.badge.questionmark")
+            }
+        } rows: {
+            switch (account.state.account.trakt, account.state.trakt) {
+            case (.linked, _):
+                ValueRow(title: "Status", value: "Connected")
+                Button("Disconnect", role: .destructive) { confirmingDisconnect = true }
+                    .accessibilityIdentifier("trakt.disconnect")
+            case (.unlinked, .failed):
+                Button("Try Again") { account.send(.startTraktLink) }
+                    .accessibilityIdentifier("trakt.retry")
+            case (.unlinked, .idle), (.unlinked, .waiting):
+                SettingsSection(note: "Scan with your phone to connect Trakt. What you watch here is then marked watched on Trakt.") {
+                    ValueRow(title: "Status", value: "Waiting for Trakt")
+                }
+            case (nil, _):
+                ValueRow(title: "Status", value: "Not Signed In")
+            }
+        }
+        .onAppear { account.send(.startTraktLink) }
+        .onDisappear { account.send(.stopTraktLink) }
+        // After disconnecting, the code shows again and is waited for like on arrival.
+        .onChange(of: account.state.account.trakt) { _, trakt in
+            if case .unlinked? = trakt { account.send(.startTraktLink) }
+        }
+        .confirmationDialog("Disconnect Trakt?", isPresented: $confirmingDisconnect) {
+            Button("Disconnect", role: .destructive) { account.send(.unlinkTrakt) }
+        } message: {
+            Text("What you watch here is no longer marked watched on Trakt.")
+        }
+    }
+
+    private static func message(_ error: AccountError) -> String {
+        switch error {
+        case .linkExpired: "Trakt was not connected in time."
+        case .rejected, .superseded, .unavailable: error.message
+        }
+    }
+}
+
+/// A QR code of the page that connects Trakt, with the site it opens below.
+private struct AuthorizationCode: View {
+    let url: URL
+
+    var body: some View {
+        VStack(spacing: Metrics.headerSpacing) {
+            QRCode(text: url.absoluteString)
+                .frame(width: Metrics.qrCodeSize, height: Metrics.qrCodeSize)
+                .accessibilityLabel("QR code to connect Trakt")
+                .accessibilityIdentifier("trakt.qr")
+            Text(url.host() ?? url.absoluteString)
+                .font(.headline)
+                .foregroundStyle(Palette.secondary)
         }
     }
 }

@@ -3,6 +3,9 @@ import os
 
 /// The Stremio account through core's profile and its `link` model.
 ///
+/// Trakt links the way stremio-web does: Stremio's site stores the authorization on the account,
+/// pulling the user shows it, and core adds the Trakt add-on when asked.
+///
 /// Core replaces the profile's add-ons with the account's and resets its settings when signing
 /// in. This adapter installs the add-ons added while signed out again and restores the settings,
 /// as `AccountService` promises.
@@ -15,7 +18,9 @@ struct CoreAccountService: AccountService {
 
     func account() -> AsyncStream<Account> {
         runtime.observe(.ctx, as: CtxState.self) { ctx in
-            ctx.profile.auth.map { .signedIn(email: $0.user.email, hasPremium: ctx.profile.hasPremium) } ?? .anonymous
+            ctx.profile.auth.map {
+                .signedIn(email: $0.user.email, hasPremium: ctx.profile.hasPremium, trakt: $0.user.traktLink)
+            } ?? .anonymous
         }
     }
 
@@ -73,6 +78,25 @@ struct CoreAccountService: AccountService {
         runtime.dispatchLogged(.ctx(.logout))
     }
 
+    func linkTrakt() async throws(AccountError) {
+        guard try traktLink() != .linked else { return }
+        let deadline = ContinuousClock.now + Self.linkLifetime
+        while ContinuousClock.now < deadline {
+            guard !Task.isCancelled else { throw .superseded }
+            try dispatch(.ctx(.pullUserFromAPI))
+            try? await Task.sleep(for: Self.linkPollInterval)
+            if try traktLink() == .linked {
+                runtime.dispatchLogged(.ctx(.installTraktAddon))
+                return
+            }
+        }
+        throw .linkExpired
+    }
+
+    func unlinkTrakt() {
+        runtime.dispatchLogged(.ctx(.logoutTrakt))
+    }
+
     /// Core syncs on its own only when signing in, and reports an error for each sync signed out.
     func sync() {
         guard (try? runtime.state(.ctx, as: CtxState.self).profile.auth) != nil else { return }
@@ -124,6 +148,17 @@ struct CoreAccountService: AccountService {
             runtime.dispatchLogged(.ctx(.installAddon(descriptor: addon.descriptor)))
         }
         runtime.dispatchLogged(.ctx(.updateSettings(before.settings)))
+    }
+
+    private func traktLink() throws(AccountError) -> TraktLink {
+        let auth: Profile.Auth?
+        do {
+            auth = try runtime.state(.ctx, as: CtxState.self).profile.auth
+        } catch {
+            throw .unavailable(reason: "\(error)")
+        }
+        guard let auth else { throw .unavailable(reason: "signed out") }
+        return auth.user.traktLink
     }
 
     private func linkState() throws(AccountError) -> LinkState {

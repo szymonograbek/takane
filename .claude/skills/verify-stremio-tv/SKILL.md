@@ -23,6 +23,8 @@ $T launch
 
 `launch` builds the tvOS simulator app (`scripts/build-app.sh tvos-sim`), boots or creates the "Stremio Apple TV" simulator (`scripts/tvos-simulator.sh`), installs, and opens the app through agent-device session `stremio-tv-verify`. It passes `-STREMIO_STORAGE_DIRECTORY <container>/tmp/verify-<run-id>`, so core starts on an empty profile (default add-ons only), and `-STREMIO_MUTE 1`, so playback is silent. Ready means Welcome shows and `doctor` passes. `launch` waits for Welcome, runs `doctor` itself and exits non-zero when not ready.
 
+For anything that needs a Stremio account (Trakt, sync), run `$T launch --account`. It keeps one profile, `Library/verify-account` in the simulator's app container, across runs and `cleanup`. When that profile is signed out, it signs in through the email screen (`$T sign-in`) with `STREMIO_TEST_EMAIL` and `STREMIO_TEST_PASSWORD` from the environment or `.env.smoke`. In a worktree without its own `.env.smoke`, it reads the main checkout's. Never print these or paste them into evidence. The profile holds the account's auth key, and the debug `app.log` does too.
+
 One run at a time: `launch` refuses while `build/verify/current.env` exists. Never drive a session you did not launch.
 
 First build after a clean checkout compiles the Rust bridge for three targets (a few minutes). The tvOS simulator runtime must be installed (`xcodebuild -downloadPlatform tvOS`).
@@ -84,6 +86,8 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
 | `player.upNext.play`, `player.upNext.dismiss` | the up next card's Play Now (Choose Stream when the next episode has no matching stream) and Cancel; the card shows near an episode's end while the controls are hidden, with Play Now focused |
 | `settings.account`, `settings.addons`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows |
+| `settings.trakt` | Trakt on Settings › Account when signed in; its value reads Connected or Not Connected |
+| `trakt.qr`, `trakt.retry`, `trakt.disconnect` | Settings › Account › Trakt: the QR code that connects Trakt (shown while not connected, the app polls the account every 3 s until it leaves the screen), Try Again after waiting failed, and Disconnect when connected (confirms first) |
 | `about.shareLogs` | Share Logs on Settings › About |
 | `shareLogs.screen`, `shareLogs.window`, `shareLogs.url`, `shareLogs.key`, `shareLogs.showKey`, `shareLogs.retry` | Share Logs: the screen, its time range button (`Last Hour` by default; opens Last 15 Minutes, Last Hour, Last 6 Hours, Last 24 Hours, Last 7 Days), the address to fetch the logs from, the log key (release builds only; its text is redaction glyphs until shown), the Show Log Key / Hide Log Key button beside it, and Try Again when sharing failed |
 | `playback.audioLanguage`, `playback.secondAudioLanguage`, `playback.seekStep`, `playback.skipSegmentSource`, `playback.upNextNotice`, `playback.autoplayNext`, `playback.hideSpoilers` | Settings › Playback rows; Second Language shows only when an audio language is set; Skip Interval opens a list of 5, 10, 15 and 30 seconds; Skip Data opens a list of IntroDB and SkipDB, with Stremio Premium first for a Premium account; Up Next Card opens a list of Off and 10, 20, 35 and 60 seconds before the end; Autoplay Next Episode and Hide Spoilers are toggles |

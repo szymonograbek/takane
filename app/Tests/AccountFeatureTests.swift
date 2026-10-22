@@ -50,15 +50,78 @@ struct AccountFeatureTests {
 
     @Test func signingInEndsTheFlow() {
         var state = AccountFeature.State(signIn: .linking(.loaded(code)))
-        _ = AccountFeature.reduce(&state, .accountChanged(.signedIn(email: Redacted("anna@example.com"), hasPremium: false)))
-        #expect(state == AccountFeature.State(account: .signedIn(email: Redacted("anna@example.com"), hasPremium: false), signIn: .idle))
+        _ = AccountFeature.reduce(&state, .accountChanged(.signedIn(email: Redacted("anna@example.com"), hasPremium: false, trakt: .linked)))
+        #expect(state == AccountFeature.State(account: .signedIn(email: Redacted("anna@example.com"), hasPremium: false, trakt: .linked), signIn: .idle))
     }
 
     @Test func signingOutNeedsAnAccount() {
         var state = AccountFeature.State()
         #expect(AccountFeature.reduce(&state, .signOut).isEmpty)
-        state.account = .signedIn(email: Redacted("anna@example.com"), hasPremium: false)
+        state.account = .signedIn(email: Redacted("anna@example.com"), hasPremium: false, trakt: .linked)
         #expect(AccountFeature.reduce(&state, .signOut) == [.signOut])
+    }
+
+    private func signedIn(trakt: TraktLink) -> Account {
+        .signedIn(email: Redacted("anna@example.com"), hasPremium: false, trakt: trakt)
+    }
+
+    private var unlinked: TraktLink { .unlinked(authorization: Redacted(URL(filePath: "/trakt/auth/user"))) }
+
+    @Test func linkingTraktWaitsForTheLink() {
+        var state = AccountFeature.State(account: signedIn(trakt: unlinked))
+        let first = AccountFeature.TraktAttempt(number: 1)
+        #expect(AccountFeature.reduce(&state, .startTraktLink) == [.awaitTraktLink(first)])
+        #expect(state.trakt == .waiting(first))
+        #expect(AccountFeature.reduce(&state, .startTraktLink).isEmpty)
+        _ = AccountFeature.reduce(&state, .traktLinkFinished(first, .success(())))
+        #expect(state.trakt == .idle)
+    }
+
+    @Test func linkingTraktNeedsAnUnlinkedAccount() {
+        var state = AccountFeature.State()
+        #expect(AccountFeature.reduce(&state, .startTraktLink).isEmpty)
+        state.account = signedIn(trakt: .linked)
+        #expect(AccountFeature.reduce(&state, .startTraktLink).isEmpty)
+        #expect(state.trakt == .idle)
+    }
+
+    @Test func aLateAnswerToAStoppedTraktLinkIsDropped() {
+        var state = AccountFeature.State(account: signedIn(trakt: unlinked))
+        _ = AccountFeature.reduce(&state, .startTraktLink)
+        #expect(AccountFeature.reduce(&state, .stopTraktLink) == [.stopAwaitingTraktLink])
+        #expect(state.trakt == .idle)
+        _ = AccountFeature.reduce(&state, .startTraktLink)
+        _ = AccountFeature.reduce(&state, .traktLinkFinished(AccountFeature.TraktAttempt(number: 1), .failure(.superseded)))
+        #expect(state.trakt == .waiting(AccountFeature.TraktAttempt(number: 2)))
+    }
+
+    @Test func aFailedTraktLinkIsShownUntilTriedAgain() {
+        var state = AccountFeature.State(account: signedIn(trakt: unlinked))
+        _ = AccountFeature.reduce(&state, .startTraktLink)
+        _ = AccountFeature.reduce(&state, .traktLinkFinished(AccountFeature.TraktAttempt(number: 1), .failure(.linkExpired)))
+        #expect(state.trakt == .failed(.linkExpired))
+        #expect(AccountFeature.reduce(&state, .startTraktLink) == [.awaitTraktLink(AccountFeature.TraktAttempt(number: 2))])
+    }
+
+    @Test func unlinkingTraktNeedsALink() {
+        var state = AccountFeature.State(account: signedIn(trakt: unlinked))
+        #expect(AccountFeature.reduce(&state, .unlinkTrakt).isEmpty)
+        state.account = signedIn(trakt: .linked)
+        #expect(AccountFeature.reduce(&state, .unlinkTrakt) == [.unlinkTrakt])
+    }
+
+    @Test func signingOutStopsWaitingForTrakt() {
+        var state = AccountFeature.State(account: signedIn(trakt: unlinked))
+        _ = AccountFeature.reduce(&state, .startTraktLink)
+        #expect(AccountFeature.reduce(&state, .accountChanged(.anonymous)) == [.stopAwaitingTraktLink])
+        #expect(state.trakt == .idle)
+    }
+
+    @Test func waitingAndStoppingTraktShareAKey() {
+        let wait = AccountFeature.key(.awaitTraktLink(AccountFeature.TraktAttempt(number: 1)))
+        #expect(wait != nil)
+        #expect(wait == AccountFeature.key(.stopAwaitingTraktLink))
+        #expect(wait == AccountFeature.key(.awaitTraktLink(AccountFeature.TraktAttempt(number: 2))))
     }
 
     @Test func emailAndPasswordParseAtTheBoundary() {

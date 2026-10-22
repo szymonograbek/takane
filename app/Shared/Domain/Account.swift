@@ -2,12 +2,24 @@ import Foundation
 
 enum Account: Hashable, Sendable {
     case anonymous
-    case signedIn(email: Redacted<String>, hasPremium: Bool)
+    case signedIn(email: Redacted<String>, hasPremium: Bool, trakt: TraktLink)
 
     /// Whether the account has an active Stremio Premium subscription.
     var hasPremium: Bool {
-        if case .signedIn(_, let hasPremium) = self { hasPremium } else { false }
+        if case .signedIn(_, let hasPremium, _) = self { hasPremium } else { false }
     }
+
+    /// Nil when signed out.
+    var trakt: TraktLink? {
+        if case .signedIn(_, _, let trakt) = self { trakt } else { nil }
+    }
+}
+
+/// Whether the account scrobbles what plays here to Trakt.
+enum TraktLink: Hashable, Sendable {
+    case linked
+    /// Never linked, or the authorization expired. Opening `authorization` on another device links it.
+    case unlinked(authorization: Redacted<URL>)
 }
 
 /// An email address as typed: trimmed, with text on both sides of a single "@".
@@ -48,9 +60,9 @@ struct LinkCode: Hashable, Sendable {
 enum AccountError: Error, Equatable, Sendable {
     /// The provider refused the credentials or the code, with its explanation.
     case rejected(message: String)
-    /// Nobody confirmed the code in time.
+    /// Nobody confirmed the code, or linked Trakt, in time.
     case linkExpired
-    /// A newer code or `cancelLinkCode()` replaced the code being waited on.
+    /// Waiting for a code or a Trakt link stopped: a newer one replaced it, or it was cancelled.
     case superseded
     case unavailable(reason: String)
 }
@@ -75,6 +87,14 @@ protocol AccountService: Sendable {
     func signIn(email: EmailAddress, password: Password) async throws(AccountError)
 
     func signOut()
+
+    /// Waits until the account is linked to Trakt, pulling it from the server every few seconds,
+    /// then adds the Trakt add-on. Returns at once, adding nothing, when it is linked already.
+    /// Throws `.linkExpired` when nobody links it in time and `.superseded` when cancelled.
+    func linkTrakt() async throws(AccountError)
+
+    /// Unlinks Trakt from the account and removes the Trakt add-on.
+    func unlinkTrakt()
 
     /// Pulls what changed on the account from other devices (add-ons, library, watch progress) and
     /// pushes what this device has not uploaded yet. Signed out, it does nothing.

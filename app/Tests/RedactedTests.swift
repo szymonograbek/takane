@@ -57,7 +57,8 @@ struct RedactedTests {
     /// Tests build in Debug, which reveals values wherever they are interpolated, nested ones included.
     @Test func debugBuildsRevealValuesInLogText() {
         #expect("\(Fixture.manifest)" == "https://addon.example/manifest.json")
-        #expect("\(Account.signedIn(email: Redacted("anna@example.com"), hasPremium: false))" == "signedIn(email: anna@example.com, hasPremium: false)")
+        let account = Account.signedIn(email: Redacted("anna@example.com"), hasPremium: false, trakt: .linked)
+        #expect("\(account)" == "signedIn(email: anna@example.com, hasPremium: false, trakt: StremioTVTests.TraktLink.linked)")
         #expect("\(LinkCode(code: Redacted("K7Q2"), link: Redacted(URL(filePath: "/link"))))" == "LinkCode(code: K7Q2, link: file:///link)")
     }
 }
