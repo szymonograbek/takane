@@ -23,6 +23,8 @@ $T launch
 
 `launch` builds the tvOS simulator app (`scripts/build-app.sh tvos-sim`), boots or creates the "Stremio Apple TV" simulator (`scripts/tvos-simulator.sh`), installs, and opens the app through agent-device session `stremio-tv-verify`. It passes `-STREMIO_STORAGE_DIRECTORY <container>/tmp/verify-<run-id>`, so core starts on an empty profile (default add-ons only), and `-STREMIO_MUTE 1`, so playback is silent. Ready means Welcome shows and `doctor` passes. `launch` waits for Welcome, runs `doctor` itself and exits non-zero when not ready.
 
+For anything that needs a Stremio account (Trakt, sync), run `$T launch --account`. It keeps one profile, `Library/verify-account` in the simulator's app container, across runs and `cleanup`. When that profile is signed out, it signs in through the email screen (`$T sign-in`) with `STREMIO_TEST_EMAIL` and `STREMIO_TEST_PASSWORD` from the environment or `.env.smoke`. In a worktree without its own `.env.smoke`, it reads the main checkout's. Never print these or paste them into evidence. The profile holds the account's auth key, and the debug `app.log` does too.
+
 One run at a time: `launch` refuses while `build/verify/current.env` exists. Never drive a session you did not launch.
 
 First build after a clean checkout compiles the Rust bridge for three targets (a few minutes). The tvOS simulator runtime must be installed (`xcodebuild -downloadPlatform tvOS`).

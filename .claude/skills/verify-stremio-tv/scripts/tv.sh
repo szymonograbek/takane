@@ -2,7 +2,10 @@
 # Drives the tvOS app in the "Stremio Apple TV" simulator through agent-device, with a
 # throwaway core profile per run. Evidence goes to build/verify/<run-id>/ and survives cleanup.
 #
-#   tv.sh launch                     build, install, open with a fresh profile at Welcome, wait until ready
+#   tv.sh launch [--account]         build, install, open with a fresh profile at Welcome, wait until ready;
+#                                    --account keeps one profile across runs, so a sign-in survives
+#   tv.sh sign-in                    from Welcome, sign in with STREMIO_TEST_EMAIL and STREMIO_TEST_PASSWORD
+#                                    (env or .env.smoke); launch --account runs it when the profile is signed out
 #   tv.sh doctor                     read-only health check of the current run
 #   tv.sh focus <id> <dir> [max]     press <dir> (up|down|left|right) until element <id> has focus
 #   tv.sh select                     press the remote's select button
@@ -20,6 +23,9 @@ root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 bundle_id=com.ograbek.stremio-tv
 state="$root/build/verify/current.env"
 session=stremio-tv-verify
+# Secrets live in the main checkout's .env.smoke; a worktree may keep its own.
+env_file="$root/.env.smoke"
+[[ -f "$env_file" ]] || env_file="$(cd "$(git -C "$root" rev-parse --git-common-dir)/.." && pwd)/.env.smoke"
 
 load_state() {
     [[ -f "$state" ]] || { echo "no active run; run: tv.sh launch" >&2; exit 1; }
@@ -77,19 +83,22 @@ elif mode == "foreground":
 case "${1:-}" in
 launch)
     [[ ! -f "$state" ]] || { echo "a run is active ($state); run: tv.sh cleanup" >&2; exit 1; }
+    account=false
+    [[ "${2:-}" == --account ]] && account=true
     "$root/scripts/build-app.sh" tvos-sim >/dev/null
     udid="$("$root/scripts/tvos-simulator.sh")"
     xcrun simctl install "$udid" "$root/build/DerivedData/Build/Products/Debug-appletvsimulator/StremioTV.app"
     run_id="$(date +%Y%m%d-%H%M%S)"
     data="$(xcrun simctl get_app_container "$udid" "$bundle_id" data)"
-    storage="$data/tmp/verify-$run_id"
+    # The account profile holds a Stremio auth key. It stays in the simulator, outside tmp.
+    if $account; then storage="$data/Library/verify-account"; else storage="$data/tmp/verify-$run_id"; fi
     run_dir="$root/build/verify/$run_id"
     mkdir -p "$run_dir"
     # Each run starts at Welcome, as on a first launch.
     xcrun simctl terminate "$udid" "$bundle_id" >/dev/null 2>&1 || true
     plutil -remove onboardingFinished "$data/Library/Preferences/$bundle_id.plist" >/dev/null 2>&1 || true
-    printf 'udid=%q\nrun_id=%q\nstorage=%q\nrun_dir=%q\nlog=%q\n' \
-        "$udid" "$run_id" "$storage" "$run_dir" "$data/Library/Caches/Logs/app.log" > "$state"
+    printf 'udid=%q\nrun_id=%q\naccount=%q\nstorage=%q\nrun_dir=%q\nlog=%q\n' \
+        "$udid" "$run_id" "$account" "$storage" "$run_dir" "$data/Library/Caches/Logs/app.log" > "$state"
     ad open "$bundle_id" --platform ios --target tv --udid "$udid" --relaunch \
         --launch-args -STREMIO_STORAGE_DIRECTORY --launch-args "$storage" \
         --launch-args -STREMIO_MUTE --launch-args 1 >/dev/null
@@ -98,6 +107,7 @@ launch)
         sleep 0.3
     done
     query ready || { echo "neither Welcome nor Home appeared" >&2; exit 1; }
+    if $account && ! query text home.screen >/dev/null; then "$0" sign-in; fi
     "$0" doctor
     ;;
 doctor)
@@ -106,9 +116,37 @@ doctor)
     xcrun simctl list devices booted | grep -q "$udid" && echo "simulator booted: $udid" || { echo "simulator NOT booted"; ok=false; }
     query foreground && echo "app foreground" || { echo "app NOT foreground, or its tree is unreadable"; ok=false; }
     # Storage paths are partly masked in the log, so match on the run id.
-    grep -q "starting bridge, storage at .*verify-$run_id" "$log" && echo "profile: fresh (verify-$run_id)" || { echo "app is NOT using this run's profile"; ok=false; }
+    profile="$(basename "$storage")"
+    grep -q "starting bridge, storage at .*$profile" "$log" && echo "profile: $profile" || { echo "app is NOT using this run's profile"; ok=false; }
     echo "evidence dir: $run_dir"
     $ok
+    ;;
+sign-in)
+    load_state
+    "$0" focus welcome.signIn down >/dev/null
+    ad tv-remote press select >/dev/null
+    "$0" focus signIn.password down >/dev/null
+    ad tv-remote press select >/dev/null
+    for _ in $(seq 1 20); do query text signIn.email >/dev/null && break; sleep 0.5; done
+    "$0" type-env signIn.email up STREMIO_TEST_EMAIL >/dev/null
+    # Done on the email keyboard opens the password keyboard: type there, then press its done.
+    [[ -n "${STREMIO_TEST_PASSWORD:-}" || ! -f "$env_file" ]] || source "$env_file"
+    for _ in $(seq 1 20); do [[ "$(query focused)" == "done" ]] && break; sleep 0.5; done
+    ad type "${STREMIO_TEST_PASSWORD:?env var STREMIO_TEST_PASSWORD is empty}" >/dev/null
+    for _ in $(seq 1 6); do
+        [[ "$(query focused)" == "done" ]] && break
+        ad tv-remote press down >/dev/null
+    done
+    ad tv-remote press select >/dev/null
+    "$0" focus signIn.submit down >/dev/null
+    ad tv-remote press select >/dev/null
+    for _ in $(seq 1 120); do
+        query text home.screen >/dev/null && { echo "signed in"; exit 0; }
+        error="$(query text signIn.error)" && { echo "sign-in failed: $error" >&2; exit 1; }
+        sleep 0.5
+    done
+    echo "not signed in after 60 s; focused: $(query focused)" >&2
+    exit 1
     ;;
 focus)
     load_state
@@ -128,7 +166,7 @@ type|type-env)
     load_state
     target="$2" direction="$3"
     if [[ "$1" == type-env ]]; then
-        [[ -n "${!4:-}" || ! -f "$root/.env.smoke" ]] || source "$root/.env.smoke"
+        [[ -n "${!4:-}" || ! -f "$env_file" ]] || source "$env_file"
         text="${!4:?env var $4 is empty}"
     else
         text="$4"
@@ -184,7 +222,7 @@ cleanup)
     [[ -f "$log" ]] && cp "$log" "$run_dir/app.log"
     agent-device close "$bundle_id" --session "$session" >/dev/null 2>&1 || true
     xcrun simctl terminate "$udid" "$bundle_id" >/dev/null 2>&1 || true
-    rm -rf "$storage"
+    $account || rm -rf "$storage"
     rm -f "$state"
     echo "cleaned up; evidence kept in $run_dir"
     ;;
