@@ -172,6 +172,7 @@ private struct PlayButtons: View {
             if let details {
                 Button { setInLibrary(!details.isInLibrary) } label: {
                     Label(details.isInLibrary ? "In Library" : "Add to Library", systemImage: details.isInLibrary ? "checkmark" : "plus")
+                        .contentTransition(.symbolEffect(.replace.downUp))
                 }
                 .accessibilityIdentifier("details.library")
                 if details.rating != .unavailable {
@@ -197,6 +198,8 @@ private struct PlayButtons: View {
         return Button { rate(isSelected ? nil : rating) } label: {
             Label(title, systemImage: isSelected ? "\(symbol).fill" : symbol)
                 .labelStyle(.iconOnly)
+                .contentTransition(.symbolEffect(.replace.magic(fallback: .downUp)))
+                .symbolEffect(.bounce.up, value: isSelected)
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier(id)

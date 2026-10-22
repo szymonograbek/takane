@@ -54,6 +54,17 @@ private extension Color {
     }
 }
 
+/// How surfaces move when they appear over content.
+enum Motion {
+    /// A strong ease-out: quick to answer, gentle to settle.
+    static let appear = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
+
+    /// Fades in while growing from `anchor`, the point it opens from. Under Reduce Motion it only fades.
+    static func surface(from anchor: UnitPoint, reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96, anchor: anchor))
+    }
+}
+
 /// Sizes that differ between the 10-foot tvOS screen and a macOS window.
 enum Metrics {
     #if os(tvOS)
