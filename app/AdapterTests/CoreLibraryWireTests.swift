@@ -41,6 +41,15 @@ struct CoreLibraryWireTests {
         """#))
     }
 
+    @Test func ratingActionsHaveTheShapesCoreParses() throws {
+        #expect(try encoded(.metaDetails(.rate(.liked)), to: .metaDetails) == json(#"""
+        {"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"Rate","args":"liked"}}}
+        """#))
+        #expect(try encoded(.metaDetails(.rate(nil)), to: .metaDetails) == json(#"""
+        {"field":"meta_details","action":{"action":"MetaDetails","args":{"action":"Rate","args":null}}}
+        """#))
+    }
+
     @Test func libraryStateReadsTypesPagesAndMembership() throws {
         let state = try JSONDecoder().decode(LibraryState.self, from: Data(#"""
         {

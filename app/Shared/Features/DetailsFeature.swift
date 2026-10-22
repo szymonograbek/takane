@@ -1,5 +1,5 @@
-/// One title's page: its metadata and videos, loaded from the add-ons, the watched marks on them and
-/// whether the title is in the library.
+/// One title's page: its metadata and videos, loaded from the add-ons, the watched marks on them,
+/// whether the title is in the library and the viewer's rating of it.
 enum DetailsFeature: Feature {
     struct Dependencies: Sendable {
         let catalog: any CatalogService
@@ -20,6 +20,8 @@ enum DetailsFeature: Feature {
         case retry
         case setWatched(WatchedTarget, Bool)
         case setInLibrary(Bool)
+        /// Nil clears the rating.
+        case rate(TitleRating?)
     }
 
     enum Effect: Equatable, Sendable {
@@ -27,6 +29,7 @@ enum DetailsFeature: Feature {
         case load(MetaPreview)
         case setWatched(WatchedTarget, Bool)
         case setInLibrary(MetaPreview, Bool)
+        case rate(MediaID, TitleRating?)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -47,8 +50,10 @@ enum DetailsFeature: Feature {
             return [.setWatched(target, isWatched)]
         case (.loaded(let details), .setInLibrary(let isInLibrary)):
             return [.setInLibrary(details.preview, isInLibrary)]
+        case (.loaded(let details), .rate(let rating)) where details.rating != .unavailable:
+            return [.rate(details.preview.media, rating)]
         case (_, .loaded), (_, .changed), (.loading, .retry), (.loaded, .retry), (_, .setWatched),
-             (.loading, .setInLibrary), (.failed, .setInLibrary):
+             (.loading, .setInLibrary), (.failed, .setInLibrary), (_, .rate):
             return []
         }
     }
@@ -75,6 +80,12 @@ enum DetailsFeature: Feature {
             }
         case .setInLibrary(let title, let isInLibrary):
             dependencies.library.setInLibrary(title, isInLibrary)
+        case .rate(let media, let rating):
+            do {
+                try dependencies.library.rate(media, rating)
+            } catch {
+                Log.features.error("rating \(media) as \(String(describing: rating)) failed: \(error)")
+            }
         }
     }
 }

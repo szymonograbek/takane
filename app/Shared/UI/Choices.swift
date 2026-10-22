@@ -188,13 +188,53 @@ struct ChoiceRowButtonStyle: ButtonStyle {
                 .padding(.horizontal, Metrics.rowPadding)
                 .padding(.vertical, Metrics.rowVerticalPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .foregroundStyle(isFocused ? Palette.canvas : Palette.text)
-                .background(isFocused ? Palette.text : .clear, in: .capsule)
-                .scaleEffect(isFocused && !configuration.isPressed ? 1.04 : 1)
-                .shadow(color: .black.opacity(isFocused ? 0.35 : 0), radius: 12, y: 6)
-                .animation(.easeOut(duration: 0.15), value: isFocused)
-                .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+                .focusPlatter(isFocused: isFocused, isPressed: configuration.isPressed)
         }
+    }
+}
+
+/// A segment of a `SegmentedButtons` group, drawn like a `ChoiceRowButtonStyle` row around its
+/// label alone.
+struct SegmentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Segment(configuration: configuration)
+    }
+
+    private struct Segment: View {
+        @Environment(\.isFocused) private var isFocused
+        let configuration: Configuration
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, Metrics.rowPadding)
+                .frame(maxHeight: .infinity)
+                .focusPlatter(isFocused: isFocused, isPressed: configuration.isPressed)
+        }
+    }
+}
+
+/// Buttons sharing one capsule, for actions that exclude each other. Each is a separate button, not
+/// a segmented `Picker`, which on tvOS selects whatever segment focus crosses. The capsule is as
+/// tall as its row, so the row fixes its height to its tallest button.
+struct SegmentedButtons<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 0, content: content)
+            .buttonStyle(SegmentButtonStyle())
+            .background(.fill.quaternary, in: .capsule)
+    }
+}
+
+private extension View {
+    /// Flat at rest; under focus a light platter that lifts, as system list rows do.
+    func focusPlatter(isFocused: Bool, isPressed: Bool) -> some View {
+        foregroundStyle(isFocused ? Palette.canvas : Palette.text)
+            .background(isFocused ? Palette.text : .clear, in: .capsule)
+            .scaleEffect(isFocused && !isPressed ? 1.04 : 1)
+            .shadow(color: .black.opacity(isFocused ? 0.35 : 0), radius: 12, y: 6)
+            .animation(.easeOut(duration: 0.15), value: isFocused)
+            .animation(.easeOut(duration: 0.1), value: isPressed)
     }
 }
 

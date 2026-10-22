@@ -165,6 +165,25 @@ struct TitleDetails: Equatable, Sendable {
     let isWatched: Bool
     /// The user added the title to their library and has not removed it.
     let isInLibrary: Bool
+    let rating: RatingStatus
+}
+
+/// The viewer's like or love of a title.
+enum TitleRating: Hashable, Sendable {
+    case liked
+    case loved
+}
+
+/// Where the viewer's rating of a title stands.
+enum RatingStatus: Equatable, Sendable {
+    /// The viewer is signed out, or the provider does not rate this title.
+    case unavailable
+    /// Asking for the rating or sending a new one.
+    case loading
+    /// Nil when the viewer gave no rating.
+    case rated(TitleRating?)
+    /// The provider did not answer. Rating again retries.
+    case failed
 }
 
 enum DetailsError: Error, Equatable, Sendable {

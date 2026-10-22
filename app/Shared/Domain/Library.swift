@@ -93,6 +93,10 @@ protocol LibraryService: Sendable {
     /// progress, which takes it out of continue watching.
     func setWatched(_ target: WatchedTarget, _ isWatched: Bool) throws(WatchedError)
 
+    /// Rates `media` from its loaded details, or clears its rating when `rating` is nil. Details
+    /// report the change.
+    func rate(_ media: MediaID, _ rating: TitleRating?) throws(RatingError)
+
     /// Looks for episodes of the library's shows that came out since each was last watched. Those
     /// shows join continue watching.
     func checkForNewEpisodes()
@@ -121,5 +125,12 @@ enum WatchedError: Error, Equatable, Sendable {
     /// The loaded details list no such video or season.
     case notFound
     /// The provider refused the mark.
+    case unavailable(reason: String)
+}
+
+enum RatingError: Error, Equatable, Sendable {
+    /// The provider holds another title's details, which titles are rated through.
+    case titleNotLoaded
+    /// The provider refused the rating.
     case unavailable(reason: String)
 }

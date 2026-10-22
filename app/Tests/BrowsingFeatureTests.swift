@@ -53,6 +53,28 @@ struct BrowsingFeatureTests {
         #expect(DetailsFeature.reduce(&state, .setInLibrary(false)) == [.setInLibrary(loaded.preview, false)])
     }
 
+    @Test func ratingIsSentOnlyForALoadedTitleTheProviderRates() {
+        let movie = Fixture.preview("tt0111161")
+        var state = DetailsFeature.State.loading(movie)
+        #expect(DetailsFeature.reduce(&state, .rate(.liked)).isEmpty)
+        _ = DetailsFeature.reduce(&state, .loaded(movie.media, .success(Fixture.details(movie))))
+
+        #expect(DetailsFeature.reduce(&state, .rate(.liked)) == [.rate(movie.media, .liked)])
+        _ = DetailsFeature.reduce(&state, .changed(Fixture.details(movie, rating: .rated(.liked))))
+        #expect(DetailsFeature.reduce(&state, .rate(nil)) == [.rate(movie.media, nil)])
+        _ = DetailsFeature.reduce(&state, .changed(Fixture.details(movie, rating: .failed)))
+        #expect(DetailsFeature.reduce(&state, .rate(.loved)) == [.rate(movie.media, .loved)])
+
+        _ = DetailsFeature.reduce(&state, .changed(Fixture.details(movie, rating: .unavailable)))
+        #expect(DetailsFeature.reduce(&state, .rate(.liked)).isEmpty)
+    }
+
+    @Test func ratingIsIgnoredWhenTheTitleFailedToLoad() {
+        let movie = Fixture.preview("tt0111161")
+        var state = DetailsFeature.State.failed(movie, .notFound)
+        #expect(DetailsFeature.reduce(&state, .rate(.liked)).isEmpty)
+    }
+
     @Test func seasonsListSpecialsLastAndPlayStartsAtTheFirstEpisode() {
         let videos = ["tt1:0:1", "tt1:2:1", "tt1:1:2", "tt1:1:1"].map { id in
             let playable = PlayableID(id).require()

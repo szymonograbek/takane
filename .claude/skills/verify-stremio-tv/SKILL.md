@@ -72,6 +72,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `calendar.screen` | the Calendar tab: one row per day of upcoming episodes, titled "Today", "Tomorrow", "In 3 days (Friday)", or its empty or error state |
 | `upcoming.<video id>` | each upcoming episode card, such as `upcoming.tt0364845:24:3`; selecting it opens the show's details |
 | `details.library` | Add to Library, or In Library once added; selecting it toggles |
+| `details.like`, `details.love` | icon-only Like (thumbs up) and Love (heart) after the library button, shown only when signed in and the title is ratable; the selected one is filled and has the Selected trait. Selecting it clears the rating; selecting the other switches |
 | `details.resume`, `details.play`, `episode.<id>` | Details actions; focus lands on Resume, else Play, on open and when the details load |
 | `details.description`, `details.descriptionDone` | the description, cut to four lines; selecting it opens the full text, which Done or Back closes |
 | `details.back` | Go Back on a series whose add-ons list no episodes |
