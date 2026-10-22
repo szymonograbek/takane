@@ -104,15 +104,32 @@ extension View {
     /// the button, because the tvOS focus engine does not move between rows that overflow their frame.
     func choiceMenus() -> some View {
         overlayPreferenceValue(ChoicePopupKey.self, alignment: .topLeading) { popup in
+            ChoicePopupLayer(popup: popup)
+        }
+    }
+}
+
+/// Lays out the open choices below their button, growing from it as they open.
+private struct ChoicePopupLayer: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let popup: ChoicePopup?
+
+    var body: some View {
+        GeometryReader { proxy in
             if let popup {
-                GeometryReader { proxy in
-                    let button = proxy[popup.button]
-                    popup.list
-                        .padding(.leading, button.minX)
-                        .padding(.top, button.maxY + Metrics.headerSpacing)
-                }
+                let button = proxy[popup.button]
+                let top = button.maxY + Metrics.headerSpacing
+                popup.list
+                    .padding(.leading, button.minX)
+                    .padding(.top, top)
+                    // The anchor is in this layer's bounds, which the padding makes the list's too.
+                    .transition(Motion.surface(
+                        from: UnitPoint(x: button.minX / proxy.size.width, y: top / proxy.size.height),
+                        reduceMotion: reduceMotion
+                    ))
             }
         }
+        .animation(Motion.appear, value: popup == nil)
     }
 }
 

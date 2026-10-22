@@ -3,6 +3,7 @@ import SwiftUI
 /// The transport bar: title, progress, and buttons for skipping, pausing and choosing tracks and speed.
 struct PlayerControls: View {
     @Environment(AppContext.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let session: PlayerFeature.Session
     let state: PlayerFeature.State
     var focus: FocusState<PlayerFocus?>.Binding
@@ -54,8 +55,11 @@ struct PlayerControls: View {
                     OptionsPanel(sections: sections(for: panel), focus: focus, choose: choose, open: open)
                         .padding(.bottom, 24)
                         .frame(height: 0, alignment: .bottom)
+                        .transition(Motion.surface(from: .bottomTrailing, reduceMotion: reduceMotion))
                 }
             }
+            // Opening and closing only; moving between pages swaps the rows in place.
+            .animation(Motion.appear, value: panel == nil)
         }
         .padding(Metrics.screenPadding)
         .background(alignment: .bottom) {
@@ -88,7 +92,9 @@ struct PlayerControls: View {
             action()
             interacted()
         } label: {
-            Label(title, systemImage: systemImage).labelStyle(.iconOnly)
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+                .contentTransition(.symbolEffect(.replace))
         }
     }
 

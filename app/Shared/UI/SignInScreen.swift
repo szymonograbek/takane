@@ -45,6 +45,7 @@ struct SignInScreen: View {
 }
 
 private struct LinkCodeView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let code: LinkCode
     /// Larger than any text style on the Mac, and still growing with the text size.
     @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 64
@@ -62,6 +63,7 @@ private struct LinkCodeView: View {
                     .kerning(12)
                     .accessibilityIdentifier("signIn.code")
                 Label("Waiting for you to confirm…", systemImage: "hourglass")
+                    .symbolEffect(.rotate.byLayer, options: .repeat(.periodic(delay: 1.5)), isActive: !reduceMotion)
                     .font(.caption)
                     .foregroundStyle(Palette.secondary)
             }

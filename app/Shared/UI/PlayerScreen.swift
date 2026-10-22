@@ -11,6 +11,7 @@ import SwiftUI
 /// the controls are hidden, the next episode's card takes focus near the end, ahead of a skip button.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var controls = Controls.hidden
     /// Bumped on every interaction; the controls hide a while after the last one.
     @State private var interactions = 0
@@ -46,23 +47,30 @@ struct PlayerScreen: View {
                 // A live channel does not seek, so its arrows only show the controls.
                 RemoteSurface(focus: $focus, interacted: poke, stepped: state.session?.isLive == true ? poke : peek)
             }
-            if let session = state.session {
-                if controls.isVisible {
-                    PlayerControls(
-                        session: session, state: state, focus: $focus, panel: $panel, interacted: poke
-                    )
-                        .transition(.opacity)
-                } else if let next = session.upNextCard {
-                    UpNextCard(next: next, focus: $focus, play: { playNext(next) }, dismiss: { player.send(.upNext(.dismiss)) })
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .padding(Metrics.screenPadding)
-                } else if let segment = state.activeSegment {
-                    SkipButton(segment: segment) { player.send(.skip(segment)) }
-                        .focused($focus, equals: .skip)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .padding(Metrics.screenPadding)
+            if let session = state.session, controls.isVisible {
+                PlayerControls(
+                    session: session, state: state, focus: $focus, panel: $panel, interacted: poke
+                )
+                    .transition(.opacity)
+            }
+            // A layer of its own, so a change of what rests over the video animates only this.
+            ZStack {
+                if let session = state.session, !controls.isVisible {
+                    if let next = session.upNextCard {
+                        UpNextCard(next: next, focus: $focus, play: { playNext(next) }, dismiss: { player.send(.upNext(.dismiss)) })
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .padding(Metrics.screenPadding)
+                            .transition(restingTransition)
+                    } else if let segment = state.activeSegment {
+                        SkipButton(segment: segment) { player.send(.skip(segment)) }
+                            .focused($focus, equals: .skip)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .padding(Metrics.screenPadding)
+                            .transition(restingTransition)
+                    }
                 }
             }
+            .animation(Motion.appear, value: restingFocus)
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.25), value: controls.isVisible)
@@ -147,6 +155,11 @@ struct PlayerScreen: View {
         } else {
             .surface
         }
+    }
+
+    /// The up next card and the skip button grow from the corner they rest in.
+    private var restingTransition: AnyTransition {
+        Motion.surface(from: .bottomTrailing, reduceMotion: reduceMotion)
     }
 
     /// Plays the next episode, or opens its streams over the player when no stream for it is ready.
@@ -328,73 +341,5 @@ private struct LoadingSpinner: View {
                 guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 isShown = true
             }
-    }
-}
-
-/// "Skip Intro", "Skip Recap", "Skip Credits" or "Skip Preview".
-private struct SkipButton: View {
-    let segment: SkipSegment
-    let skip: () -> Void
-
-    var body: some View {
-        Button(action: skip) {
-            Label(segment.kind.skipTitle, systemImage: "forward.end.fill")
-        }
-        .accessibilityIdentifier("player.skip")
-    }
-}
-
-/// The next episode's still and name, with buttons to play it now or turn it down.
-private struct UpNextCard: View {
-    let next: UpNext
-    var focus: FocusState<PlayerFocus?>.Binding
-    let play: () -> Void
-    let dismiss: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Metrics.headerSpacing) {
-            Artwork(url: next.thumbnail, title: next.title.rawValue)
-                .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardWidth * 9 / 16)
-                .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Up Next").font(.caption).foregroundStyle(Palette.secondary)
-                Text(episodeName).font(.headline).lineLimit(2)
-            }
-            .frame(width: Metrics.wideCardWidth, alignment: .leading)
-            HStack {
-                Button(action: play) {
-                    Label(next.stream == nil ? "Choose Stream" : "Play Now", systemImage: "play.fill")
-                }
-                .focused(focus, equals: .playNext)
-                .accessibilityIdentifier("player.upNext.play")
-                Button("Cancel", action: dismiss)
-                    .focused(focus, equals: .dismissNext)
-                    .accessibilityIdentifier("player.upNext.dismiss")
-            }
-        }
-        .padding(Metrics.playerPanelPadding)
-        .background(Palette.canvas.opacity(0.85), in: .rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
-        #if os(tvOS)
-        .focusSection()
-        #endif
-    }
-
-    /// "S1 E4 · The Big Day", or the episode number alone when it has no title.
-    private var episodeName: String {
-        let title = next.title.rawValue
-        guard case .episode(_, let season, let episode) = next.video else { return title }
-        let number = "S\(season) E\(episode)"
-        return title.isEmpty ? number : "\(number) · \(title)"
-    }
-}
-
-extension SegmentKind {
-    var skipTitle: String {
-        switch self {
-        case .recap: "Skip Recap"
-        case .intro: "Skip Intro"
-        case .outro: "Skip Credits"
-        case .preview: "Skip Preview"
-        }
     }
 }
