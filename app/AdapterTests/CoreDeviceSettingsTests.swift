@@ -7,7 +7,7 @@ struct CoreDeviceSettingsTests {
     private static func profile(premiumExpire: String?) throws -> Profile {
         let expiry = premiumExpire.map { "\"\($0)\"" } ?? "null"
         return try JSONDecoder().decode(Profile.self, from: Data("""
-        {"auth": {"user": {"email": "anna@example.com", "premium_expire": \(expiry)}}, "addons": [], "settings": {}}
+        {"auth": {"user": {"_id": "u1", "email": "anna@example.com", "premium_expire": \(expiry)}}, "addons": [], "settings": {}}
         """.utf8))
     }
 

@@ -78,6 +78,10 @@ enum CoreAction: Sendable {
         /// Refreshes the signed-in user and signs out if the session expired.
         case pullUserFromAPI
         case pullAddonsFromAPI
+        /// Adds the account's Trakt add-on, which scrobbles to Trakt.
+        case installTraktAddon
+        /// Unlinks Trakt from the account and removes the Trakt add-on.
+        case logoutTrakt
         /// Pulls library items changed elsewhere and pushes the ones changed here.
         case syncLibraryWithAPI
         case clearSearchHistory
@@ -242,6 +246,8 @@ extension CoreAction.Ctx: Encodable {
         // No token: core uses the profile's.
         case .pullUserFromAPI: try action("PullUserFromAPI", NoArgs()).encode(to: encoder)
         case .pullAddonsFromAPI: try action("PullAddonsFromAPI").encode(to: encoder)
+        case .installTraktAddon: try action("InstallTraktAddon").encode(to: encoder)
+        case .logoutTrakt: try action("LogoutTrakt").encode(to: encoder)
         case .syncLibraryWithAPI: try action("SyncLibraryWithAPI").encode(to: encoder)
         case .clearSearchHistory: try action("ClearSearchHistory").encode(to: encoder)
         case .addToLibrary(let title): try action("AddToLibrary", MetaItemPreviewArgs(title)).encode(to: encoder)

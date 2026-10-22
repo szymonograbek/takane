@@ -90,13 +90,17 @@ struct Profile: Decodable, Sendable {
     }
 
     struct User: Decodable, Sendable {
+        let id: Redacted<String>
         let email: Redacted<String>
         /// RFC 3339. When Stremio Premium ends, nil for an account that never had it.
         let premiumExpire: String?
+        let trakt: Trakt?
 
         private enum CodingKeys: String, CodingKey {
+            case id = "_id"
             case email
             case premiumExpire = "premium_expire"
+            case trakt
         }
     }
 

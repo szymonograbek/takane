@@ -238,6 +238,8 @@ mod tests {
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullNotifications"}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullUserFromAPI","args":{}}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"PullAddonsFromAPI"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"InstallTraktAddon"}}}"#,
+            r#"{"field":null,"action":{"action":"Ctx","args":{"action":"LogoutTrakt"}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"SyncLibraryWithAPI"}}}"#,
             r#"{"field":null,"action":{"action":"Ctx","args":{"action":"ClearSearchHistory"}}}"#,
             r#"{"field":"library","action":{"action":"Load","args":{"model":"LibraryWithFilters","args":{"request":{"type":null,"sort":"lastwatched"}}}}}"#,
