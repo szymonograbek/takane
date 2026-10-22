@@ -204,7 +204,17 @@ struct CoreCatalogService: CatalogService {
                 }
             },
             isWatched: (state.libraryItem?.state.timesWatched ?? 0) > 0,
-            isInLibrary: state.libraryItem?.isInLibrary ?? false
+            isInLibrary: state.libraryItem?.isInLibrary ?? false,
+            rating: rating(state.ratingInfo)
         )
+    }
+
+    private static func rating(_ info: Loadable<MetaDetailsState.RatingInfo>?) -> RatingStatus {
+        switch info {
+        case nil: .unavailable
+        case .loading: .loading
+        case .ready(let info): .rated(info.status.flatMap(TitleRating.init(core:)))
+        case .failed: .failed
+        }
     }
 }

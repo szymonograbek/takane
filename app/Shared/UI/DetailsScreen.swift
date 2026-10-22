@@ -113,7 +113,8 @@ private struct DetailsContent: View {
                 PlayButtons(
                     preview: preview, details: details, focus: $focus,
                     setWatched: { store.send(.setWatched(.title(preview.media), $0)) },
-                    setInLibrary: { store.send(.setInLibrary($0)) }
+                    setInLibrary: { store.send(.setInLibrary($0)) },
+                    rate: { store.send(.rate($0)) }
                 )
                 .padding(.top, 8)
             }
@@ -135,7 +136,8 @@ private struct DetailsContent: View {
 }
 
 /// Resume where the viewer stopped, or Play from the start, then adding the title to the library or
-/// taking it out. For a movie, a long press on Resume or Play marks it watched or unwatched.
+/// taking it out, and liking or loving it. For a movie, a long press on Resume or Play marks it
+/// watched or unwatched.
 private struct PlayButtons: View {
     @Environment(AppContext.self) private var app
     let preview: MetaPreview
@@ -143,6 +145,7 @@ private struct PlayButtons: View {
     let focus: FocusState<DetailsFocus?>.Binding
     let setWatched: (Bool) -> Void
     let setInLibrary: (Bool) -> Void
+    let rate: (TitleRating?) -> Void
 
     var body: some View {
         HStack(spacing: 24) {
@@ -171,8 +174,32 @@ private struct PlayButtons: View {
                     Label(details.isInLibrary ? "In Library" : "Add to Library", systemImage: details.isInLibrary ? "checkmark" : "plus")
                 }
                 .accessibilityIdentifier("details.library")
+                if details.rating != .unavailable {
+                    let current: TitleRating? = if case .rated(let rating) = details.rating { rating } else { nil }
+                    SegmentedButtons {
+                        rateButton(.liked, current: current)
+                        rateButton(.loved, current: current)
+                    }
+                }
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Selecting the current rating clears it. Never disabled, since disabling a focused button on
+    /// tvOS moves focus away.
+    private func rateButton(_ rating: TitleRating, current: TitleRating?) -> some View {
+        let isSelected = rating == current
+        let (title, symbol, id) = switch rating {
+        case .liked: ("Like", "hand.thumbsup", "details.like")
+        case .loved: ("Love", "heart", "details.love")
+        }
+        return Button { rate(isSelected ? nil : rating) } label: {
+            Label(title, systemImage: isSelected ? "\(symbol).fill" : symbol)
+                .labelStyle(.iconOnly)
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier(id)
     }
 
     /// A series is marked by season and episode instead, since marking it whole leaves its episodes as they were.

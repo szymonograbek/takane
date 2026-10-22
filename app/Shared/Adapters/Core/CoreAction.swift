@@ -90,12 +90,15 @@ enum CoreAction: Sendable {
         case removeFromLibrary(id: String)
     }
 
-    /// Watched marks on the title the `meta_details` model holds, through its library item.
+    /// Watched marks on the title the `meta_details` model holds, through its library item, and the
+    /// viewer's rating of it.
     enum MetaDetails: Sendable {
         case markAsWatched(Bool)
         /// core's full video JSON, as the model's first ready meta item lists it.
         case markVideoAsWatched(video: JSONValue, Bool)
         case markSeasonAsWatched(UInt32, Bool)
+        /// Nil clears the rating.
+        case rate(TitleRating?)
     }
 
     /// core's `AuthRequest`.
@@ -313,6 +316,8 @@ extension CoreAction.MetaDetails: Encodable {
             try action("MarkVideoAsWatched", Pair(video, isWatched)).encode(to: encoder)
         case .markSeasonAsWatched(let season, let isWatched):
             try action("MarkSeasonAsWatched", Pair(season, isWatched)).encode(to: encoder)
+        case .rate(let rating):
+            try action("Rate", rating?.coreName).encode(to: encoder)
         }
     }
 }

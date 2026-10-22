@@ -85,6 +85,22 @@ struct CoreLibraryService: LibraryService {
         }
     }
 
+    /// Core rates only the title the `meta_details` model holds.
+    func rate(_ media: MediaID, _ rating: TitleRating?) throws(RatingError) {
+        let page: MetaDetailsState
+        do {
+            page = try runtime.state(.metaDetails)
+        } catch {
+            throw .unavailable(reason: "\(error)")
+        }
+        guard page.selected?.metaPath.id == media.rawValue else { throw .titleNotLoaded }
+        do {
+            try runtime.dispatch(.metaDetails(.rate(rating)), to: .metaDetails)
+        } catch {
+            throw .unavailable(reason: "\(error)")
+        }
+    }
+
     private static func preview(_ item: LibraryItem) -> MetaPreview? {
         guard let media = MediaID(item.id), let type = ContentType(item.type) else { return nil }
         let poster = item.poster.flatMap(URL.init(string:))
