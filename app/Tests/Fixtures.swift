@@ -30,10 +30,11 @@ enum Fixture {
     }
 
     static func preferences(
-        seekStep: SeekStep = .ten, upNext: UpNextBehavior = .defaults, skipSegmentSource: SkipSegmentSource = .defaults
+        languages: TrackLanguages = .streamDefaults, seekStep: SeekStep = .ten, upNext: UpNextBehavior = .defaults,
+        skipSegmentSource: SkipSegmentSource = .defaults
     ) -> Preferences {
         Preferences(
-            languages: .streamDefaults, subtitleStyle: .defaults, seekStep: seekStep, hidesSpoilers: false, upNext: upNext,
+            languages: languages, subtitleStyle: .defaults, seekStep: seekStep, hidesSpoilers: false, upNext: upNext,
             skipSegmentSource: skipSegmentSource
         )
     }

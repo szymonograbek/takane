@@ -43,8 +43,11 @@ extension PlayerFeature.Session {
         guard let track = tracks.first(where: { $0.id == id }), !track.isSelected else { return [] }
         var choices = self.choices
         switch id.kind {
-        case .audio: choices.audio = TrackChoices.Track(track)
-        case .subtitle: choices.subtitles = remembered(subtitleChoice(of: track))
+        case .audio:
+            choices.audio = TrackChoices.Track(track)
+        case .subtitle:
+            choices.subtitles = remembered(subtitleChoice(of: track))
+            picksSubtitles = false
         }
         return viewerChose([.select(id)], choices)
     }
@@ -52,6 +55,7 @@ extension PlayerFeature.Session {
     mutating func chooseSubtitles(_ choice: PlayerFeature.SubtitleChoice) -> [Effect] {
         var choices = self.choices
         choices.subtitles = remembered(choice)
+        picksSubtitles = false
         return viewerChose(effects(choosing: choice), choices)
     }
 
@@ -71,7 +75,34 @@ extension PlayerFeature.Session {
     /// Takes what the add-ons offer for this stream, which a remembered add-on file may be waiting on.
     mutating func receive(_ sources: [SubtitleSource]) -> [Effect] {
         addonSubtitles = sources
-        return continueRestore()
+        return continueRestore() + preferredSubtitles()
+    }
+
+    /// Shows subtitles in the most preferred language that has any, until the viewer chooses: the
+    /// stream's own track, which the engine selects by itself, else the first file the add-ons offer,
+    /// in their order. Add-ons that time files to this stream put the best one first and may answer
+    /// again once they know the file, so a later answer can replace an earlier pick. An add-on still
+    /// answering holds the pick, since an earlier one in the order may yet offer a file.
+    func preferredSubtitles() -> [Effect] {
+        guard picksSubtitles, let languages = subtitleLanguages, !tracks.isEmpty else { return [] }
+        if case .pending(let choices) = restore, choices.subtitles != nil { return [] }
+        for language in languages.inPreferenceOrder {
+            // A forced track only translates signs and foreign lines.
+            if builtInSubtitles.contains(where: { !$0.isForced && $0.language.flatMap(Language.init) == language }) { return [] }
+            for source in addonSubtitles {
+                switch source.subtitles {
+                case .loading:
+                    return []
+                case .loaded(let files):
+                    if let file = files.first(where: { Language($0.language) == language }) {
+                        return effects(choosing: .addon(file.id))
+                    }
+                case .failed:
+                    continue
+                }
+            }
+        }
+        return []
     }
 
     /// Applies what the known tracks allow of the remembered choices. An add-on file waits until the
@@ -87,9 +118,13 @@ extension PlayerFeature.Session {
         case nil:
             break
         case .builtIn(let saved):
-            if let track = saved.match(in: builtInSubtitles), !track.isSelected { effects.append(.select(track.id)) }
+            if let track = saved.match(in: builtInSubtitles) {
+                picksSubtitles = false
+                if !track.isSelected { effects.append(.select(track.id)) }
+            }
         case .addon(let url, _):
             if let offered = addonSubtitles.lazy.compactMap(\.subtitles.value).joined().first(where: { $0.url == url }) {
+                picksSubtitles = false
                 effects += self.effects(choosing: .addon(offered.id))
             } else if addonSubtitles.isEmpty || addonSubtitles.contains(where: { !$0.subtitles.isSettled }) {
                 restore = .pending(TrackChoices(subtitles: choices.subtitles))
