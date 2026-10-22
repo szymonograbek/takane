@@ -24,7 +24,7 @@ use stremio_core::runtime::{EnvError, Runtime, RuntimeAction, RuntimeEvent};
 use crate::env::AppleEnv;
 use crate::fetch::FetchOutcome;
 use crate::host::{SBBytes, SBHost, SBOwnedBytes};
-use crate::model::{AppModel, AppModelField, SetAddonEnabled};
+use crate::model::{AddonRequest, AppModel, AppModelField};
 use crate::scrobble::Scrobble;
 
 static RUNTIME: OnceLock<Runtime<AppleEnv, AppModel>> = OnceLock::new();
@@ -38,14 +38,7 @@ enum DispatchRequest {
         action: Box<Action>,
         field: Option<AppModelField>,
     },
-    Bridge(BridgeRequest),
-}
-
-/// Requests about what core does not know, as `{"<name>": <args>}`.
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-enum BridgeRequest {
-    SetAddonEnabled(SetAddonEnabled),
+    Bridge(AddonRequest),
 }
 
 fn initialize(host: SBHost, storage_directory: PathBuf) -> Result<(), String> {
@@ -106,10 +99,10 @@ fn dispatch(request: &[u8]) -> Result<(), String> {
     let runtime = runtime()?;
     let action = match request {
         DispatchRequest::Core { action, field } => RuntimeAction { field, action: *action },
-        DispatchRequest::Bridge(BridgeRequest::SetAddonEnabled(request)) => runtime
+        DispatchRequest::Bridge(request) => runtime
             .model()
             .map_err(|error| format!("model lock poisoned: {error}"))?
-            .set_addon_enabled(request),
+            .queue(request),
     };
     runtime.dispatch(action);
     Ok(())
@@ -286,11 +279,12 @@ mod tests {
         let requests = [
             r#"{"setAddonEnabled":{"transportUrl":"https://example.com/manifest.json","enabled":false}}"#,
             r#"{"setAddonEnabled":{"transportUrl":"https://example.com/manifest.json","enabled":true}}"#,
+            r#"{"setAddonOrder":{"transportUrls":["https://two.example/manifest.json","https://example.com/manifest.json"]}}"#,
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);
             assert!(
-                matches!(parsed, Ok(DispatchRequest::Bridge(BridgeRequest::SetAddonEnabled(_)))),
+                matches!(parsed, Ok(DispatchRequest::Bridge(_))),
                 "{request}\n{parsed:?}"
             );
         }

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The installed add-ons; switching one off on this device, removing one and installing one by
-/// manifest URL.
+/// The installed add-ons in the account's order; switching one off on this device, moving one,
+/// removing one and installing one by manifest URL.
 struct AddonSettings: View {
     @Environment(AppContext.self) private var app
     @State private var removing: InstalledAddon?
@@ -17,6 +17,7 @@ struct AddonSettings: View {
                     .accessibilityIdentifier("addons.install")
             }
             SettingsSection(title: "Installed", note: note) {
+                let order = state.installed.map(\.manifestURL)
                 ForEach(state.installed) { addon in
                     Toggle(isOn: Binding { addon.isEnabled } set: { app.addons.send(.setEnabled(addon.manifestURL, $0)) }) {
                         HStack(alignment: .firstTextBaseline) {
@@ -27,6 +28,13 @@ struct AddonSettings: View {
                     }
                     .accessibilityIdentifier("addons.row")
                     .contextMenu {
+                        if order.moving(addon.manifestURL, .toTop) != nil {
+                            Button("Move to Top", systemImage: "arrow.up.to.line") { app.addons.send(.move(addon.manifestURL, .toTop)) }
+                            Button("Move Up", systemImage: "arrow.up") { app.addons.send(.move(addon.manifestURL, .oneUp)) }
+                        }
+                        if order.moving(addon.manifestURL, .oneDown) != nil {
+                            Button("Move Down", systemImage: "arrow.down") { app.addons.send(.move(addon.manifestURL, .oneDown)) }
+                        }
                         if addon.isRemovable {
                             Button("Remove", systemImage: "trash", role: .destructive) { removing = addon }
                         }
@@ -43,10 +51,11 @@ struct AddonSettings: View {
     }
 
     #if os(tvOS)
-    private static let hint = "Turning an add-on off affects this Apple TV only. To remove one, press and hold it."
+    private static let hint = "Turning an add-on off affects this Apple TV only. To move or remove one, press and hold it. \(orderNote)"
     #else
-    private static let hint = "Turning an add-on off affects this Mac only. To remove one, Control-click it."
+    private static let hint = "Turning an add-on off affects this Mac only. To move or remove one, Control-click it. \(orderNote)"
     #endif
+    private static let orderNote = "Streams and subtitles list add-ons in this order, which your Stremio account keeps."
 }
 
 /// Typing or pasting a manifest URL, such as a debrid add-on's.

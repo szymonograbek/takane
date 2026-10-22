@@ -22,10 +22,11 @@ use stremio_core::models::library_with_filters::{LibraryWithFilters, NotRemovedF
 use stremio_core::models::link::Link;
 use stremio_core::models::meta_details::MetaDetails;
 use stremio_core::models::player::Player;
-use stremio_core::runtime::msg::{Action, Internal, Msg};
+use stremio_core::runtime::msg::{Action, ActionCtx, Internal, Msg};
 use stremio_core::runtime::{
     Effect, Effects, Env, EnvError, Model, RuntimeAction, Update, UpdateWithCtx,
 };
+use stremio_core::types::addon::Descriptor;
 use stremio_core::types::api::LinkAuthKey;
 use stremio_core::types::events::DismissedEventsBucket;
 use stremio_core::types::library::LibraryBucket;
@@ -100,16 +101,51 @@ pub struct AppModel {
     ctx: Ctx,
     models: Models,
     disabled_addons: DisabledAddons,
-    /// `set_addon_enabled` requests the next update applies.
-    addon_requests: Arc<Mutex<Vec<SetAddonEnabled>>>,
+    /// Requests the next update applies.
+    addon_requests: Arc<Mutex<Vec<AddonRequest>>>,
 }
 
-/// Switching one add-on on or off on this device, as the app sends it.
+/// A change to the installed add-ons core has no action for, as the app sends it: `{"<name>": <args>}`.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum AddonRequest {
+    SetAddonEnabled(SetAddonEnabled),
+    SetAddonOrder(SetAddonOrder),
+}
+
+/// Switching one add-on on or off on this device.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SetAddonEnabled {
     transport_url: Url,
     enabled: bool,
+}
+
+/// Every installed add-on's transport URL, in the order the account should list them. Core asks
+/// add-ons in this order, so it orders streams, subtitles and catalogs.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAddonOrder {
+    transport_urls: Vec<Url>,
+}
+
+impl SetAddonOrder {
+    /// Puts `addons` in this order and says whether it changed. An order that does not name each
+    /// installed add-on once is refused: the list changed since the app read it.
+    fn apply(&self, addons: &mut [Descriptor]) -> bool {
+        let mut named = self.transport_urls.clone();
+        let mut installed: Vec<Url> = addons.iter().map(|addon| addon.transport_url.clone()).collect();
+        named.sort();
+        installed.sort();
+        named.dedup();
+        if named != installed || named.len() != self.transport_urls.len() {
+            tracing::warn!(named = self.transport_urls.len(), installed = addons.len(), "add-on order refused");
+            return false;
+        }
+        let before: Vec<Url> = addons.iter().map(|addon| addon.transport_url.clone()).collect();
+        addons.sort_by_key(|addon| self.transport_urls.iter().position(|url| *url == addon.transport_url));
+        addons.iter().map(|addon| &addon.transport_url).ne(before.iter())
+    }
 }
 
 /// Transport URLs of the add-ons switched off on this device. Core never sees them: `ctx` keeps
@@ -241,12 +277,12 @@ impl AppModel {
         Ok((model, continue_watching_effects))
     }
 
-    /// Queues switching an add-on on or off on this device and returns the action that applies it.
+    /// Queues `request` and returns the action that applies it.
     ///
     /// Core's runtime dispatches only core actions and keeps its model lock private, so the
     /// request waits in `addon_requests` and every update applies the waiting ones first. The
     /// returned action, `Unload` aimed at `ctx`, which ctx ignores, makes that update happen now.
-    pub fn set_addon_enabled(&self, request: SetAddonEnabled) -> RuntimeAction<AppleEnv, AppModel> {
+    pub fn queue(&self, request: AddonRequest) -> RuntimeAction<AppleEnv, AppModel> {
         self.addon_requests
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -254,19 +290,38 @@ impl AppModel {
         RuntimeAction { field: Some(AppModelField::Ctx), action: Action::Unload }
     }
 
-    /// Applies the waiting `set_addon_enabled` requests. A change is saved, and the models
-    /// select again with the add-ons now enabled, as they do when the profile's add-ons change.
+    /// Applies the waiting requests. A change is saved, a new order is also synced to the account
+    /// as core syncs an install, and the models select again with the add-ons now enabled and in
+    /// order, as they do when the profile's add-ons change.
     fn apply_addon_requests(&mut self) -> Changes {
         let requests = std::mem::take(
             &mut *self.addon_requests.lock().unwrap_or_else(PoisonError::into_inner),
         );
         let mut changes = Changes::default();
-        let mut changed = false;
+        let mut switched = false;
+        let mut reordered = false;
         for request in requests {
-            changed |= self.disabled_addons.apply(request);
+            match request {
+                AddonRequest::SetAddonEnabled(request) => switched |= self.disabled_addons.apply(request),
+                AddonRequest::SetAddonOrder(request) if self.ctx.profile.addons_locked => {
+                    tracing::warn!(?request, "add-on order refused: the account's add-ons are locked");
+                }
+                AddonRequest::SetAddonOrder(request) => reordered |= request.apply(&mut self.ctx.profile.addons),
+            }
         }
-        if changed {
+        if switched {
             self.disabled_addons.save();
+        }
+        if reordered {
+            let mut sync = vec![Msg::Internal(Internal::ProfileChanged)];
+            if self.ctx.profile.auth_key().is_some() {
+                sync.push(Msg::Action(Action::Ctx(ActionCtx::PushAddonsToAPI)));
+            }
+            for msg in sync {
+                changes.record(AppModelField::Ctx, Update::<AppleEnv>::update(&mut self.ctx, &msg));
+            }
+        }
+        if switched || reordered {
             changes.fields.push(AppModelField::Ctx);
             self.update_models(&Msg::Internal(Internal::ProfileChanged), None, &mut changes);
         }
@@ -440,7 +495,6 @@ mod tests {
     use super::*;
     use crate::{executor, storage};
     use stremio_core::runtime::Runtime;
-    use stremio_core::types::addon::Descriptor;
     use stremio_watched_bitfield::WatchedBitField;
 
     const ONE: &str = "https://one.example/manifest.json";
@@ -479,7 +533,12 @@ mod tests {
     }
 
     fn set_enabled(model: &AppModel, transport_url: &str, enabled: bool) -> RuntimeAction<AppleEnv, AppModel> {
-        model.set_addon_enabled(SetAddonEnabled { transport_url: transport_url.parse().unwrap(), enabled })
+        model.queue(AddonRequest::SetAddonEnabled(SetAddonEnabled { transport_url: transport_url.parse().unwrap(), enabled }))
+    }
+
+    fn set_order(model: &AppModel, transport_urls: &[&str]) -> RuntimeAction<AppleEnv, AppModel> {
+        let transport_urls = transport_urls.iter().map(|url| url.parse().unwrap()).collect();
+        model.queue(AddonRequest::SetAddonOrder(SetAddonOrder { transport_urls }))
     }
 
     /// The add-ons the board lists catalogs of, which are the ones core asks for them.
@@ -510,14 +569,12 @@ mod tests {
             .collect()
     }
 
-    /// What the next launch reads, once the writes queued before it have finished.
-    fn saved_disabled_addons() -> serde_json::Value {
+    /// What the next launch reads under `key`, once the writes queued before it have finished.
+    fn saved(key: &str) -> serde_json::Value {
         let (sender, receiver) = std::sync::mpsc::channel();
         executor::spawn_sequential(async move { sender.send(()).unwrap() });
         receiver.recv().unwrap();
-        futures::executor::block_on(AppleEnv::get_storage(DISABLED_ADDONS_STORAGE_KEY))
-            .unwrap()
-            .unwrap()
+        futures::executor::block_on(AppleEnv::get_storage(key)).unwrap().unwrap()
     }
 
     #[test]
@@ -539,13 +596,47 @@ mod tests {
         let ctx = ctx_state(&runtime);
         assert_eq!(installed_addons(&ctx), [ONE, TWO]);
         assert_eq!(ctx["disabledAddons"], serde_json::json!([ONE]));
-        assert_eq!(saved_disabled_addons(), serde_json::json!([ONE]));
+        assert_eq!(saved(DISABLED_ADDONS_STORAGE_KEY), serde_json::json!([ONE]));
 
         let enable = set_enabled(&runtime.model().unwrap(), ONE, true);
         runtime.dispatch(enable);
         assert_eq!(board_addons(&runtime), [ONE, TWO]);
         assert_eq!(ctx_state(&runtime)["disabledAddons"], serde_json::json!([]));
-        assert_eq!(saved_disabled_addons(), serde_json::json!([]));
+        assert_eq!(saved(DISABLED_ADDONS_STORAGE_KEY), serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_new_order_lists_the_addons_and_asks_them_in_it() {
+        storage::install_temporary();
+        let model = model_with(vec![addon(ONE), addon(TWO)]);
+        let (runtime, _events) = Runtime::<AppleEnv, AppModel>::new(model, vec![], 1000);
+        let load_board = serde_json::from_value(serde_json::json!({
+            "action": "Load",
+            "args": {"model": "CatalogsWithExtra", "args": {"type": null, "extra": []}},
+        }))
+        .unwrap();
+        runtime.dispatch(RuntimeAction { field: Some(AppModelField::Board), action: load_board });
+
+        let reorder = set_order(&runtime.model().unwrap(), &[TWO, ONE]);
+        runtime.dispatch(reorder);
+
+        assert_eq!(installed_addons(&ctx_state(&runtime)), [TWO, ONE]);
+        assert_eq!(board_addons(&runtime), [TWO, ONE]);
+        assert_eq!(installed_addons(&serde_json::json!({"profile": saved(PROFILE_STORAGE_KEY)})), [TWO, ONE]);
+    }
+
+    #[test]
+    fn an_order_that_does_not_name_each_addon_once_is_refused() {
+        for order in [&[ONE][..], &[TWO, TWO], &[TWO, ONE, ONE], &[TWO, "https://three.example/manifest.json"]] {
+            let mut model = model_with(vec![addon(ONE), addon(TWO)]);
+            let RuntimeAction { field, action } = set_order(&model, order);
+
+            let (effects, fields) = model.update_field(&Msg::Action(action), &field.unwrap());
+
+            assert!(effects.is_empty(), "{order:?}");
+            assert_eq!(fields, [], "{order:?}");
+            assert_eq!(installed_addons(&serde_json::from_slice(&model.state_json(&AppModelField::Ctx).unwrap()).unwrap()), [ONE, TWO]);
+        }
     }
 
     #[test]

@@ -117,6 +117,57 @@ struct AddonsFeatureTests {
         #expect(state.change == .failed(Fixture.manifest, .timedOut(stage: "add-on switch")))
         #expect(AddonsFeature.reduce(&state, .setEnabled(Fixture.manifest, false)) == [.setEnabled(Fixture.manifest, false)])
     }
+
+    private let third = InstalledAddon(
+        manifestURL: ManifestURL("https://third.example/manifest.json").require(), name: Redacted("Subtitles"),
+        version: "2.1.0", isRemovable: true, isEnabled: true
+    )
+
+    private func listed() -> AddonsFeature.State {
+        var state = AddonsFeature.State()
+        _ = AddonsFeature.reduce(&state, .installedChanged([addon, official, third]))
+        return state
+    }
+
+    @Test func movingAnAddonSendsTheWholeNewOrder() {
+        var state = listed()
+        let order = [third.manifestURL, addon.manifestURL, official.manifestURL]
+        #expect(AddonsFeature.reduce(&state, .move(third.manifestURL, .toTop)) == [.setOrder(order)])
+        #expect(state.change == .ordering(third.manifestURL, order: order))
+        _ = AddonsFeature.reduce(&state, .setOrderFinished(order, .success(())))
+        #expect(state.change == .idle)
+    }
+
+    @Test func movesUpAndDownByOne() {
+        var state = listed()
+        #expect(AddonsFeature.reduce(&state, .move(official.manifestURL, .oneDown)) == [
+            .setOrder([addon.manifestURL, third.manifestURL, official.manifestURL]),
+        ])
+        state = listed()
+        #expect(AddonsFeature.reduce(&state, .move(official.manifestURL, .oneUp)) == [
+            .setOrder([official.manifestURL, addon.manifestURL, third.manifestURL]),
+        ])
+    }
+
+    @Test func aMovePastEitherEndDoesNothing() {
+        var state = listed()
+        #expect(AddonsFeature.reduce(&state, .move(addon.manifestURL, .oneUp)).isEmpty)
+        #expect(AddonsFeature.reduce(&state, .move(addon.manifestURL, .toTop)).isEmpty)
+        #expect(AddonsFeature.reduce(&state, .move(third.manifestURL, .oneDown)).isEmpty)
+        #expect(AddonsFeature.reduce(&state, .move(ManifestURL("https://gone.example/manifest.json").require(), .oneUp)).isEmpty)
+        #expect(state.change == .idle)
+    }
+
+    @Test func oneMoveAtATimeAndAFailureNamesTheMovedAddon() {
+        var state = listed()
+        let order = [addon.manifestURL, third.manifestURL, official.manifestURL]
+        _ = AddonsFeature.reduce(&state, .move(third.manifestURL, .oneUp))
+        #expect(AddonsFeature.reduce(&state, .move(official.manifestURL, .toTop)).isEmpty)
+        #expect(AddonsFeature.reduce(&state, .setEnabled(addon.manifestURL, false)).isEmpty)
+        _ = AddonsFeature.reduce(&state, .setOrderFinished(order, .failure(.timedOut(stage: "add-on order"))))
+        #expect(state.change == .failed(third.manifestURL, .timedOut(stage: "add-on order")))
+        #expect(AddonsFeature.reduce(&state, .move(third.manifestURL, .oneUp)) == [.setOrder(order)])
+    }
 }
 
 private extension InstalledAddon {

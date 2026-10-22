@@ -6,6 +6,9 @@ enum BridgeRequest: Sendable {
     /// Switches an add-on on or off on this device only. The bridge keeps the off ones from every
     /// core model but `ctx`, which still holds and syncs them.
     case setAddonEnabled(transportURL: URL, isEnabled: Bool)
+    /// Lists the installed add-ons in this order on the account and syncs it, as core syncs an
+    /// install. Core has no action for it.
+    case setAddonOrder(transportURLs: [URL])
 }
 
 /// The JSON document `sb_dispatch` accepts: a core action for one model, or for all with no
@@ -37,10 +40,13 @@ extension DispatchRequest: Encodable {
 }
 
 extension BridgeRequest: Encodable {
-    private enum CodingKeys: String, CodingKey { case setAddonEnabled }
+    private enum CodingKeys: String, CodingKey { case setAddonEnabled, setAddonOrder }
     private struct SetAddonEnabledArgs: Encodable {
         let transportUrl: URL
         let enabled: Bool
+    }
+    private struct SetAddonOrderArgs: Encodable {
+        let transportUrls: [URL]
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -48,6 +54,8 @@ extension BridgeRequest: Encodable {
         switch self {
         case .setAddonEnabled(let url, let isEnabled):
             try container.encode(SetAddonEnabledArgs(transportUrl: url, enabled: isEnabled), forKey: .setAddonEnabled)
+        case .setAddonOrder(let urls):
+            try container.encode(SetAddonOrderArgs(transportUrls: urls), forKey: .setAddonOrder)
         }
     }
 }
