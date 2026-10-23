@@ -36,7 +36,8 @@ struct SourceIndex: Equatable, Sendable {
     /// The items that play a movie or an episode, keyed by its IMDb id when the server knows it,
     /// else by its local id.
     let items: [PlayableID: [SourceItemID]]
-    /// The titles found only on this source, by their local id.
+    /// The titles found only on this source, by their local id, and the titles matched by name
+    /// under the local id they had before, so what was watched under it still opens.
     let localTitles: [MediaID: SourceTitle]
     /// The libraries and folders the titles are in, for browsing.
     let folders: SourceFolders

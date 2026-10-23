@@ -67,7 +67,8 @@ struct Services: Sendable {
         let sources = SourceLibrary(
             store: KeychainSourceStore(service: "\(Bundle.main.bundleIdentifier ?? "com.ograbek.takane").sources"),
             jellyfin: JellyfinClient(session: .shared, version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"),
-            webDAV: WebDAVClient(session: .shared)
+            webDAV: WebDAVClient(session: .shared),
+            titles: TitleMatcher(session: .shared, defaults: .standard)
         )
         let inProcess = inProcessAddons(sources)
         let core: CoreRuntime

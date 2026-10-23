@@ -1,0 +1,47 @@
+{
+ "query": "Big Buck Bunny",
+ "metas": [
+  {
+   "id": "tt2245084",
+   "type": "movie",
+   "name": "Big Hero 6",
+   "releaseInfo": "2014"
+  },
+  {
+   "id": "tt0094737",
+   "type": "movie",
+   "name": "Big",
+   "releaseInfo": "1988"
+  },
+  {
+   "id": "tt0142342",
+   "type": "movie",
+   "name": "Big Daddy",
+   "releaseInfo": "1999"
+  },
+  {
+   "id": "tt0490086",
+   "type": "movie",
+   "name": "Big Stan",
+   "releaseInfo": "2008"
+  },
+  {
+   "id": "tt1430615",
+   "type": "movie",
+   "name": "Big Miracle",
+   "releaseInfo": "2012"
+  },
+  {
+   "id": "tt0246464",
+   "type": "movie",
+   "name": "Big Trouble",
+   "releaseInfo": "2002"
+  },
+  {
+   "id": "tt7336572",
+   "type": "movie",
+   "name": "Big Brother",
+   "releaseInfo": "2018"
+  }
+ ]
+}
