@@ -37,8 +37,10 @@ extension Route {
 }
 
 /// What the streams screen looks up, and how it labels and resumes it.
-struct StreamsRequest: Hashable {
+struct StreamsRequest: Hashable, Identifiable {
     let video: PlayableID
     let title: Redacted<String>
     let backdrop: URL?
+
+    var id: Self { self }
 }

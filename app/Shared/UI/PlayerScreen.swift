@@ -124,14 +124,16 @@ struct PlayerScreen: View {
         .onChange(of: canTimeSubtitles) {
             if !canTimeSubtitles, controls == .timing { controls = .hidden }
         }
-        .sheet(isPresented: Binding { nextStreams != nil } set: { if !$0 { nextStreams = nil } }) {
-            if let nextStreams {
-                StreamsScreen(request: nextStreams)
-                    #if os(macOS)
-                    .presentationSizing(.page)
-                    #endif
-            }
+        .onChange(of: nextStreams) { old, new in
+            guard new == nil, let old else { return }
+            focus = controls.openTab == nil ? restingFocus : .episode(old.video)
         }
+        #if os(tvOS)
+        // A tvOS sheet is too narrow for the streams page, whose list would get no width.
+        .fullScreenCover(item: $nextStreams) { StreamsScreen(request: $0) }
+        #else
+        .sheet(item: $nextStreams) { StreamsScreen(request: $0).presentationSizing(.page) }
+        #endif
         .onChange(of: focus) { old, focused in
             // Moving between controls counts as using them, and leaving the progress bar keeps them up.
             guard let focused, focused != .surface else { return }
