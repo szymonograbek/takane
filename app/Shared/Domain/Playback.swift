@@ -31,6 +31,8 @@ struct MediaTrack: Identifiable, Hashable, Sendable {
     /// The file the track was added from, such as an add-on subtitle. Nil for the stream's own tracks.
     let externalFile: Redacted<URL>?
     let isSelected: Bool
+    /// Subtitles drawn as pictures, such as a Blu-ray's, rather than as text.
+    var isImageBased = false
 }
 
 /// A playback rate the player offers.
@@ -169,6 +171,8 @@ enum PlaybackEvent: Equatable, Sendable {
     case speed(PlaybackSpeed)
     /// The subtitles to show now, replacing the previous ones. Empty when none is visible.
     case subtitles([SubtitleCue])
+    /// The second subtitles to show now, timed by their file alone, replacing the previous ones.
+    case secondSubtitles([SubtitleCue])
     /// Every cue the selected subtitle track holds so far, timed like `position`, after any change
     /// to them. Empty without one.
     case cueTimeline([TimedCue])
@@ -212,8 +216,15 @@ protocol PlaybackEngine: AnyObject, Sendable {
     /// Adds a subtitle file, fetched from `source`, as a track and selects it. The track's
     /// `externalFile` is `file`. A file that fails to load is logged.
     func addSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String)
+    /// Shows `track`, a text subtitle track, as second subtitles beside the selected one.
+    func selectSecond(_ track: MediaTrack.ID)
+    /// Adds a subtitle file as a track, like `addSubtitles`, and shows it as second subtitles.
+    func addSecondSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String)
+    /// A new load starts without second subtitles.
+    func turnOffSecondSubtitles()
     func setSpeed(_ speed: PlaybackSpeed)
-    /// Shows the subtitles `delay` away from their file's times, at once. A new load starts at zero.
+    /// Shows the subtitles `delay` away from their file's times, at once, leaving the second ones
+    /// alone. A new load starts at zero.
     func setSubtitleDelay(_ delay: SubtitleDelay)
     /// Starts or stops hearing the playing audio for speech. A new load starts stopped. What was
     /// heard stays readable after stopping.

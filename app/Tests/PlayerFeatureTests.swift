@@ -376,11 +376,11 @@ struct PlayerControlsTests {
 extension MediaTrack {
     var unselected: MediaTrack {
         MediaTrack(id: id, title: title, language: language, codec: codec, channelCount: channelCount,
-                   isForced: isForced, externalFile: externalFile, isSelected: false)
+                   isForced: isForced, externalFile: externalFile, isSelected: false, isImageBased: isImageBased)
     }
 
     var selected: MediaTrack {
         MediaTrack(id: id, title: title, language: language, codec: codec, channelCount: channelCount,
-                   isForced: isForced, externalFile: externalFile, isSelected: true)
+                   isForced: isForced, externalFile: externalFile, isSelected: true, isImageBased: isImageBased)
     }
 }
