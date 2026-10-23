@@ -77,10 +77,13 @@ struct CtxState: Decodable, Sendable {
     let searchHistory: [String]
     /// Transport URLs of the add-ons switched off on this device. The bridge adds it, since core does not know about it.
     let disabledAddons: Set<URL>
+    /// The user's sources, add-ons the app answers itself. The bridge adds them; core never holds them in `ctx`.
+    let sourceAddons: [Addon]
 
-    /// The installed add-ons this device uses.
-    var enabledAddons: [Addon] {
-        profile.addons.filter { !disabledAddons.contains($0.transportUrl) }
+    /// The add-ons every model but `ctx` asks, in their order: the installed ones this device uses,
+    /// then the sources.
+    var answeringAddons: [Addon] {
+        profile.addons.filter { !disabledAddons.contains($0.transportUrl) } + sourceAddons
     }
 }
 

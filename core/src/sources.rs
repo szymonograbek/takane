@@ -14,7 +14,7 @@
 //! which `scrobble` keeps to titles that are not local). Requests to add-ons are not Stremio's: an
 //! add-on that declares no id prefixes may still be asked for streams or sent events of a local id.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use stremio_core::types::addon::{Descriptor, ManifestResource};
 
@@ -29,7 +29,7 @@ const SOURCE_DOMAIN: &str = ".source.invalid";
 
 /// The source add-ons, each checked when it is parsed: a transport URL under `.source.invalid` and
 /// id prefixes that are `tt` or local.
-#[derive(Clone, Default, PartialEq, Debug, Deserialize)]
+#[derive(Clone, Default, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(try_from = "Vec<Descriptor>")]
 pub struct SourceAddons(Vec<Descriptor>);
 
