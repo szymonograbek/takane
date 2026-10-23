@@ -155,9 +155,10 @@ struct CoreCatalogService: CatalogService {
             // Core's own rule for `LoadNextPage`: the last page loaded and the catalog accepts `skip`.
             let canLoadMore = paging && pages.last?.content?.readyContent != nil && catalog.extraNames.contains("skip")
             let name = catalog.name.map(Redacted.init) ?? addon.manifest.name
+            // The fixture source's add-on, which no source stands behind, lists as an add-on's.
+            let source = InProcessURL(id.addon.url.rawValue).flatMap { SourceID($0.addonID) }
             return CatalogRow(
-                id: id, addonName: addon.manifest.name,
-                name: InProcessURL(id.addon.url.rawValue) == nil ? .catalog(name) : .library(name),
+                id: id, addonName: addon.manifest.name, name: source.map { .library(name, source: $0) } ?? .catalog(name),
                 items: items(pages), canLoadMore: canLoadMore
             )
         }

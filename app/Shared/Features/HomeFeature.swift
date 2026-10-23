@@ -1,4 +1,4 @@
-/// Continue watching and the add-ons' catalog rows.
+/// Continue watching, then the rows of the user's sources, then the add-ons' catalog rows.
 enum HomeFeature: Feature {
     struct Dependencies: Sendable {
         let library: any LibraryService
@@ -34,7 +34,7 @@ enum HomeFeature: Feature {
             state.continueWatching = items
             return []
         case .boardChanged(let board):
-            state.board = board
+            state.board = board.sourcesFirst
             return []
         case .loadMore(let id):
             guard case .rows(let rows) = state.board, let row = rows.first(where: { $0.id == id }),
@@ -75,6 +75,16 @@ enum HomeFeature: Feature {
     }
 }
 
+extension Board {
+    /// The user's own media leads: the sources' rows, then the add-ons', each in core's order.
+    /// Core lists sources after the add-ons, which also orders streams and subtitles, so only the
+    /// board reorders.
+    var sourcesFirst: Board {
+        guard case .rows(let rows) = self else { return self }
+        return .rows(rows.filter { $0.name.source != nil } + rows.filter { $0.name.source == nil })
+    }
+}
+
 extension ContinueWatchingItem {
     /// A movie is marked as a whole. Marking a series as a whole would leave the episode in
     /// progress unmarked, so a series is marked on its page instead.
@@ -82,11 +92,12 @@ extension ContinueWatchingItem {
 }
 
 extension HomeFeature.State {
-    /// The title the hero shows: the first one with wide artwork in the first row that has loaded.
+    /// The title the hero shows: the first one with wide artwork, else the first one, of the rows
+    /// that have loaded. A source's rows come first and often have no wide artwork.
     var featured: MetaPreview? {
         guard case .rows(let rows) = board else { return nil }
-        let loaded = rows.lazy.compactMap(\.items.value).first { !$0.isEmpty }
-        return loaded?.first { $0.background != nil } ?? loaded?.first
+        let loaded = rows.lazy.compactMap(\.items.value).joined()
+        return loaded.first { $0.background != nil } ?? loaded.first
     }
 
     /// Where to start `video`: the saved position when continue watching holds this exact video.
