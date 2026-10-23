@@ -5,7 +5,7 @@ struct LogTests {
     @Test func namesTheCaseOfAnEnumWithOrWithoutPayload() {
         #expect(Log.caseName(of: LogSharingFeature.State.idle) == "idle")
         #expect(Log.caseName(of: LogSharingFeature.State.starting(.oneHour)) == "starting")
-        #expect(Log.caseName(of: StreamsFeature.State.lookingUp(Fixture.movie, results: nil)) == "lookingUp")
+        #expect(Log.caseName(of: StreamsFeature.State.lookingUp(Fixture.movie, results: nil, offers: nil)) == "lookingUp")
         #expect(Log.caseName(of: AccountFeature.State()) == nil)
     }
 

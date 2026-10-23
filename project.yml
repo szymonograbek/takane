@@ -25,6 +25,9 @@ packages:
 targetTemplates:
   App:
     type: application
+    configFiles:
+      Debug: Secrets.xcconfig
+      Release: Secrets.xcconfig
     sources:
       - path: app/Shared
     dependencies:
@@ -41,6 +44,7 @@ targetTemplates:
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.entertainment
         NSLocalNetworkUsageDescription: Takane shares its logs with devices on your network when you ask it to.
+        RapidAPIKey: $(RAPIDAPI_KEY)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.stremio-tv
@@ -131,6 +135,7 @@ targets:
       - path: app/Shared/Adapters/HTTP
       - path: app/Shared/Adapters/IntroDB
       - path: app/Shared/Adapters/SkipDB
+      - path: app/Shared/Adapters/StreamingAvailability
       - path: app/Shared/Adapters/Core/CoreDeviceSettings.swift
       - path: app/Shared/Adapters/Core/CoreSubtitleSettings.swift
       - path: app/Shared/Adapters/Core/CoreGeneralSettings.swift

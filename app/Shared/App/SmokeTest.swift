@@ -158,9 +158,9 @@ struct SmokeTest {
         Log.smoke.info("SMOKE step 1/4 addon installed: \(addon.name) \(addon.version)")
 
         let item = configuration.item
-        app.streams.send(.lookUp(item))
+        app.streams.send(.lookUp(item, account: app.account.state.account))
         let streams = try await app.streams.until(timeout: .seconds(60), onTimeout: Failure.timedOut("streams for \(item)")) { state in
-            guard case .lookingUp(item, let results?) = state, results.isComplete else { return Probe<StreamResults, Failure>.pending }
+            guard case .lookingUp(item, let results?, _) = state, results.isComplete else { return Probe<StreamResults, Failure>.pending }
             return .done(results)
         }
         let loaded = streams.sources.compactMap { source in source.candidates.value.map { (source, $0) } }

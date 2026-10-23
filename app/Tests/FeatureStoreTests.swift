@@ -90,7 +90,7 @@ struct FeatureStoreTests {
     }
 
     @Test func untilTimesOut() async {
-        let store = FeatureStore<StreamsFeature>(.idle, dependencies: StreamsFeature.Dependencies(streams: NoStreams()))
+        let store = FeatureStore<StreamsFeature>(.idle, dependencies: StreamsFeature.Dependencies(streams: NoStreams(), offers: NoOffers()))
         await #expect(throws: TimedOut.self) {
             try await store.until(timeout: .milliseconds(50), onTimeout: TimedOut()) { _ in Probe<Void, TimedOut>.pending }
         }
@@ -101,6 +101,10 @@ private struct NoStreams: StreamService {
     func streams(for item: PlayableID) -> AsyncStream<StreamResults> {
         AsyncStream { $0.finish() }
     }
+}
+
+private struct NoOffers: WatchOfferService {
+    func offers(for title: MediaID) async throws(WatchOfferError) -> [WatchOffer] { [] }
 }
 
 private struct OneSubtitleSource: SubtitleService {

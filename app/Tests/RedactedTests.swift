@@ -24,7 +24,8 @@ struct RedactedTests {
     }
 
     @Test func releaseLookUpNamesNoTitle() {
-        #expect(Fixture.inRelease { Log.summary(of: StreamsFeature.Event.lookUp(PlayableID("tt0063350").require())) } == "lookUp(#q5r4qa)")
+        let event = StreamsFeature.Event.lookUp(PlayableID("tt0063350").require(), account: .anonymous)
+        #expect(Fixture.inRelease { Log.summary(of: event) } == "lookUp(#q5r4qa, account: StremioTVTests.Account.anonymous)")
     }
 
     @Test func releaseSearchNamesNoQuery() {

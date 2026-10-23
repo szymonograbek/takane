@@ -1,6 +1,10 @@
+import Foundation
 import Testing
 
 struct StreamsFeatureTests {
+    private static let signedIn = Account.signedIn(email: Redacted("anna@example.com"), hasPremium: false, trakt: .linked)
+    private static let netflix = WatchOffer(service: "Netflix", link: URL(filePath: "/title"), access: [.subscription])
+
     private func results(_ item: PlayableID, complete: Bool) -> StreamResults {
         StreamResults(
             item: item,
@@ -16,7 +20,7 @@ struct StreamsFeatureTests {
 
     @Test func showsResultsAsTheyArriveAndCountsWhenComplete() {
         var state = StreamsFeature.State.idle
-        #expect(StreamsFeature.reduce(&state, .lookUp(Fixture.movie)) == [.watch(Fixture.movie)])
+        #expect(StreamsFeature.reduce(&state, .lookUp(Fixture.movie, account: Self.signedIn)) == [.watch(Fixture.movie)])
         #expect(state.message == "Loading…")
         _ = StreamsFeature.reduce(&state, .resultsChanged(results(Fixture.movie, complete: false)))
         #expect(state.loadedSources.map(\.addonName) == [Redacted("Debrid")])
@@ -28,9 +32,33 @@ struct StreamsFeatureTests {
 
     @Test func dropsResultsForAPreviousLookup() {
         var state = StreamsFeature.State.idle
-        _ = StreamsFeature.reduce(&state, .lookUp(Fixture.movie))
-        _ = StreamsFeature.reduce(&state, .lookUp(Fixture.episode))
+        _ = StreamsFeature.reduce(&state, .lookUp(Fixture.movie, account: Self.signedIn))
+        _ = StreamsFeature.reduce(&state, .lookUp(Fixture.episode, account: Self.signedIn))
         _ = StreamsFeature.reduce(&state, .resultsChanged(results(Fixture.movie, complete: true)))
-        #expect(state == .lookingUp(Fixture.episode, results: nil))
+        #expect(state == .lookingUp(Fixture.episode, results: nil, offers: nil))
+    }
+
+    @Test func signedOutAlsoFindsOffersAndKeepsThemAlongsideResults() {
+        var state = StreamsFeature.State.idle
+        #expect(StreamsFeature.reduce(&state, .lookUp(Fixture.episode, account: .anonymous)) == [.watch(Fixture.episode), .findOffers(Fixture.episode)])
+        #expect(state == .lookingUp(Fixture.episode, results: nil, offers: .loading))
+        _ = StreamsFeature.reduce(&state, .offersFound(Fixture.episode, .success([Self.netflix])))
+        _ = StreamsFeature.reduce(&state, .resultsChanged(results(Fixture.episode, complete: true)))
+        #expect(state == .lookingUp(Fixture.episode, results: results(Fixture.episode, complete: true), offers: .loaded([Self.netflix])))
+    }
+
+    @Test func keepsAFailureToFindOffers() {
+        var state = StreamsFeature.State.idle
+        _ = StreamsFeature.reduce(&state, .lookUp(Fixture.movie, account: .anonymous))
+        _ = StreamsFeature.reduce(&state, .offersFound(Fixture.movie, .failure(.rateLimited)))
+        #expect(state == .lookingUp(Fixture.movie, results: nil, offers: .failed(.rateLimited)))
+    }
+
+    @Test func dropsOffersForAPreviousLookup() {
+        var state = StreamsFeature.State.idle
+        _ = StreamsFeature.reduce(&state, .lookUp(Fixture.movie, account: .anonymous))
+        _ = StreamsFeature.reduce(&state, .lookUp(Fixture.episode, account: .anonymous))
+        _ = StreamsFeature.reduce(&state, .offersFound(Fixture.movie, .success([Self.netflix])))
+        #expect(state == .lookingUp(Fixture.episode, results: nil, offers: .loading))
     }
 }
