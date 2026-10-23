@@ -128,11 +128,11 @@ private extension CtxState {
 }
 
 extension CoreRuntime {
-    /// Installed add-ons' names by transport URL, for labelling their answers.
+    /// The names of the add-ons the models ask, by transport URL, for labelling their answers.
     func addonNames() -> [URL: Redacted<String>] {
         do {
             let ctx = try state(.ctx, as: CtxState.self)
-            return Dictionary(ctx.profile.addons.map { ($0.transportUrl, $0.manifest.name) }) { first, _ in first }
+            return Dictionary(ctx.answeringAddons.map { ($0.transportUrl, $0.manifest.name) }) { first, _ in first }
         } catch {
             Log.core.error("reading addon names failed: \(error)")
             return [:]

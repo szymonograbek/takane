@@ -45,7 +45,7 @@ struct CoreCatalogService: CatalogService {
 
     func genres() -> AsyncStream<[CatalogGenres]> {
         runtime.observe(.ctx, as: CtxState.self) { state in
-            state.enabledAddons.flatMap { addon in
+            state.answeringAddons.flatMap { addon in
                 addon.manifest.catalogs.compactMap { catalog -> CatalogGenres? in
                     // A catalog that requires the extra lists other values under it, such as Cinemeta's years.
                     guard let addonURL = ManifestURL(addon.transportUrl), let type = ContentType(catalog.type),
@@ -134,7 +134,7 @@ struct CoreCatalogService: CatalogService {
 
     private static func addons(_ runtime: CoreRuntime) -> [Addon] {
         do {
-            return try runtime.state(.ctx, as: CtxState.self).profile.addons
+            return try runtime.state(.ctx, as: CtxState.self).answeringAddons
         } catch {
             Log.core.error("reading addons failed: \(error)")
             return []
