@@ -11,6 +11,8 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
         var observers: [UUID: AsyncStream<[MediaSource]>.Continuation] = [:]
         /// Made when first needed, and dropped when their source changes.
         var addons: [SourceID: ServerAddon] = [:]
+        /// What each WebDAV source's `.nfo` files hold, kept while its add-on is made again.
+        var nfo: [SourceID: NfoReader] = [:]
         /// Asks for the add-ons to be listed in core again, once `keepListed` runs.
         var relist: AsyncStream<Void>.Continuation?
     }
@@ -106,6 +108,7 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
             try store.remove(id)
             state.sources.removeAll { $0.id == id }
             state.addons[id] = nil
+            state.nfo[id] = nil
         }
         Log.sources.info("removed source \(id)")
     }
@@ -113,6 +116,26 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
     func browse(_ id: SourceID, folder: SourceFolderID?) async throws(SourceError) -> [SourceEntry] {
         guard let addon = addon(for: id) else { throw .notFound }
         return try await addon.listed.browse(folder)
+    }
+
+    func libraryFolders(_ id: SourceID) async throws(SourceError) -> [FolderSuggestion] {
+        switch addon(for: id) {
+        case nil: throw .notFound
+        case .jellyfin: return []
+        case .webDAV(let addon): return try await addon.folderSuggestions()
+        }
+    }
+
+    func setKind(_ kind: FolderKind, of folder: LibraryFolder, on id: SourceID) async throws(SourceError) {
+        try change { state throws(SourceError) in
+            guard let index = state.sources.firstIndex(where: { $0.id == id }) else { throw .notFound }
+            var source = state.sources[index]
+            source.folderKinds[folder] = kind
+            try store.save(source)
+            state.sources[index] = source
+            state.addons[id] = nil
+        }
+        Log.sources.info("source \(id) holds \(kind) in \(folder)")
     }
 
     /// Lists the sources' add-ons in core now, before anything loads a model that would have to load
@@ -183,9 +206,14 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
             let relist: @Sendable () -> Void = { [weak self] in
                 self?.state.withLock { $0.relist }?.yield()
             }
-            let addon: ServerAddon = switch credential {
-            case .jellyfin(let session): .jellyfin(JellyfinAddon(source: source, session: session, client: jellyfin, catalogsChanged: relist))
-            case .webDAV(let password): .webDAV(WebDAVAddon(source: source, password: password, client: webDAV, titles: titles, catalogsChanged: relist))
+            let addon: ServerAddon
+            switch credential {
+            case .jellyfin(let session):
+                addon = .jellyfin(JellyfinAddon(source: source, session: session, client: jellyfin, catalogsChanged: relist))
+            case .webDAV(let password):
+                let nfo = state.nfo[id] ?? NfoReader()
+                state.nfo[id] = nfo
+                addon = .webDAV(WebDAVAddon(source: source, password: password, client: webDAV, titles: titles, nfo: nfo, catalogsChanged: relist))
             }
             state.addons[id] = addon
             return addon

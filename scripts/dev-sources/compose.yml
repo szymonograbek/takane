@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
   webdav:
     image: rclone/rclone:1.71
-    command: serve webdav /media --addr :8080 --user takane --pass takane-dev --read-only
+    command: serve webdav /media --addr :8080 --user takane --pass takane-dev --read-only --dir-cache-time 5s
     ports: ["8197:8080"]
     volumes:
       - ${DEV_SOURCES_DIR}/media:/media:ro

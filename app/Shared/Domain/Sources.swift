@@ -112,6 +112,38 @@ struct MediaSource: Identifiable, Equatable, Sendable {
     let name: SourceName
     let endpoint: SourceEndpoint
     let username: SourceUsername
+    /// The kinds the user chose for a WebDAV source's top-level folders. A folder missing here takes
+    /// the kind its videos suggest. Jellyfin's libraries have their kinds on the server.
+    var folderKinds: [LibraryFolder: FolderKind] = [:]
+}
+
+/// One of a WebDAV source's top-level folders, each a library: its name under the source's folder,
+/// so editing the folder's address keeps it.
+struct LibraryFolder: Hashable, Sendable, CustomStringConvertible {
+    let name: Redacted<String>
+
+    /// Nil for a name that is no folder's, empty or holding a `/`.
+    init?(_ name: String) {
+        guard !name.isEmpty, !name.contains("/") else { return nil }
+        self.name = Redacted(name)
+    }
+
+    var description: String { name.description }
+}
+
+/// What a library folder holds, which decides its catalog's type and whether its titles are looked
+/// up by name: only films in Movies and shows in Shows are, so a home video called like a film
+/// keeps its own name and details.
+enum FolderKind: Hashable, Sendable, CaseIterable {
+    case movies
+    case shows
+    case otherVideos
+}
+
+/// A library folder and the kind its videos suggest, which it has until the user picks one.
+struct FolderSuggestion: Hashable, Sendable {
+    let folder: LibraryFolder
+    let kind: FolderKind
 }
 
 /// A folder on a source, named as only the source's adapter reads it: a Jellyfin library or folder,
@@ -172,4 +204,11 @@ protocol MediaSourceService: Sendable {
     /// What a folder of the source holds: its folders, then its titles and episode files. Nil is the
     /// source's root: a Jellyfin server's libraries, or the top of a WebDAV folder.
     func browse(_ id: SourceID, folder: SourceFolderID?) async throws(SourceError) -> [SourceEntry]
+
+    /// A WebDAV source's library folders, by name, with the kind each one's videos suggest. Empty for
+    /// a Jellyfin server.
+    func libraryFolders(_ id: SourceID) async throws(SourceError) -> [FolderSuggestion]
+
+    /// Keeps the user's kind for a WebDAV source's library folder, then lists the source again with it.
+    func setKind(_ kind: FolderKind, of folder: LibraryFolder, on id: SourceID) async throws(SourceError)
 }

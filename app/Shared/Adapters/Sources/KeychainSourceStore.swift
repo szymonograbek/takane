@@ -64,10 +64,9 @@ struct KeychainSourceStore: Sendable {
 
     /// Adds the source, or replaces the one with its id. `source.kind` must be the credential's.
     func save(_ source: MediaSource, _ credential: SourceCredential) throws(SourceError) {
-        let listing: Data
+        let listing = try Self.listing(of: source)
         let secret: Data
         do {
-            listing = try JSONEncoder().encode(StoredListing(source))
             secret = try JSONEncoder().encode(StoredSecret(credential))
         } catch {
             throw .storageFailed(reason: "encoding: \(error)")
@@ -80,6 +79,14 @@ struct KeychainSourceStore: Sendable {
         if status == errSecDuplicateItem {
             status = SecItemUpdate(item(source.id) as CFDictionary, contents as CFDictionary)
         }
+        guard status == errSecSuccess else { throw Self.failure(status, "saving a source") }
+    }
+
+    /// Replaces what a stored source shows, keeping its sign-in.
+    func save(_ source: MediaSource) throws(SourceError) {
+        let contents: [String: Any] = [kSecAttrGeneric as String: try Self.listing(of: source)]
+        let status = SecItemUpdate(item(source.id) as CFDictionary, contents as CFDictionary)
+        if status == errSecItemNotFound { throw .notFound }
         guard status == errSecSuccess else { throw Self.failure(status, "saving a source") }
     }
 
@@ -107,12 +114,33 @@ struct KeychainSourceStore: Sendable {
 
     private static func source(from attributes: [String: Any]) -> MediaSource? {
         guard let account = attributes[kSecAttrAccount as String] as? String, let id = SourceID(account),
-              let data = attributes[kSecAttrGeneric as String] as? Data,
-              let listing = try? JSONDecoder().decode(StoredListing.self, from: data),
+              let data = attributes[kSecAttrGeneric as String] as? Data
+        else { return nil }
+        return source(id, listed: data)
+    }
+
+    /// The source a `kSecAttrGeneric` listing describes. Listings kept before folders had kinds
+    /// read as sources whose folders all take their suggested kinds, and a kind this version does
+    /// not know is left out.
+    static func source(_ id: SourceID, listed data: Data) -> MediaSource? {
+        guard let listing = try? JSONDecoder().decode(StoredListing.self, from: data),
               let name = SourceName(listing.name), let endpoint = SourceEndpoint(listing.endpoint.absoluteString),
               let username = SourceUsername(listing.username)
         else { return nil }
-        return MediaSource(id: id, kind: listing.kind.kind, name: name, endpoint: endpoint, username: username)
+        var source = MediaSource(id: id, kind: listing.kind.kind, name: name, endpoint: endpoint, username: username)
+        for (name, kind) in listing.folderKinds ?? [:] {
+            guard let folder = LibraryFolder(name), let kind = StoredListing.FolderKindName(rawValue: kind)?.kind else { continue }
+            source.folderKinds[folder] = kind
+        }
+        return source
+    }
+
+    static func listing(of source: MediaSource) throws(SourceError) -> Data {
+        do {
+            return try JSONEncoder().encode(StoredListing(source))
+        } catch {
+            throw .storageFailed(reason: "encoding: \(error)")
+        }
     }
 
     private static func failure(_ status: OSStatus, _ action: String) -> SourceError {
@@ -133,10 +161,33 @@ private struct StoredListing: Codable {
         }
     }
 
+    enum FolderKindName: String {
+        case movies, shows, otherVideos
+
+        init(_ kind: FolderKind) {
+            self = switch kind {
+            case .movies: .movies
+            case .shows: .shows
+            case .otherVideos: .otherVideos
+            }
+        }
+
+        var kind: FolderKind {
+            switch self {
+            case .movies: .movies
+            case .shows: .shows
+            case .otherVideos: .otherVideos
+            }
+        }
+    }
+
     let kind: Kind
     let name: String
     let endpoint: URL
     let username: String
+    /// Kind names by folder name. Missing from listings kept before folders had kinds; kept as
+    /// text, so a kind a later version adds leaves the rest readable.
+    let folderKinds: [String: String]?
 
     init(_ source: MediaSource) {
         kind = switch source.kind {
@@ -146,6 +197,9 @@ private struct StoredListing: Codable {
         name = source.name.text.rawValue
         endpoint = source.endpoint.url.rawValue
         username = source.username.name.rawValue
+        folderKinds = source.folderKinds.isEmpty ? nil : Dictionary(uniqueKeysWithValues: source.folderKinds.map { folder, kind in
+            (folder.name.rawValue, FolderKindName(kind).rawValue)
+        })
     }
 }
 
