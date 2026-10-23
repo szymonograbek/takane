@@ -1,13 +1,14 @@
 import SwiftUI
 
 /// Sync mode: a strip along the bottom of the playing video for moving the subtitles earlier or
-/// later. It reads the delay in words and shows the subtitles' cues sliding past a playhead fixed in
-/// the middle, each with a dashed outline where its file times it.
+/// later. It reads the delay in words and shows where people speak above the subtitles' cues, both
+/// sliding past a playhead fixed in the middle, each cue with a dashed outline where its file times
+/// it. When the speech heard shows the delay the subtitles need, it offers it.
 ///
 /// Remote: left and right move the subtitles a fine step earlier or later as they go down, and
 /// held, a coarse step at a time until released. Select starts the highlighted line, the one
-/// nearest the playhead, now. Play/pause and Menu stay the player's, which leaves the strip on
-/// Menu. Swipes do nothing. macOS: arrows, Return, space and Esc.
+/// nearest the playhead, now. Up applies the delay on offer. Play/pause and Menu stay the
+/// player's, which leaves the strip on Menu. Swipes do nothing. macOS: arrows, Return, space and Esc.
 struct SubtitleTimingStrip: View {
     private static let holdThreshold = Duration.milliseconds(500)
     private static let repeatInterval = Duration.milliseconds(250)
@@ -29,6 +30,10 @@ struct SubtitleTimingStrip: View {
                     .contentTransition(reduceMotion ? .identity : .numericText(value: session.subtitleDelay.duration / .seconds(1)))
                     .animation(Motion.appear, value: session.subtitleDelay)
                     .accessibilityIdentifier("player.timing.offset")
+                Spacer()
+                if let offered = session.offeredDelay {
+                    suggestion(offered)
+                }
             }
             CueLanes(session: session, target: session.alignmentTarget)
             hints
@@ -41,17 +46,39 @@ struct SubtitleTimingStrip: View {
         }
         .overlay { remote }
         .task(id: press) { await repeatWhileHeld() }
+        .onAppear { app.player.send(.subtitleTiming(.listen)) }
+        .onDisappear { app.player.send(.subtitleTiming(.stopListening)) }
+    }
+
+    private func suggestion(_ delay: SubtitleDelay) -> some View {
+        HStack(spacing: Metrics.timingLaneSpacing) {
+            Text("Suggested: \(delay.label)").bold()
+            #if os(tvOS)
+            Text("Press \(Image(systemName: "chevron.up")) to apply").foregroundStyle(Palette.secondary)
+            #else
+            Text("Press \(Image(systemName: "arrow.up")) to apply").foregroundStyle(Palette.secondary)
+            #endif
+        }
+        .font(.caption)
+        .padding(.horizontal, Metrics.timingLaneSpacing * 1.5)
+        .padding(.vertical, Metrics.timingLaneSpacing / 2)
+        .background(Palette.lane, in: .capsule)
+        .transition(.opacity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Suggested: \(delay.label). Press Up to apply")
+        .accessibilityIdentifier("player.timing.suggestion")
     }
 
     /// Takes the presses, over the whole strip.
     @ViewBuilder
     private var remote: some View {
         #if os(tvOS)
-        RemotePresses(arrow: pressed, vertical: {}, select: align)
+        RemotePresses(arrow: pressed, vertical: { if $0 == .upArrow { applySuggestion() } }, select: align)
             .focused(focus, equals: .timing)
             .accessibilityLabel("Subtitle Timing")
             .accessibilityValue(session.subtitleDelay.label)
             .accessibilityAdjustableAction(adjust)
+            .accessibilityAction(named: "Apply Suggestion", applySuggestion)
             .accessibilityIdentifier("player.timing")
         #else
         Color.clear
@@ -67,9 +94,14 @@ struct SubtitleTimingStrip: View {
                 align()
                 return .handled
             }
+            .onKeyPress(.upArrow) {
+                applySuggestion()
+                return .handled
+            }
             .accessibilityLabel("Subtitle Timing")
             .accessibilityValue(session.subtitleDelay.label)
             .accessibilityAdjustableAction(adjust)
+            .accessibilityAction(named: "Apply Suggestion", applySuggestion)
             .accessibilityIdentifier("player.timing")
         #endif
     }
@@ -134,6 +166,10 @@ struct SubtitleTimingStrip: View {
         app.player.send(.subtitleTiming(.align))
     }
 
+    private func applySuggestion() {
+        app.player.send(.subtitleTiming(.applySuggestion))
+    }
+
     private func adjust(_ direction: AccessibilityAdjustmentDirection) {
         switch direction {
         case .increment: nudge(.forward, .fine)
@@ -143,7 +179,7 @@ struct SubtitleTimingStrip: View {
     }
 }
 
-/// The strip's lanes, each named on the left. The subtitles lane shows the cues within
+/// The strip's lanes, each named on the left: where people speak, then the subtitles' cues, within
 /// `PlayerFeature.alignmentWindow` of the playhead, which stays in the middle while they glide past,
 /// with `target`, the line select starts, highlighted.
 private struct CueLanes: View {
@@ -164,6 +200,8 @@ private struct CueLanes: View {
         let cues = visibleCues
         HStack(spacing: Metrics.timingLaneSpacing) {
             VStack(alignment: .leading, spacing: Metrics.timingLaneSpacing) {
+                Text("Speech")
+                    .frame(height: Metrics.timingLaneHeight)
                 Text("Subtitles")
                     .frame(height: Metrics.timingLaneHeight)
             }
@@ -172,6 +210,7 @@ private struct CueLanes: View {
             .frame(width: Metrics.timingLabelWidth, alignment: .leading)
             TimelineView(.animation(paused: !isMoving)) { context in
                 VStack(spacing: Metrics.timingLaneSpacing) {
+                    SpeechTrack(speech: session.heardSpeech?.lane ?? .empty, playhead: playhead(at: context.date))
                     CueTrack(cues: cues, delay: session.subtitleDelay, target: target?.id, playhead: playhead(at: context.date))
                 }
             }
@@ -246,15 +285,7 @@ private struct CueTrack: View {
         }
         .frame(height: Metrics.timingLaneHeight)
         .clipped()
-        .mask {
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0), .init(color: .black, location: Metrics.timingLaneFade),
-                    .init(color: .black, location: 1 - Metrics.timingLaneFade), .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading, endPoint: .trailing
-            )
-        }
+        .mask { LaneFade() }
     }
 
     private func width(of cue: TimedCue, scale: CGFloat) -> CGFloat {

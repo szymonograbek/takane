@@ -296,7 +296,7 @@ private struct RemoteSurface: View {
             arrow: { isDown, direction in
                 if isDown { step(direction) }
             },
-            vertical: interacted,
+            vertical: { _ in interacted() },
             select: interacted
         )
         .focused(focus, equals: .surface)
