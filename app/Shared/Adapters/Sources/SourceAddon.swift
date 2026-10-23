@@ -25,6 +25,7 @@ protocol ListedSourceAddon: Sendable {
     func respond(to url: InProcessURL) async -> CoreFetchReply
     func playbackSource(for placeholder: SourcePlaceholder) -> PlaybackSource?
     func index() async throws(SourceError) -> SourceIndex
+    func browse(_ folder: SourceFolderID?) async throws(SourceError) -> [SourceEntry]
 }
 
 /// One source as a Stremio add-on. It answers core's requests from a listing of the server, read
@@ -96,6 +97,11 @@ final class SourceAddon<Server: SourceServer>: ListedSourceAddon {
 
     func index() async throws(SourceError) -> SourceIndex {
         try await listing().index
+    }
+
+    func browse(_ folder: SourceFolderID?) async throws(SourceError) -> [SourceEntry] {
+        guard let entries = try await index().folders.entries(in: folder) else { throw .folderGone }
+        return entries
     }
 
     /// The current listing, read from the server when there is none or it is older than `lifetime`.

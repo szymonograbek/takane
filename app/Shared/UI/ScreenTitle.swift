@@ -21,6 +21,14 @@ struct ScreenTitle: View {
 }
 
 extension View {
+    /// A pushed screen's state other than its content, such as loading or empty, below its title.
+    func titled(_ title: String) -> some View {
+        VStack(spacing: 0) {
+            ScreenTitle(title).frame(maxWidth: .infinity, alignment: .leading)
+            frame(maxHeight: .infinity)
+        }
+    }
+
     /// Names the screen for navigation and, on tvOS, hides the navigation bar. A pushed screen
     /// then shows its name with `ScreenTitle`; a tab's root screen is named by its tab.
     func screenTitle(_ title: String) -> some View {

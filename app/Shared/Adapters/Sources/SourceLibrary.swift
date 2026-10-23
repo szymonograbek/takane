@@ -108,6 +108,11 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
         Log.sources.info("removed source \(id)")
     }
 
+    func browse(_ id: SourceID, folder: SourceFolderID?) async throws(SourceError) -> [SourceEntry] {
+        guard let addon = addon(for: id) else { throw .notFound }
+        return try await addon.listed.browse(folder)
+    }
+
     /// Lists the sources' add-ons in core now, before anything loads a model that would have to load
     /// again with them, then after every change to the sources or their catalogs. Each listing reads
     /// the indexes that are missing or old, so a source's catalogs follow its libraries.

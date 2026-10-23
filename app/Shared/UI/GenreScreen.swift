@@ -69,16 +69,6 @@ private struct GenreContent: View {
     }
 }
 
-private extension View {
-    /// A state other than the grid, below the screen's title.
-    func titled(_ title: String) -> some View {
-        VStack(spacing: 0) {
-            ScreenTitle(title).frame(maxWidth: .infinity, alignment: .leading)
-            frame(maxHeight: .infinity)
-        }
-    }
-}
-
 extension GenreFilter {
     /// "Action Movies".
     var title: String { "\(genre.rawValue) \(catalog.type.pluralName)" }

@@ -82,6 +82,8 @@ struct WebDAVMatcher {
         /// As the folder or file names it, tags and year included.
         let name: String
         let episode: SourceEpisode?
+        /// For a movie that is a folder, the folder's place in the path, so browsing shows the folder as the movie.
+        let folder: Int?
     }
 
     /// A video's place: its path's names, and which of them carries an IMDb id.
@@ -100,6 +102,7 @@ struct WebDAVMatcher {
         var items: [PlayableID: [SourceItemID]] = [:]
         var localTitles: [MediaID: SourceTitle] = [:]
         var libraries: [SourceIndex.Library] = []
+        var titles: [MediaID: SourceTitle] = [:]
         for (name, found) in Dictionary(grouping: matches, by: \.library) {
             guard let id = Self.key(of: [name]) else { continue }
             for match in found {
@@ -107,16 +110,45 @@ struct WebDAVMatcher {
                 let playable = match.title.episode.map { PlayableID.episode(media, season: $0.season, episode: $0.episode) } ?? .movie(media)
                 items[playable, default: []].append(match.key)
             }
-            let titles = Dictionary(grouping: found, by: \.title.id).values.compactMap(title).sorted(by: Self.newestFirst).map(\.title)
-            for title in titles where !title.id.rawValue.hasPrefix("tt") {
-                localTitles[title.id] = title
+            let libraryTitles = Dictionary(grouping: found, by: \.title.id).values.compactMap(title).sorted(by: Self.newestFirst).map(\.title)
+            for title in libraryTitles {
+                titles[title.id] = title
+                if !title.id.rawValue.hasPrefix("tt") { localTitles[title.id] = title }
             }
-            let type: SourceTitle.Kind = titles.contains { $0.kind == .series } ? .series : .movie
-            libraries.append(SourceIndex.Library(id: id, name: Redacted(name), type: type, titles: titles))
+            let type: SourceTitle.Kind = libraryTitles.contains { $0.kind == .series } ? .series : .movie
+            libraries.append(SourceIndex.Library(id: id, name: Redacted(name), type: type, titles: libraryTitles))
         }
         libraries.sort { $0.name.rawValue.localizedStandardCompare($1.name.rawValue) == .orderedAscending }
         let videos = Dictionary(matches.map { ($0.key, $0.video) }) { first, _ in first }
-        return WebDAVListing(index: SourceIndex(libraries: libraries, items: items, localTitles: localTitles), videos: videos)
+        let index = SourceIndex(libraries: libraries, items: items, localTitles: localTitles, folders: folders(of: matches, titles: titles))
+        return WebDAVListing(index: index, videos: videos)
+    }
+
+    /// Each video in its folder, by name: a movie that is a folder in that folder's place, an
+    /// episode as its file, any other movie as its title.
+    private func folders(of matches: [Match], titles: [MediaID: SourceTitle]) -> SourceFolders {
+        var folders: [SourceFolders.Folder] = []
+        var items: [(entry: SourceEntry, folder: SourceFolderID?)] = []
+        let sorted = matches.sorted { one, other in
+            one.video.path.names.lexicographicallyPrecedes(other.video.path.names) { $0.localizedStandardCompare($1) == .orderedAscending }
+        }
+        for match in sorted {
+            guard let preview = titles[match.title.id]?.preview else { continue }
+            let names = match.video.path.names
+            let path = Array(names[..<(match.title.folder ?? names.count - 1)])
+            for depth in path.indices {
+                guard let id = Self.folderID(of: path[...depth]) else { continue }
+                folders.append(SourceFolders.Folder(id: id, name: Redacted(path[depth]), parent: depth == 0 ? nil : Self.folderID(of: path[..<depth])))
+            }
+            let entry: SourceEntry = match.title.episode.map { .episode(show: preview, season: $0.season, episode: $0.episode, name: $0.name) }
+                ?? .title(preview)
+            items.append((entry, path.isEmpty ? nil : Self.folderID(of: path[...])))
+        }
+        return SourceFolders(folders: folders, items: items)
+    }
+
+    private static func folderID(of path: ArraySlice<String>) -> SourceFolderID? {
+        key(of: Array(path)).map { SourceFolderID($0.rawValue) }
     }
 
     private static func newestFirst(_ one: (title: SourceTitle, modified: Date), _ other: (title: SourceTitle, modified: Date)) -> Bool {
@@ -180,7 +212,7 @@ struct WebDAVMatcher {
             season: marker.season, episode: marker.episode, name: Redacted(rest.isEmpty ? "Episode \(marker.episode)" : rest),
             overview: nil, thumbnail: nil, released: nil
         )
-        return Title(id: id, name: name, episode: episode)
+        return Title(id: id, name: name, episode: episode, folder: nil)
     }
 
     /// A movie is the folder carrying its id or holding it alone, else the file itself.
@@ -188,7 +220,7 @@ struct WebDAVMatcher {
         let carrier = place.imdb?.carrier ?? (place.file > 1 && isAlone ? place.file - 1 : place.file)
         let name = carrier == place.file ? place.base : place.names[carrier]
         guard let id = place.imdb?.id ?? local(Array(place.names[...carrier])) else { return nil }
-        return Title(id: id, name: name, episode: nil)
+        return Title(id: id, name: name, episode: nil, folder: carrier < place.file ? carrier : nil)
     }
 
     private func local(_ path: [String]) -> MediaID? {

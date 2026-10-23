@@ -5,39 +5,35 @@ struct SettingsScreen: View {
     @Environment(AppContext.self) private var app
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Settings") {
-                AppLogo(size: Metrics.emblemSize)
-            } rows: {
-                NavigationLink {
-                    AccountSettings()
-                } label: {
-                    LabeledContent("Account", value: app.account.state.account.email?.rawValue ?? "Not Signed In")
-                }
-                .accessibilityIdentifier("settings.account")
-                NavigationLink {
-                    AddonSettings()
-                } label: {
-                    LabeledContent("Add-ons", value: "\(app.addons.state.installed.count) installed")
-                }
-                .accessibilityIdentifier("settings.addons")
-                NavigationLink {
-                    SourceSettings()
-                } label: {
-                    LabeledContent("Sources", value: Self.count(app.sources.state.sources))
-                }
-                .accessibilityIdentifier("settings.sources")
-                NavigationLink("Playback") { PlaybackSettings() }
-                    .accessibilityIdentifier("settings.playback")
-                NavigationLink {
-                    SubtitleSettings()
-                } label: {
-                    LabeledContent("Subtitles", value: app.preferences.state.preferences?.languages.subtitles?.primary.displayName ?? "Off")
-                }
-                .accessibilityIdentifier("settings.subtitles")
-                NavigationLink("About") { AboutSettings() }
-                    .accessibilityIdentifier("settings.about")
+        SettingsPage(title: "Settings") {
+            AppLogo(size: Metrics.emblemSize)
+        } rows: {
+            NavigationLink {
+                AccountSettings()
+            } label: {
+                LabeledContent("Account", value: app.account.state.account.email?.rawValue ?? "Not Signed In")
             }
+            .accessibilityIdentifier("settings.account")
+            NavigationLink {
+                AddonSettings()
+            } label: {
+                LabeledContent("Add-ons", value: "\(app.addons.state.installed.count) installed")
+            }
+            .accessibilityIdentifier("settings.addons")
+            NavigationLink(value: Route.sourceSettings) {
+                LabeledContent("Sources", value: Self.count(app.sources.state.sources))
+            }
+            .accessibilityIdentifier("settings.sources")
+            NavigationLink("Playback") { PlaybackSettings() }
+                .accessibilityIdentifier("settings.playback")
+            NavigationLink {
+                SubtitleSettings()
+            } label: {
+                LabeledContent("Subtitles", value: app.preferences.state.preferences?.languages.subtitles?.primary.displayName ?? "Off")
+            }
+            .accessibilityIdentifier("settings.subtitles")
+            NavigationLink("About") { AboutSettings() }
+                .accessibilityIdentifier("settings.about")
         }
     }
 }
