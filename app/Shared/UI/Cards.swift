@@ -217,9 +217,9 @@ struct EpisodeCard<Link: View>: View {
                 Text("\(video.episode.map { "\($0). " } ?? "")\(video.name.rawValue)").bold().labelLineLimit()
             }
             .font(.caption)
-            if let overview = video.overview, !hidesSpoilers {
-                Text(overview.rawValue).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2)
-            }
+            // So the cards of a row are equally tall and none is squeezed into a shorter one's height.
+            Text(hidesSpoilers ? "" : video.overview?.rawValue ?? "")
+                .font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2, reservesSpace: true)
         }
         .lockupFrame(.wide)
     }
@@ -239,17 +239,19 @@ struct EpisodeStill: View {
     }
 }
 
-/// A titled row of cards that scrolls sideways.
+/// A row of cards that scrolls sideways, usually titled.
 struct Shelf<Content: View>: View {
-    let title: String
+    var title: String?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(title)
-                .font(.title3).bold()
-                .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, Metrics.screenPadding)
+            if let title {
+                Text(title)
+                    .font(.title3).bold()
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.horizontal, Metrics.screenPadding)
+            }
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: Metrics.shelfSpacing) {
                     content()

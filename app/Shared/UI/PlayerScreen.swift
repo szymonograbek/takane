@@ -10,7 +10,9 @@ import SwiftUI
 /// jumps in one direction add up beside the picture ("+30s"). macOS: space, arrows and Esc. While
 /// the controls are hidden, the next episode's card takes focus near the end, ahead of a skip button.
 /// Subtitles › Timing swaps the controls for the subtitle timing strip, and Menu swaps it back for
-/// the bare video, as does the stream ending or failing or the subtitles going off.
+/// the bare video, as does the stream ending or failing or the subtitles going off. Down from the
+/// transport bar reaches the content tabs (Info, Episodes, Chapters) while the video plays on; up or
+/// Menu goes back to the transport bar, and the controls stay up while focus is in the tabs.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -19,10 +21,10 @@ struct PlayerScreen: View {
     @State private var interactions = 0
     @FocusState private var focus: PlayerFocus?
     @State private var panel: PlayerPanel?
-    /// The next episode's streams, open over the player when its card had no stream ready.
+    /// An episode's streams, open over the player.
     @State private var nextStreams: StreamsRequest?
-    /// How tall the subtitle timing strip is, which the subtitles rise above.
-    @State private var timingHeight: CGFloat = 0
+    /// How tall the controls or the subtitle timing strip are, which the subtitles rise above.
+    @State private var coveredHeight: CGFloat = 0
 
     var body: some View {
         let player = app.player
@@ -35,7 +37,9 @@ struct PlayerScreen: View {
                     cues: session.subtitles, videoSize: session.videoSize,
                     style: app.preferences.state.preferences?.subtitleStyle ?? .defaults
                 )
-                .offset(y: controls == .timing ? -timingHeight : 0)
+                .offset(y: controls == .hidden ? 0 : -coveredHeight)
+                // A tab covers the lower half of the picture, and the subtitles risen above it would leave the screen.
+                .opacity(controls.openTab == nil ? 1 : 0)
             }
             switch state {
             case .failed(_, let error):
@@ -55,13 +59,19 @@ struct PlayerScreen: View {
             if let session = state.session, controls.isVisible {
                 PlayerControls(
                     session: session, state: state, focus: $focus, panel: $panel, interacted: poke,
-                    openTiming: openTiming
+                    openTiming: openTiming,
+                    tabs: PlayerTabs(
+                        session: session, open: controls.openTab, focus: $focus, openTab: { controls = .tabs($0) },
+                        playEpisode: play, playChapter: play
+                    )
                 )
-                    .transition(.opacity)
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { coveredHeight = $0 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .transition(.opacity)
             }
             if let session = state.session, controls == .timing {
                 SubtitleTimingStrip(session: session, focus: $focus)
-                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { timingHeight = $0 }
+                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { coveredHeight = $0 }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
@@ -94,7 +104,7 @@ struct PlayerScreen: View {
             case (_, .hidden): focus = restingFocus
             case (_, .peeking): focus = .progress
             // Stays where the viewer moved it from the progress bar.
-            case (.peeking, .shown), (.shown, .shown): break
+            case (.peeking, .shown), (.shown, .shown), (.tabs, .shown), (_, .tabs): break
             case (.hidden, .shown), (.timing, .shown): focus = .playPause
             case (_, .timing): focus = .timing
             }
@@ -109,7 +119,7 @@ struct PlayerScreen: View {
         }
         .onChange(of: state.candidate) {
             nextStreams = nil
-            if controls == .timing { controls = .hidden }
+            if controls == .timing || controls.openTab != nil { controls = .hidden }
         }
         .onChange(of: canTimeSubtitles) {
             if !canTimeSubtitles, controls == .timing { controls = .hidden }
@@ -122,16 +132,24 @@ struct PlayerScreen: View {
                     #endif
             }
         }
-        .onChange(of: focus) { _, focused in
+        .onChange(of: focus) { old, focused in
             // Moving between controls counts as using them, and leaving the progress bar keeps them up.
             guard let focused, focused != .surface else { return }
             interactions += 1
-            if controls == .peeking, focused != .progress { controls = .shown }
+            if case .tab(let tab) = focused {
+                let landing = tabLanding(reaching: tab, from: old)
+                controls = .tabs(landing)
+                if landing != tab { focus = .tab(landing) }
+            } else if controls.openTab != nil, focused.isOnTransportBar {
+                controls = .shown
+            } else if controls == .peeking, focused != .progress {
+                controls = .shown
+            }
         }
         .task(id: Autohide(interactions: interactions, isPlaying: isPlaying, controls: controls)) {
-            guard (try? await Task.sleep(for: controls.autohideDelay)) != nil else { return }
+            guard let delay = controls.autohideDelay, (try? await Task.sleep(for: delay)) != nil else { return }
             // An open panel keeps the controls up.
-            guard isPlaying, panel == nil, controls.isVisible else { return }
+            guard isPlaying, panel == nil else { return }
             controls = .hidden
         }
         #if os(tvOS)
@@ -154,6 +172,8 @@ struct PlayerScreen: View {
                 player.send(.togglePause)
             } else if panel != nil {
                 closePanel()
+            } else if controls.openTab != nil {
+                backToTransportBar()
             } else if controls.isVisible, state.session != nil {
                 controls = .hidden
             } else {
@@ -211,6 +231,44 @@ struct PlayerScreen: View {
         }
     }
 
+    /// Plays another episode of the season the way Up Next does: the offered one through its offer,
+    /// any other by its streams over the player. The one playing goes back to the transport bar.
+    private func play(_ episode: Video) {
+        guard let session = app.player.state.session, episode.playable != session.candidate.item else {
+            backToTransportBar()
+            return
+        }
+        if case .offered(let next) = session.upNext, next.video == episode.playable {
+            playNext(next)
+        } else {
+            nextStreams = StreamsRequest(
+                video: episode.playable, title: session.meta?.name ?? session.title, backdrop: session.meta?.backdrop
+            )
+        }
+    }
+
+    /// Plays from the chapter's start, back on the progress bar so the viewer sees where it landed.
+    private func play(_ chapter: Chapter) {
+        app.player.send(.timeline(.chapter(chapter.id)))
+        controls = .shown
+        focus = .progress
+    }
+
+    /// Which tab opens when focus reaches `tab`'s name: the first coming down from the transport bar,
+    /// the open one coming up from its content, else `tab` itself.
+    private func tabLanding(reaching tab: PlayerFeature.Tab, from old: PlayerFocus?) -> PlayerFeature.Tab {
+        switch old {
+        case .episode, .chapter: controls.openTab ?? tab
+        case let old? where old.isOnTransportBar: app.player.state.session?.tabs.first ?? tab
+        case .some, nil: tab
+        }
+    }
+
+    private func backToTransportBar() {
+        controls = .shown
+        focus = .playPause
+    }
+
     private func openTiming() {
         panel = nil
         controls = .timing
@@ -229,18 +287,34 @@ struct PlayerScreen: View {
 }
 
 /// Whether the transport bar shows, and why.
-private enum Controls: Equatable {
+private enum Controls: Hashable {
     case hidden
     /// Shown by a seek from the bare video, with focus on the progress bar, until the seeking stops.
     case peeking
     case shown
+    /// Shown with a content tab open below them, while focus is in the tabs.
+    case tabs(PlayerFeature.Tab)
     /// Hidden for the subtitle timing strip, until Menu.
     case timing
 
-    var isVisible: Bool { self == .peeking || self == .shown }
+    var isVisible: Bool {
+        switch self {
+        case .peeking, .shown, .tabs: true
+        case .hidden, .timing: false
+        }
+    }
 
-    var autohideDelay: Duration {
-        self == .peeking ? .seconds(2) : .seconds(5)
+    var openTab: PlayerFeature.Tab? {
+        if case .tabs(let tab) = self { tab } else { nil }
+    }
+
+    /// How long the controls stay up after the last interaction, nil while they are not hiding by themselves.
+    var autohideDelay: Duration? {
+        switch self {
+        case .peeking: .seconds(2)
+        case .shown: .seconds(5)
+        case .hidden, .tabs, .timing: nil
+        }
     }
 }
 
@@ -258,6 +332,19 @@ enum PlayerFocus: Hashable {
     case link(PlayerPanel)
     case skip
     case playNext, dismissNext
+    /// A tab's name below the transport bar.
+    case tab(PlayerFeature.Tab)
+    /// A card in the Episodes or Chapters tab.
+    case episode(PlayableID)
+    case chapter(Chapter.ID)
+
+    /// The progress bar or a button of the transport bar.
+    var isOnTransportBar: Bool {
+        switch self {
+        case .progress, .back, .playPause, .forward, .subtitles, .audio, .speed: true
+        case .surface, .timing, .option, .link, .skip, .playNext, .dismissNext, .tab, .episode, .chapter: false
+        }
+    }
 }
 
 /// Restarts the autohide countdown on every interaction, when playback starts or pauses and when the controls change.

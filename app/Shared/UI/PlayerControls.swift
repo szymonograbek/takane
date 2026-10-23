@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The transport bar: title, progress, and buttons for skipping, pausing and choosing tracks and speed.
+/// The transport bar, with the content tabs below it: title, progress, and buttons for skipping,
+/// pausing and choosing tracks and speed.
 struct PlayerControls: View {
     @Environment(AppContext.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -11,10 +12,24 @@ struct PlayerControls: View {
     let interacted: () -> Void
     /// Closes the panel and the controls and opens the subtitle timing strip.
     let openTiming: () -> Void
+    let tabs: PlayerTabs
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Spacer()
+            transportBar
+                .padding(.horizontal, Metrics.screenPadding)
+            tabs
+                .disabled(panel != nil)
+        }
+        .padding(.vertical, Metrics.screenPadding)
+        .background(alignment: .bottom) {
+            LinearGradient(colors: [.clear, Palette.scrim], startPoint: .top, endPoint: .bottom)
+                .frame(height: tabs.open == nil ? Metrics.scrimHeight : Metrics.tabScrimHeight)
+        }
+    }
+
+    private var transportBar: some View {
+        VStack(alignment: .leading, spacing: 18) {
             Text(session.title.rawValue.isEmpty ? session.candidate.name?.rawValue ?? "" : session.title.rawValue)
                 .font(.title3).bold()
                 .opacity(chapterReplacesTitle ? 0 : 1)
@@ -64,11 +79,6 @@ struct PlayerControls: View {
             }
             // Opening and closing only; moving between pages swaps the rows in place.
             .animation(Motion.appear, value: panel == nil)
-        }
-        .padding(Metrics.screenPadding)
-        .background(alignment: .bottom) {
-            LinearGradient(colors: [.clear, Palette.scrim], startPoint: .top, endPoint: .bottom)
-                .frame(height: Metrics.scrimHeight)
         }
     }
 
