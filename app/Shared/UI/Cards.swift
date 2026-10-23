@@ -193,6 +193,52 @@ struct ContinueCard: View {
     }
 }
 
+/// An episode's still, number, name and overview, ticked once watched. With spoilers hidden, an
+/// unwatched episode blurs its still and leaves out its overview, unless it is the one playing.
+/// `link` makes the still selectable, such as a link to the episode's streams.
+struct EpisodeCard<Link: View>: View {
+    @Environment(AppContext.self) private var app
+    let video: Video
+    /// The series' artwork, for an episode without a still.
+    let fallbackArtwork: URL?
+    var isPlaying = false
+    @ViewBuilder let link: (EpisodeStill) -> Link
+
+    var body: some View {
+        let hidesSpoilers = !video.isWatched && !isPlaying && (app.preferences.state.preferences?.hidesSpoilers ?? false)
+        VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
+            link(EpisodeStill(url: video.thumbnail ?? fallbackArtwork, title: video.name.rawValue, isBlurred: hidesSpoilers))
+            HStack(spacing: 8) {
+                if isPlaying {
+                    Image(systemName: "play.fill").foregroundStyle(Palette.red).accessibilityLabel("Playing")
+                } else if video.isWatched {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.secondary).accessibilityLabel("Watched")
+                }
+                Text("\(video.episode.map { "\($0). " } ?? "")\(video.name.rawValue)").bold().labelLineLimit()
+            }
+            .font(.caption)
+            if let overview = video.overview, !hidesSpoilers {
+                Text(overview.rawValue).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2)
+            }
+        }
+        .lockupFrame(.wide)
+    }
+}
+
+/// An episode's 16:9 still, blurred while it would spoil the episode.
+struct EpisodeStill: View {
+    let url: URL?
+    let title: String
+    let isBlurred: Bool
+
+    var body: some View {
+        Artwork(url: url, title: title)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .blur(radius: isBlurred ? Metrics.spoilerBlurRadius : 0, opaque: true)
+            .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
+    }
+}
+
 /// A titled row of cards that scrolls sideways.
 struct Shelf<Content: View>: View {
     let title: String
