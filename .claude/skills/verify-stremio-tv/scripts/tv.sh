@@ -2,8 +2,10 @@
 # Drives the tvOS app in the "Stremio Apple TV" simulator through agent-device, with a
 # throwaway core profile per run. Evidence goes to build/verify/<run-id>/ and survives cleanup.
 #
-#   tv.sh launch [--account]         build, install, open with a fresh profile at Welcome, wait until ready;
-#                                    --account keeps one profile across runs, so a sign-in survives
+#   tv.sh launch [--account] [-STREMIO_KEY value]...
+#                                    build, install, open with a fresh profile at Welcome, wait until ready;
+#                                    --account keeps one profile across runs, so a sign-in survives; each
+#                                    -STREMIO_KEY value pair is passed to the app as a launch option
 #   tv.sh sign-in                    from Welcome, sign in with STREMIO_TEST_EMAIL and STREMIO_TEST_PASSWORD
 #                                    (env or .env.smoke); launch --account runs it when the profile is signed out
 #   tv.sh doctor                     read-only health check of the current run
@@ -85,8 +87,15 @@ elif mode == "foreground":
 case "${1:-}" in
 launch)
     [[ ! -f "$state" ]] || { echo "a run is active ($state); run: tv.sh cleanup" >&2; exit 1; }
+    shift
     account=false
-    [[ "${2:-}" == --account ]] && account=true
+    [[ "${1:-}" == --account ]] && { account=true; shift; }
+    options=()
+    while (( $# >= 2 )) && [[ "$1" == -STREMIO_* ]]; do
+        options+=(--launch-args "$1" --launch-args "$2")
+        shift 2
+    done
+    (( $# == 0 )) || { echo "launch options are -STREMIO_KEY value pairs, got: $*" >&2; exit 1; }
     "$root/scripts/build-app.sh" tvos-sim >/dev/null
     udid="$("$root/scripts/tvos-simulator.sh")"
     xcrun simctl install "$udid" "$root/build/DerivedData/Build/Products/Debug-appletvsimulator/Takane.app"
@@ -103,7 +112,7 @@ launch)
         "$udid" "$run_id" "$(date +%s)" "$account" "$storage" "$run_dir" "$data/Library/Caches/Logs/app.log" > "$state"
     ad open "$bundle_id" --platform ios --target tv --udid "$udid" --relaunch \
         --launch-args -STREMIO_STORAGE_DIRECTORY --launch-args "$storage" \
-        --launch-args -STREMIO_MUTE --launch-args 1 >/dev/null
+        --launch-args -STREMIO_MUTE --launch-args 1 ${options[@]+"${options[@]}"} >/dev/null
     for _ in $(seq 1 100); do
         query ready && break
         sleep 0.3

@@ -6,6 +6,7 @@ import Foundation
 /// finishes its stream.
 struct CoreStreamService: StreamService {
     let runtime: CoreRuntime
+    let links: any CorePlaybackLinks
 
     func streams(for item: PlayableID) -> AsyncStream<StreamResults> {
         let (results, continuation) = AsyncStream.makeStream(of: StreamResults.self, bufferingPolicy: .bufferingNewest(1))
@@ -25,6 +26,7 @@ struct CoreStreamService: StreamService {
             return results
         }
         let runtime = runtime
+        let links = links
         let task = Task {
             let started = ContinuousClock.now
             var isSelected = false
@@ -34,7 +36,7 @@ struct CoreStreamService: StreamService {
                     if isSelected { break } else { continue }
                 }
                 isSelected = true
-                let current = CoreStreamResults.results(for: item, from: details, addonNames: runtime.addonNames())
+                let current = CoreStreamResults(links: links).results(for: item, from: details, addonNames: runtime.addonNames())
                 continuation.yield(current)
                 if current.isComplete {
                     Log.core.info("\(current.sources.count) addon responses for \(item) in \(ContinuousClock.now - started)")

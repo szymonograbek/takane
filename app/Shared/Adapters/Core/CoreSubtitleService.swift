@@ -8,6 +8,7 @@ import Foundation
 /// stream. Add-ons that time subtitles to the file need those to tell this copy apart.
 struct CoreSubtitleService: SubtitleService {
     let runtime: CoreRuntime
+    let links: any CorePlaybackLinks
     var session = URLSession.shared
 
     func subtitles(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<[SubtitleSource]> {
@@ -15,6 +16,7 @@ struct CoreSubtitleService: SubtitleService {
         // Subscribe before reporting the file so no answer is missed.
         let states = runtime.states(.player, as: PlayerState.self)
         let runtime = runtime
+        let links = links
         let session = session
         let reporting = Task {
             let fingerprint: VideoFingerprint?
@@ -34,12 +36,12 @@ struct CoreSubtitleService: SubtitleService {
         let listening = Task {
             var isSelected = false
             for await player in states {
-                guard player.plays(candidate, from: source) else {
+                guard player.plays(candidate, from: source, links: links) else {
                     // Before the tracker's load lands nothing is selected; after, another candidate replaced this one.
                     if isSelected { break } else { continue }
                 }
                 isSelected = true
-                continuation.yield(Self.sources(from: player, addonNames: runtime.addonNames()))
+                continuation.yield(Self.sources(from: player, addonNames: runtime.addonNames(), links: links))
             }
             reporting.cancel()
             continuation.finish()
@@ -51,7 +53,11 @@ struct CoreSubtitleService: SubtitleService {
         return results
     }
 
-    private static func sources(from player: PlayerState, addonNames: [URL: Redacted<String>]) -> [SubtitleSource] {
+    private static func sources(
+        from player: PlayerState,
+        addonNames: [URL: Redacted<String>],
+        links: any CorePlaybackLinks
+    ) -> [SubtitleSource] {
         player.subtitles.compactMap { loadable -> SubtitleSource? in
             guard let addon = ManifestURL(loadable.request.base) else { return nil }
             let subtitles: Remote<[AddonSubtitle], SubtitleSourceError> = switch loadable.content {
@@ -59,12 +65,12 @@ struct CoreSubtitleService: SubtitleService {
                 .loading
             case .ready(let files):
                 .loaded(files.compactMap { file in
-                    URL(string: file.url).map {
-                        AddonSubtitle(
-                            id: AddonSubtitle.ID(addon: addon, key: Redacted(file.id)), url: Redacted($0),
-                            language: file.lang, label: file.label.map(Redacted.init)
-                        )
-                    }
+                    // A file whose placeholder resolves to nothing is left out, as a malformed URL is.
+                    guard let url = URL(string: file.url), let fetched = links.playbackSource(for: url, headers: [:]) else { return nil }
+                    return AddonSubtitle(
+                        id: AddonSubtitle.ID(addon: addon, key: Redacted(file.id)), url: Redacted(url), source: fetched,
+                        language: file.lang, label: file.label.map(Redacted.init)
+                    )
                 })
             case .failed(let error):
                 .failed(.addonFailed(reason: error.compactDescription))

@@ -310,7 +310,7 @@ extension PlayerFeature {
         case .turnOffSubtitles:
             engine.turnOffSubtitles()
         case .addSubtitles(let subtitle):
-            engine.addSubtitles(subtitle.url, title: subtitle.label?.rawValue ?? subtitle.language, language: subtitle.language)
+            engine.addSubtitles(subtitle.url, from: subtitle.source, title: subtitle.label?.rawValue ?? subtitle.language, language: subtitle.language)
         case .setSpeed(let speed):
             engine.setSpeed(speed)
         case .findSegments(let item, let duration, let source):

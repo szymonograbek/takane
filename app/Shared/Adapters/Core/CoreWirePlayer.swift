@@ -32,10 +32,11 @@ struct PlayerState: Decodable, Sendable {
     /// Premium accounts.
     let introOutro: IntroOutro?
 
-    /// Whether core has `candidate`, playing from `source`, selected.
-    func plays(_ candidate: StreamCandidate, from source: PlaybackSource) -> Bool {
+    /// Whether core has `candidate`, playing from `source`, selected. Core holds the stream as its
+    /// add-on gave it, so its URL can be a placeholder that `links` resolves to `source`.
+    func plays(_ candidate: StreamCandidate, from source: PlaybackSource, links: any CorePlaybackLinks) -> Bool {
         guard let selected else { return false }
-        return selected.stream.source == .url(source.url.rawValue) && selected.subtitlesPath?.id == candidate.item.rawValue
+        return links.playability(of: selected.stream) == .playable(source) && selected.subtitlesPath?.id == candidate.item.rawValue
     }
 }
 

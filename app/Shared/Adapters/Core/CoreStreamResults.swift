@@ -1,9 +1,12 @@
 import Foundation
 
 /// The add-ons' answers in core's `meta_details` state, as stream results whose tracking tokens
-/// hold the selection core's player model loads.
-enum CoreStreamResults {
-    static func results(for item: PlayableID, from details: MetaDetailsState, addonNames: [URL: Redacted<String>]) -> StreamResults {
+/// hold the selection core's player model loads. Each candidate plays what `links` resolves its
+/// stream's URL to.
+struct CoreStreamResults {
+    let links: any CorePlaybackLinks
+
+    func results(for item: PlayableID, from details: MetaDetailsState, addonNames: [URL: Redacted<String>]) -> StreamResults {
         // Core's player model loads the item's metadata from this request and records progress against
         // it, so a stream picked while the metadata loads, or after it failed, needs it too.
         let metaRequest = (details.metaItems.first { $0.content?.readyContent != nil } ?? details.metaItems.first)?.request
@@ -32,7 +35,7 @@ enum CoreStreamResults {
 
     /// Loading until each of the add-on's responses settles, then the streams of those that are ready;
     /// failed only when none is.
-    private static func candidates(
+    private func candidates(
         from loadables: [ResourceLoadable<[Stream]>],
         addon: ManifestURL,
         item: PlayableID,
@@ -57,18 +60,15 @@ enum CoreStreamResults {
         return .loaded(candidates)
     }
 
-    /// `stream` as a candidate whose tracking token loads core's player model with it.
-    static func candidate(
+    /// `stream` as a candidate whose tracking token loads core's player model with it. The token
+    /// keeps the stream as core has it, a placeholder URL included.
+    func candidate(
         _ stream: Stream,
         id: StreamCandidate.ID,
         item: PlayableID,
         streamRequest: ResourceRequest,
         metaRequest: ResourceRequest?
     ) -> StreamCandidate {
-        let playability: Playability = switch stream.source {
-        case .url(let url): .playable(PlaybackSource(url: Redacted(url), headers: stream.requestHeaders))
-        case .unsupported(let kind): .unsupported(kind: kind)
-        }
         // The subtitles path makes core's player model ask subtitle add-ons for this item.
         var selection: [String: JSONValue] = [
             "stream": stream.raw,
@@ -82,7 +82,7 @@ enum CoreStreamResults {
             name: stream.name.map(Redacted.init),
             description: stream.description.map(Redacted.init),
             filename: stream.filename.map(Redacted.init),
-            playability: playability,
+            playability: links.playability(of: stream),
             tracking: TrackingToken(payload: Redacted(.object(selection)))
         )
     }

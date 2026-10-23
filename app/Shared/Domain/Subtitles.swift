@@ -9,8 +9,12 @@ struct AddonSubtitle: Identifiable, Hashable, Sendable {
     }
 
     let id: ID
-    /// Configured add-ons may carry credentials in it.
+    /// The add-on's URL for the file, which remembered track choices name it by. Configured add-ons
+    /// may carry credentials in it.
     let url: Redacted<URL>
+    /// Where the player fetches the file and what it sends: usually `url` with no headers, the file
+    /// it stands for when it is an in-app add-on's placeholder.
+    let source: PlaybackSource
     /// As the add-on gives it, usually an ISO 639-2 code such as `eng`.
     let language: String
     /// The add-on's description of the file, such as its release name or how well it is timed.

@@ -100,9 +100,12 @@ final class AetherPlaybackEngine: PlaybackEngine {
         player.clearSubtitle()
     }
 
-    func addSubtitles(_ file: Redacted<URL>, title: String, language: String) {
-        Log.player.info("add subtitles \(file) \(language)")
-        let track = player.addExternalSubtitleTrack(ExternalSubtitleTrack(url: file.rawValue, name: title, language: language))
+    func addSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String) {
+        Log.player.info("add subtitles \(file) \(language) headers=\(source.headers.keys.sorted())")
+        // Headers of their own, never the stream's: those can be another server's credentials.
+        let track = player.addExternalSubtitleTrack(
+            ExternalSubtitleTrack(url: source.url.rawValue, name: title, language: language, httpHeaders: source.headers)
+        )
         externalFiles[track.id] = file
         player.selectSubtitleTrack(index: track.id)
     }

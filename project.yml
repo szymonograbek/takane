@@ -140,6 +140,7 @@ targets:
       - path: app/Shared/Adapters/Core/CoreSubtitleSettings.swift
       - path: app/Shared/Adapters/Core/CoreGeneralSettings.swift
       - path: app/Shared/Adapters/Core/CoreStreamResults.swift
+      - path: app/Shared/Adapters/Core/CoreInProcessAddons.swift
       - path: app/Shared/Adapters/Core/CoreWire.swift
       - path: app/Shared/Adapters/Core/CoreWirePlayer.swift
       - path: app/Shared/Adapters/Core/CoreWireLibrary.swift

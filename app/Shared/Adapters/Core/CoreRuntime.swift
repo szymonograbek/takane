@@ -23,10 +23,13 @@ final class CoreRuntime: Sendable {
         self.client = client
     }
 
-    /// Starts core and loads persisted state from `storageDirectory`.
-    static func start(storageDirectory: URL) async throws(CoreError) -> CoreRuntime {
+    /// Starts core and loads persisted state from `storageDirectory`. `inProcessAddons` answers
+    /// every request core makes for an `InProcessURL`.
+    static func start(storageDirectory: URL, inProcessAddons: any CoreInProcessAddons) async throws(CoreError) -> CoreRuntime {
         let started = await Task.detached(priority: .userInitiated) { () -> Result<CoreClient, CoreError> in
-            Result { () throws(CoreError) in try CoreClient.start(storageDirectory: storageDirectory) }
+            Result { () throws(CoreError) in
+                try CoreClient.start(storageDirectory: storageDirectory, inProcessAddons: inProcessAddons)
+            }
         }.value
         let runtime = CoreRuntime(client: try started.get())
         let changes = runtime.client.changes
@@ -71,6 +74,12 @@ final class CoreRuntime: Sendable {
 
     func state<State: Decodable>(_ field: CoreField, as type: State.Type = State.self) throws(CoreError) -> State {
         try client.state(field)
+    }
+
+    /// Replaces the source add-ons every model but `ctx` lists. The bridge refuses the whole list
+    /// when one is not a source add-on.
+    func setSources(_ descriptors: [SourceAddonDescriptor]) throws(CoreError) {
+        try client.dispatch(.bridge(.setSources(descriptors)))
     }
 
     /// The field's state now, then after every change.
