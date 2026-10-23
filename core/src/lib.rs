@@ -12,6 +12,7 @@ mod logging;
 mod model;
 mod open_movies;
 mod scrobble;
+mod sources;
 mod storage;
 
 use std::path::PathBuf;
@@ -281,6 +282,8 @@ mod tests {
             r#"{"setAddonEnabled":{"transportUrl":"https://example.com/manifest.json","enabled":false}}"#,
             r#"{"setAddonEnabled":{"transportUrl":"https://example.com/manifest.json","enabled":true}}"#,
             r#"{"setAddonOrder":{"transportUrls":["https://two.example/manifest.json","https://example.com/manifest.json"]}}"#,
+            r#"{"setSources":{"descriptors":[]}}"#,
+            &set_sources("https://ab12cd34.source.invalid/manifest.json", &["tt", "takane-ab12cd34-"], &["takane-ab12cd34-"]),
         ];
         for request in requests {
             let parsed = serde_json::from_str::<DispatchRequest>(request);
@@ -288,6 +291,50 @@ mod tests {
                 matches!(parsed, Ok(DispatchRequest::Bridge(_))),
                 "{request}\n{parsed:?}"
             );
+        }
+    }
+
+    /// `{"setSources": …}` with one source add-on, shaped as the app describes a source.
+    fn set_sources(transport_url: &str, id_prefixes: &[&str], meta_id_prefixes: &[&str]) -> String {
+        serde_json::json!({"setSources": {"descriptors": [{
+            "transportUrl": transport_url,
+            "manifest": {
+                "id": "app.takane.source.ab12cd34",
+                "version": "1.0.0",
+                "name": "Home Jellyfin",
+                "types": ["movie", "series"],
+                "idPrefixes": id_prefixes,
+                "resources": [
+                    "catalog",
+                    {"name": "meta", "types": ["movie", "series"], "idPrefixes": meta_id_prefixes},
+                    "stream",
+                    "subtitles",
+                ],
+                "catalogs": [{"type": "movie", "id": "movies", "name": "Movies"}],
+            },
+        }]}})
+        .to_string()
+    }
+
+    /// A refused descriptor fails the request in `sb_dispatch`, and the sources set before stay.
+    #[test]
+    fn sources_that_are_not_source_addons_are_refused() {
+        let local = &["tt", "takane-ab12cd34-"][..];
+        let meta = &["takane-ab12cd34-"][..];
+        let requests = [
+            set_sources("http://ab12cd34.source.invalid/manifest.json", local, meta),
+            set_sources("https://ab12cd34.example.com/manifest.json", local, meta),
+            set_sources("https://source.invalid/manifest.json", local, meta),
+            set_sources("https://a.b.source.invalid/manifest.json", local, meta),
+            set_sources("https://ab12cd34.source.invalid/catalog.json", local, meta),
+            set_sources("https://ab12cd34.source.invalid/manifest.json?token=x", local, meta),
+            set_sources("https://user:pass@ab12cd34.source.invalid/manifest.json", local, meta),
+            set_sources("https://ab12cd34.source.invalid/manifest.json", &["tt", "jellyfin-"], meta),
+            set_sources("https://ab12cd34.source.invalid/manifest.json", local, &["kitsu"]),
+        ];
+        for request in requests {
+            let parsed = serde_json::from_str::<DispatchRequest>(&request);
+            assert!(parsed.is_err(), "{request}\n{parsed:?}");
         }
     }
 
