@@ -34,6 +34,13 @@ enum Palette {
         increasedContrast: Color(red: 1, green: 0.749, blue: 0.392)
     )
 
+    /// The second subtitles' text: a pale gold that sets them apart from the first, white or
+    /// cream, and stays light enough to read over the picture.
+    static let secondSubtitle = Color(
+        Color(red: 1, green: 0.851, blue: 0.541),
+        increasedContrast: Color(red: 1, green: 0.894, blue: 0.4)
+    )
+
     private static let cream = Color(red: 0.937, green: 0.910, blue: 0.871)
 
     /// Burgundy fading into the canvas from the top, behind sign-in and empty screens.
@@ -202,6 +209,8 @@ enum Metrics {
     static let subtitlePadding: CGFloat = 0.32
     /// Outline thickness, as a fraction of the text size.
     static let subtitleOutline: CGFloat = 0.06
+    /// The second subtitles' text size, as a fraction of the first's: a step smaller.
+    static let secondSubtitleScale: CGFloat = 0.8
 }
 
 /// How the text size shapes layouts. At accessibility sizes (Large Text on tvOS, the largest

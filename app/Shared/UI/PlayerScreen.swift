@@ -34,7 +34,7 @@ struct PlayerScreen: View {
             app.services.videoSurface()
             if let session = state.session {
                 SubtitleOverlay(
-                    cues: session.subtitles, videoSize: session.videoSize,
+                    cues: session.subtitles, secondCues: session.secondSubtitles, videoSize: session.videoSize,
                     style: app.preferences.state.preferences?.subtitleStyle ?? .defaults
                 )
                 .offset(y: controls == .hidden ? 0 : -coveredHeight)
