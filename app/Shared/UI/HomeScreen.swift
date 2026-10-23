@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// A featured title, then continue watching, then every add-on catalog.
+/// A featured title, then continue watching, then the rows of the user's sources, then every
+/// add-on catalog.
 struct HomeScreen: View {
     @Environment(AppContext.self) private var app
 
@@ -145,9 +146,15 @@ private struct CatalogShelf: View {
             EmptyView()
         case .loaded(let items):
             Shelf(title: row.title) {
-                ForEach(items) { preview in
-                    PosterCard(preview: preview)
-                        .onAppear { if preview == items.last { loadMore() } }
+                if let source = row.name.source {
+                    // A source's newest titles; Library pages through the rest.
+                    ForEach(items.prefix(20)) { PosterCard(preview: $0) }
+                    SeeAllCard(source: source)
+                } else {
+                    ForEach(items) { preview in
+                        PosterCard(preview: preview)
+                            .onAppear { if preview == items.last { loadMore() } }
+                    }
                 }
             }
         }
@@ -180,7 +187,7 @@ extension CatalogRow {
     /// types. A library keeps the name the user gave it.
     var title: String {
         switch name {
-        case .library(let name):
+        case .library(let name, _):
             return name.rawValue
         case .catalog(let name):
             let type = id.type.pluralName

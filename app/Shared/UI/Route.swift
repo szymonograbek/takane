@@ -5,6 +5,8 @@ enum Route: Hashable, CustomStringConvertible {
     case details(MetaPreview)
     case streams(StreamsRequest)
     case genre(GenreFilter)
+    /// Library with one of the user's sources picked, pushed from that source's row on Home.
+    case library(SourceID)
     /// Settings › Sources, and one source's page. They are routes, not views pushed in place, so a
     /// source's folders, pushed as routes, show above them.
     case sourceSettings
@@ -19,6 +21,7 @@ enum Route: Hashable, CustomStringConvertible {
         case .details(let preview): "details(\(preview.type)/\(preview.media))"
         case .streams(let request): "streams(\(request.video))"
         case .genre(let filter): "genre(\(filter.catalog.type)/\(filter.catalog.id), \(filter.genre))"
+        case .library(let source): "library(\(source))"
         case .sourceSettings: "sourceSettings"
         case .source(let id): "source(\(id))"
         case .sourceFolder(let folder, _): "sourceFolder(\(folder))"

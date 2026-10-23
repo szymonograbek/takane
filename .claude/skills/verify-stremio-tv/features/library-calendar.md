@@ -1,6 +1,6 @@
 # Library and calendar
 
-A title's Details page adds it to the user's library or takes it out. The Library tab lists the library's titles as posters, filtered by type and sorted by recently watched, name or unwatched first; a long press on a poster removes it. The Calendar tab lists the upcoming episodes of the library's series, one row per day, titled by how far off the day is.
+A title's Details page adds it to the user's library or takes it out. The Library tab lists the library's titles as posters, filtered by type and sorted by recently watched, name or unwatched first; a long press on a poster removes it. Once the user has a source, a picker switches the grid to that source's titles ([Browse sources](./browse-sources.md)). The Calendar tab lists the upcoming episodes of the library's series, one row per day, titled by how far off the day is.
 
 ## Sub-features
 
