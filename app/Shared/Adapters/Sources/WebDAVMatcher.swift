@@ -26,7 +26,7 @@ struct WebDAVMatcher {
         let title: Title
         let key: SourceItemID
         let video: WebDAVVideo
-        let modified: Date
+        let modified: Date?
     }
 
     /// The title a video plays, and for an episode, which.
@@ -71,8 +71,7 @@ struct WebDAVMatcher {
                     items[playable, default: []].append(match.key)
                 }
             }
-            let libraryTitles = Dictionary(grouping: found, by: \.title.id).compactMap { title(of: $1, as: $0) }
-                .sorted(by: Self.newestFirst).map(\.title)
+            let libraryTitles = Dictionary(grouping: found, by: \.title.id).compactMap { title(of: $1, as: $0) }.sorted(by: .recentlyAdded)
             for title in libraryTitles {
                 titles[title.id] = title
                 guard !title.id.rawValue.hasPrefix("tt") else { continue }
@@ -81,7 +80,7 @@ struct WebDAVMatcher {
             }
             for (former, renamed) in Dictionary(grouping: found.filter { $0.title.formerID != nil }, by: \.title.formerID) {
                 guard let former, let title = title(of: renamed, as: former) else { continue }
-                localTitles[former] = title.title
+                localTitles[former] = title
             }
             let type: SourceTitle.Kind = kind == .shows ? .series : .movie
             libraries.append(SourceIndex.Library(id: id, name: Redacted(name), type: type, titles: libraryTitles))
@@ -155,25 +154,22 @@ struct WebDAVMatcher {
         key(of: Array(path)).map { SourceFolderID($0.rawValue) }
     }
 
-    private static func newestFirst(_ one: (title: SourceTitle, modified: Date), _ other: (title: SourceTitle, modified: Date)) -> Bool {
-        guard one.modified == other.modified else { return one.modified > other.modified }
-        return one.title.name.rawValue.localizedStandardCompare(other.title.name.rawValue) == .orderedAscending
-    }
-
-    /// The title that `matches`, the files of one title, make as `id`, with when its newest file changed.
-    private func title(of matches: [Match], as id: MediaID) -> (title: SourceTitle, modified: Date)? {
+    /// The title that `matches`, the files of one title, make as `id`, added when its newest file changed.
+    private func title(of matches: [Match], as id: MediaID) -> SourceTitle? {
         guard let first = matches.first?.title else { return nil }
         var seen: Set<[Int]> = []
         let episodes = matches.compactMap(\.title.episode)
             .filter { seen.insert([$0.season, $0.episode]).inserted }
             .sorted { ($0.season, $0.episode) < ($1.season, $1.episode) }
         let name = ReleaseName(first.name)
-        let title = SourceTitle(
+        return SourceTitle(
             id: id, kind: first.episode == nil ? .movie : .series, name: Redacted(name.title.isEmpty ? first.name : name.title),
             poster: first.id.rawValue.hasPrefix("tt") ? SourceTitle.cinemetaPoster(of: first.id).map(Redacted.init) : nil,
-            isLandscape: false, background: nil, overview: nil, year: name.year, episodes: episodes
+            isLandscape: false, background: nil, overview: nil,
+            // Copies of one title may be named with and without the year, as an `.nfo` file names it.
+            year: name.year ?? matches.lazy.compactMap { ReleaseName($0.title.name).year }.first,
+            added: matches.compactMap(\.modified).max(), episodes: episodes
         )
-        return (title, matches.map(\.modified).max() ?? .distantPast)
     }
 
     /// Matches a video in a library to its title. Other files, and files outside a library, match nothing.
@@ -195,7 +191,7 @@ struct WebDAVMatcher {
             title = movie(of: place, isAlone: videosBeside.count == 1)
         }
         guard let title else { return nil }
-        return Match(library: names[0], title: title, key: key, video: video, modified: entry.modified ?? .distantPast)
+        return Match(library: names[0], title: title, key: key, video: video, modified: entry.modified)
     }
 
     /// An episode's show is the nearest folder carrying an id, else the folder above its season

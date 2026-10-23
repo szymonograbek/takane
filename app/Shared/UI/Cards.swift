@@ -22,16 +22,49 @@ struct PosterCard: View {
     let preview: MetaPreview
 
     var body: some View {
-        NavigationLink(value: Route.details(preview)) {
+        PosterLockup(route: .details(preview), name: preview.name.rawValue) {
+            Artwork(url: preview.poster, title: preview.name.rawValue)
+                .aspectRatio(preview.posterShape.aspectRatio, contentMode: .fit)
+        }
+        .accessibilityLabel(preview.name.rawValue)
+        .accessibilityIdentifier("poster.\(preview.media.rawValue)")
+    }
+}
+
+/// The last lockup of a source's row on Home, poster-sized like the row's: it opens Library with
+/// the source picked, pushed in this tab, so Menu comes back to the row.
+struct SeeAllCard: View {
+    let source: SourceID
+
+    var body: some View {
+        PosterLockup(route: .library(source), name: "See All") {
+            Palette.surface
+                .aspectRatio(PosterShape.poster.aspectRatio, contentMode: .fit)
+                .overlay {
+                    Image(systemName: "square.grid.2x2").font(.largeTitle).foregroundStyle(Palette.secondary)
+                }
+        }
+        .accessibilityIdentifier("shelf.seeAll")
+    }
+}
+
+/// A poster-sized lockup named underneath, opening `route`.
+private struct PosterLockup<Art: View>: View {
+    let route: Route
+    let name: String
+    @ViewBuilder let art: () -> Art
+
+    var body: some View {
+        NavigationLink(value: route) {
             #if os(tvOS)
             // The borderless style stacks the poster over its name and lifts the label's first
-            // `Image`, which `Artwork` is not, hence the highlight.
+            // `Image`, which the artwork is not, hence the highlight.
             poster.hoverEffect(.highlight)
-            name
+            caption
             #else
             VStack(alignment: .leading) {
                 poster
-                name
+                caption
             }
             #endif
         }
@@ -40,19 +73,16 @@ struct PosterCard: View {
         #else
         .buttonStyle(.plain)
         #endif
-        .accessibilityLabel(preview.name.rawValue)
-        .accessibilityIdentifier("poster.\(preview.media.rawValue)")
     }
 
     private var poster: some View {
-        Artwork(url: preview.poster, title: preview.name.rawValue)
-            .aspectRatio(preview.posterShape.aspectRatio, contentMode: .fit)
+        art()
             .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
             .lockupFrame(.poster)
     }
 
-    private var name: some View {
-        Text(preview.name.rawValue)
+    private var caption: some View {
+        Text(name)
             .font(.caption)
             .foregroundStyle(Palette.secondary)
             .labelLineLimit()

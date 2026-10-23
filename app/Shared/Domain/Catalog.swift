@@ -67,16 +67,24 @@ enum CatalogRowName: Equatable, Sendable, CustomStringConvertible {
     /// An add-on's catalog name from its manifest, such as "Popular", or the add-on's name when the
     /// catalog has none. Add-ons reuse catalog names across types.
     case catalog(Redacted<String>)
-    /// A library on the user's own server, such as "Shows", named by the user.
-    case library(Redacted<String>)
+    /// A library on one of the user's sources, such as "Shows", named by the user.
+    case library(Redacted<String>, source: SourceID)
 
     var text: Redacted<String> {
         switch self {
-        case .catalog(let name), .library(let name): name
+        case .catalog(let name), .library(let name, _): name
         }
     }
 
     var description: String { text.description }
+
+    /// The source whose library the row is. Nil for an add-on's catalog.
+    var source: SourceID? {
+        switch self {
+        case .catalog: nil
+        case .library(_, let source): source
+        }
+    }
 }
 
 /// One catalog's titles. A failing add-on fails its own row, never the board or the search.

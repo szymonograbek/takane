@@ -12,8 +12,8 @@ struct LibraryFeatureTests {
     @Test func choosingAFilterLoadsItAndDropsContentsForAnotherOne() {
         let show = Fixture.preview("tt0944947", type: .series)
         var state = LibraryFeature.State.loading(all)
-        #expect(LibraryFeature.reduce(&state, .select(all)).isEmpty)
-        #expect(LibraryFeature.reduce(&state, .select(series)) == [.observe(series)])
+        #expect(LibraryFeature.reduce(&state, .select(.library(all))).isEmpty)
+        #expect(LibraryFeature.reduce(&state, .select(.library(series))) == [.observe(series)])
         #expect(state == .loading(series))
 
         _ = LibraryFeature.reduce(&state, .contentsChanged(contents(all, [Fixture.preview("tt0111161")])))
@@ -29,6 +29,66 @@ struct LibraryFeatureTests {
         #expect(LibraryFeature.reduce(&state, .loadMore) == [.loadMore])
         _ = LibraryFeature.reduce(&state, .contentsChanged(contents(all, [Fixture.preview("tt1")], canLoadMore: false)))
         #expect(LibraryFeature.reduce(&state, .loadMore).isEmpty)
+    }
+
+    @Test func pickingASourceListsItsTitlesNewestFirstAndYourLibraryAsBefore() {
+        let source = SourceID("ab23cd45").require()
+        let newest = SourceTitlesFilter(source: source, type: nil, sort: .recentlyAdded)
+        var state = LibraryFeature.State.loaded(contents(all, []))
+
+        #expect(LibraryFeature.reduce(&state, .pick(.yourLibrary)).isEmpty)
+        #expect(LibraryFeature.reduce(&state, .pick(.source(source))) == [.listSource(newest, skip: 0)])
+        #expect(state == .loadingSource(newest))
+        #expect(state.listing.collection == .source(source))
+        #expect(LibraryFeature.reduce(&state, .pick(.source(source))).isEmpty)
+
+        _ = LibraryFeature.reduce(&state, .contentsChanged(contents(all, [Fixture.preview("tt1")])))
+        #expect(state == .loadingSource(newest))
+        _ = LibraryFeature.reduce(&state, .sourceListed(newest, skip: 0, .success(SourceTitlesPage(titles: [Fixture.preview("tt2")], hasMore: false))))
+        #expect(state == .source(LibraryFeature.SourceTitles(filter: newest, titles: [Fixture.preview("tt2")], paging: .complete)))
+
+        #expect(LibraryFeature.reduce(&state, .pick(.yourLibrary)) == [.observe(all)])
+        #expect(state == .loading(all))
+    }
+
+    @Test func aSourcesTypeAndSortListItAgainAndDropAnswersForTheOldFilter() {
+        let source = SourceID("ab23cd45").require()
+        let newest = SourceTitlesFilter(source: source, type: nil, sort: .recentlyAdded)
+        let showsByName = SourceTitlesFilter(source: source, type: .series, sort: .name)
+        var state = LibraryFeature.opening(.source(source)).state
+        #expect(LibraryFeature.opening(.source(source)).effects == [.listSource(newest, skip: 0)])
+        #expect(LibraryFeature.opening(.yourLibrary).state == .loading(all))
+        #expect(LibraryFeature.opening(.yourLibrary).effects == [.observe(all)])
+
+        #expect(LibraryFeature.reduce(&state, .select(.source(showsByName))) == [.listSource(showsByName, skip: 0)])
+        _ = LibraryFeature.reduce(&state, .sourceListed(newest, skip: 0, .success(SourceTitlesPage(titles: [Fixture.preview("tt1")], hasMore: false))))
+        #expect(state == .loadingSource(showsByName))
+        _ = LibraryFeature.reduce(&state, .sourceListed(showsByName, skip: 0, .failure(.unreachable)))
+        #expect(state == .sourceFailed(showsByName, .unreachable))
+
+        #expect(LibraryFeature.reduce(&state, .retry) == [.listSource(showsByName, skip: 0)])
+        #expect(state == .loadingSource(showsByName))
+        #expect(LibraryFeature.reduce(&state, .retry).isEmpty)
+    }
+
+    @Test func aSourcePagesInOnePageAtATimeWithEachTitleOnce() {
+        let filter = SourceTitlesFilter(source: SourceID("ab23cd45").require(), type: .movie, sort: .name)
+        let first = (1...100).map { Fixture.preview("tt\($0)") }
+        var state = LibraryFeature.State.loadingSource(filter)
+        _ = LibraryFeature.reduce(&state, .sourceListed(filter, skip: 0, .success(SourceTitlesPage(titles: first, hasMore: true))))
+
+        #expect(LibraryFeature.reduce(&state, .loadMore) == [.listSource(filter, skip: 100)])
+        #expect(LibraryFeature.reduce(&state, .loadMore).isEmpty)
+        _ = LibraryFeature.reduce(&state, .sourceListed(filter, skip: 0, .success(SourceTitlesPage(titles: [Fixture.preview("tt999")], hasMore: false))))
+        _ = LibraryFeature.reduce(&state, .sourceListed(filter, skip: 100, .failure(.unreachable)))
+        #expect(state == .source(LibraryFeature.SourceTitles(filter: filter, titles: first, paging: .more(skip: 100))))
+
+        #expect(LibraryFeature.reduce(&state, .loadMore) == [.listSource(filter, skip: 100)])
+        let second = SourceTitlesPage(titles: [Fixture.preview("tt100"), Fixture.preview("tt101")], hasMore: false)
+        _ = LibraryFeature.reduce(&state, .sourceListed(filter, skip: 100, .success(second)))
+        #expect(state == .source(LibraryFeature.SourceTitles(filter: filter, titles: first + [Fixture.preview("tt101")], paging: .complete)))
+        #expect(LibraryFeature.reduce(&state, .loadMore).isEmpty)
+        #expect(LibraryFeature.reduce(&state, .remove(MediaID("tt1").require())).isEmpty)
     }
 
     @Test func removingTakesOutAListedTitle() {

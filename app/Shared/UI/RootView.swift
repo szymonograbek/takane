@@ -79,6 +79,7 @@ private struct RouteStack<Root: View>: View {
                 case .details(let preview): DetailsScreen(preview: preview)
                 case .streams(let request): StreamsScreen(request: request)
                 case .genre(let filter): GenreScreen(filter: filter)
+                case .library(let source): LibraryScreen(placement: .pushed(source))
                 case .sourceSettings: SourceSettings()
                 case .source(let id): SourceScreen(id: id)
                 case .sourceFolder(let folder, let name): SourceBrowserScreen(folder: folder, name: name)

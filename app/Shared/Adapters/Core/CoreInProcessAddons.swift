@@ -82,21 +82,19 @@ struct SourceAddonDescriptor: Encodable, Equatable, Sendable {
     struct Catalog: Encodable, Equatable, Sendable {
         /// core's `ExtraProp`.
         struct Extra: Encodable, Equatable, Sendable {
+            /// The catalog answers `search=…` with its matching titles, so Search lists it.
+            static let search = Extra(name: "search")
+            /// The catalog answers in pages, `skip=…` titles in, so core asks for the next one.
+            static let skip = Extra(name: "skip")
+
             let name: String
         }
 
         let type: String
         let id: String
         let name: String
-        let extra: [Extra]
+        var extra: [Extra] = []
 
-        /// A searchable catalog also answers `search=…` with its matching titles, so Search lists it.
-        init(type: String, id: String, name: String, searchable: Bool = false) {
-            self.type = type
-            self.id = id
-            self.name = name
-            extra = searchable ? [Extra(name: "search")] : []
-        }
     }
 
     /// The beginning of every local id, as in core/src/sources.rs.

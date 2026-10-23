@@ -43,7 +43,7 @@ extension JellyfinClient {
                 URLQueryItem(name: "ParentId", value: view.id),
                 URLQueryItem(name: "Recursive", value: "true"),
                 URLQueryItem(name: "IncludeItemTypes", value: "Movie,Series,Episode,Video,Folder"),
-                URLQueryItem(name: "Fields", value: "ProviderIds,Overview,ProductionYear,PremiereDate,PrimaryImageAspectRatio,ParentId"),
+                URLQueryItem(name: "Fields", value: "ProviderIds,Overview,ProductionYear,PremiereDate,PrimaryImageAspectRatio,ParentId,DateCreated"),
                 URLQueryItem(name: "SortBy", value: "DateCreated,SortName"),
                 URLQueryItem(name: "SortOrder", value: "Descending"),
                 URLQueryItem(name: "EnableUserData", value: "false"),
@@ -131,18 +131,23 @@ private struct IndexBuilder {
             }
             let shows = Dictionary(listed.filter { $0.type == "Series" }.map { ($0.id, $0) }) { first, _ in first }
             var episodes: [String: [SourceEpisode]] = [:]
+            var newestEpisode: [String: Date] = [:]
             for episode in listed where episode.type == "Episode" {
                 guard let showID = episode.seriesID, let show = shows[showID], let showMedia = media(of: show),
                       let season = episode.parentIndexNumber, let number = episode.indexNumber, let file = SourceItemID(episode.id)
                 else { continue }
                 items[.episode(showMedia, season: season, episode: number), default: []].append(file)
+                if let added = episode.added {
+                    newestEpisode[showID] = Swift.max(added, newestEpisode[showID] ?? added)
+                }
                 episodes[showID, default: []].append(SourceEpisode(
                     season: season, episode: number, name: Redacted(episode.name), overview: episode.overview.map(Redacted.init),
                     thumbnail: image(episode, "Primary").map(Redacted.init), released: episode.premiereDate
                 ))
             }
             let titles = listed.compactMap { item -> SourceTitle? in
-                guard let kind = item.kind, let title = title(item, kind, episodes: episodes[item.id] ?? []) else { return nil }
+                let added = [item.added, newestEpisode[item.id]].compactMap(\.self).max()
+                guard let kind = item.kind, let title = title(item, kind, added: added, episodes: episodes[item.id] ?? []) else { return nil }
                 if kind == .movie, let file = SourceItemID(item.id) {
                     items[.movie(title.id), default: []].append(file)
                 }
@@ -183,7 +188,7 @@ private struct IndexBuilder {
         }
     }
 
-    private func title(_ item: Item, _ kind: SourceTitle.Kind, episodes: [SourceEpisode]) -> SourceTitle? {
+    private func title(_ item: Item, _ kind: SourceTitle.Kind, added: Date?, episodes: [SourceEpisode]) -> SourceTitle? {
         guard let id = media(of: item) else { return nil }
         let isMatched = id.rawValue.hasPrefix("tt")
         let poster = isMatched ? SourceTitle.cinemetaPoster(of: id) : image(item, "Primary")
@@ -196,6 +201,7 @@ private struct IndexBuilder {
             background: isMatched ? nil : image(item, "Backdrop").map(Redacted.init),
             overview: item.overview.map(Redacted.init),
             year: item.productionYear,
+            added: added,
             episodes: episodes.sorted { ($0.season, $0.episode) < ($1.season, $1.episode) }
         )
     }
@@ -255,6 +261,12 @@ private struct Item: Decodable {
     let backdropImageTags: [String]?
     let primaryImageAspectRatio: Double?
     let parentID: String?
+    let dateCreated: String?
+
+    /// When it came to the server, from its ISO 8601 date with up to seven digits of a second.
+    var added: Date? {
+        dateCreated.flatMap { try? Date($0, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) }
+    }
 
     /// What a catalog lists it as. Nil for an episode, which its show lists.
     var kind: SourceTitle.Kind? {
@@ -270,7 +282,7 @@ private struct Item: Decodable {
         case productionYear = "ProductionYear", premiereDate = "PremiereDate", seriesID = "SeriesId"
         case parentIndexNumber = "ParentIndexNumber", indexNumber = "IndexNumber", imageTags = "ImageTags"
         case backdropImageTags = "BackdropImageTags", primaryImageAspectRatio = "PrimaryImageAspectRatio"
-        case parentID = "ParentId"
+        case parentID = "ParentId", dateCreated = "DateCreated"
     }
 }
 

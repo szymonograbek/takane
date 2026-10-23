@@ -2,11 +2,42 @@ import Foundation
 import Testing
 
 struct HomeFeatureTests {
-    private func row(_ id: String, items: Remote<[MetaPreview], CatalogError>, canLoadMore: Bool = true) -> CatalogRow {
+    private func row(
+        _ id: String, items: Remote<[MetaPreview], CatalogError>, canLoadMore: Bool = true, source: SourceID? = nil
+    ) -> CatalogRow {
         CatalogRow(
-            id: CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted(id)), addonName: Redacted("Cinemeta"), name: .catalog(Redacted(id)),
+            id: CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted(id)), addonName: Redacted("Cinemeta"),
+            name: source.map { .library(Redacted(id), source: $0) } ?? .catalog(Redacted(id)),
             items: items, canLoadMore: canLoadMore
         )
+    }
+
+    @Test func theSourcesRowsComeFirstEachInCoresOrder() {
+        let nas = SourceID("ab23cd45").require()
+        let jellyfin = SourceID("ef67gh23").require()
+        let popular = row("popular", items: .loading)
+        let featured = row("featured", items: .loading)
+        let movies = row("movies", items: .loading, source: jellyfin)
+        let clips = row("clips", items: .loading, source: nas)
+        var state = HomeFeature.State()
+
+        #expect(HomeFeature.reduce(&state, .boardChanged(.rows([popular, movies, featured, clips]))).isEmpty)
+
+        #expect(state.board == .rows([movies, clips, popular, featured]))
+        _ = HomeFeature.reduce(&state, .boardChanged(.noCatalogAddons))
+        #expect(state.board == .noCatalogAddons)
+    }
+
+    @Test func theHeroSkipsASourcesRowWithoutWideArtwork() {
+        let video = Fixture.preview("tt1", background: nil)
+        let wide = Fixture.preview("tt2", background: URL(filePath: "/wide.jpg"))
+        let source = row("videos", items: .loaded([video]), source: SourceID("ab23cd45").require())
+        var state = HomeFeature.State(board: .rows([source]))
+        #expect(state.featured == video)
+
+        state.board = .rows([source, row("popular", items: .loaded([wide]))])
+
+        #expect(state.featured == wide)
     }
 
     @Test func theHeroIsTheFirstLoadedTitleWithWideArtwork() {

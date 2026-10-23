@@ -118,6 +118,12 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
         return try await addon.listed.browse(folder)
     }
 
+    func titles(_ filter: SourceTitlesFilter, skip: Int) async throws(SourceError) -> SourceTitlesPage {
+        guard let addon = addon(for: filter.source) else { throw .notFound }
+        let page = try await addon.listed.index().titles(of: filter.type, sortedBy: filter.sort).page(from: skip)
+        return SourceTitlesPage(titles: page.titles.map(\.preview), hasMore: page.hasMore)
+    }
+
     func libraryFolders(_ id: SourceID) async throws(SourceError) -> [FolderSuggestion] {
         switch addon(for: id) {
         case nil: throw .notFound
