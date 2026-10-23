@@ -63,11 +63,19 @@ struct Services: Sendable {
     /// `STREMIO_MUTE=1` (see `LaunchOptions`) mutes playback, so automated runs play silently.
     @MainActor
     static func live(storageDirectory: URL) async throws(StartupError) -> Services {
+        let (inProcess, sources) = inProcessAddons()
         let core: CoreRuntime
         do {
-            core = try await CoreRuntime.start(storageDirectory: storageDirectory)
+            core = try await CoreRuntime.start(storageDirectory: storageDirectory, inProcessAddons: inProcess)
         } catch {
             throw .core(error)
+        }
+        if !sources.isEmpty {
+            do {
+                try core.setSources(sources)
+            } catch {
+                Log.core.error("setting the source add-ons failed: \(error)")
+            }
         }
         let engine: AetherPlaybackEngine
         do {
@@ -79,11 +87,11 @@ struct Services: Sendable {
             account: CoreAccountService(runtime: core),
             addons: CoreAddonService(runtime: core),
             catalog: CoreCatalogService(runtime: core),
-            streams: CoreStreamService(runtime: core),
+            streams: CoreStreamService(runtime: core, links: inProcess),
             offers: watchOffers(),
             library: CoreLibraryService(runtime: core),
             preferences: CorePreferencesService(runtime: core),
-            tracker: CorePlaybackTracker(runtime: core),
+            tracker: CorePlaybackTracker(runtime: core, links: inProcess),
             engine: engine,
             videoSurface: { AnyView(engine.surface()) },
             skipSegments: { source in
@@ -93,9 +101,21 @@ struct Services: Sendable {
                 case .skipDB: SkipDBSkipSegmentService()
                 }
             },
-            subtitles: CoreSubtitleService(runtime: core),
+            subtitles: CoreSubtitleService(runtime: core, links: inProcess),
             logSharing: LocalLogServer()
         )
+    }
+
+    /// The add-ons the app answers itself and the source add-ons core lists them as.
+    /// `STREMIO_FIXTURE_SOURCE=1` (debug builds) adds `FixtureSource`.
+    private static func inProcessAddons() -> (any CoreInProcessAddons & CorePlaybackLinks, [SourceAddonDescriptor]) {
+        #if DEBUG
+        if LaunchOptions.current["STREMIO_FIXTURE_SOURCE"] == "1", let fixture = FixtureSource() {
+            Log.app.info("fixture source on")
+            return (fixture, [fixture.descriptor])
+        }
+        #endif
+        return (NoInProcessAddons(), [])
     }
 
     private static func watchOffers() -> any WatchOfferService {

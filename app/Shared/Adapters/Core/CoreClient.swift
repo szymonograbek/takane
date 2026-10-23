@@ -38,10 +38,10 @@ final class CoreClient: Sendable {
     }
 
     /// Starts core and loads persisted state from `storageDirectory`. Blocks; call off the main thread.
-    static func start(storageDirectory: URL) throws(CoreError) -> CoreClient {
+    static func start(storageDirectory: URL, inProcessAddons: any CoreInProcessAddons) throws(CoreError) -> CoreClient {
         let (changes, continuation) = AsyncStream.makeStream(of: [CoreField].self, bufferingPolicy: .unbounded)
         let (events, eventContinuation) = AsyncStream.makeStream(of: CoreEvent.self, bufferingPolicy: .unbounded)
-        let host = CoreHost(changes: continuation, events: eventContinuation)
+        let host = CoreHost(changes: continuation, events: eventContinuation, inProcessAddons: inProcessAddons)
         Log.core.info("starting bridge, storage at \(storageDirectory.path)")
         let started = ContinuousClock.now
         try callBridge { error in
@@ -99,11 +99,17 @@ final class CoreClient: Sendable {
 private final class CoreHost: Sendable {
     private let changes: AsyncStream<[CoreField]>.Continuation
     private let events: AsyncStream<CoreEvent>.Continuation
+    private let inProcessAddons: any CoreInProcessAddons
     private let session: URLSession
 
-    init(changes: AsyncStream<[CoreField]>.Continuation, events: AsyncStream<CoreEvent>.Continuation) {
+    init(
+        changes: AsyncStream<[CoreField]>.Continuation,
+        events: AsyncStream<CoreEvent>.Continuation,
+        inProcessAddons: any CoreInProcessAddons
+    ) {
         self.changes = changes
         self.events = events
+        self.inProcessAddons = inProcessAddons
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -150,6 +156,10 @@ private final class CoreHost: Sendable {
             Self.reject(id, "invalid URL: \(Redacted(request.url))")
             return
         }
+        if let addonURL = InProcessURL(url.rawValue) {
+            respondInProcess(id: id, method: request.method, url: addonURL)
+            return
+        }
         var urlRequest = URLRequest(url: url.rawValue)
         urlRequest.httpMethod = request.method
         for (name, value) in request.headers {
@@ -181,6 +191,18 @@ private final class CoreHost: Sendable {
                 Log.network.error("#\(id) ✕ \(url): \(error)")
                 Self.reject(id, error.localizedDescription)
             }
+        }
+    }
+
+    private func respondInProcess(id: UInt64, method: String, url: InProcessURL) {
+        Log.network.debug("#\(id) → \(method) \(url.url) in process")
+        let addons = inProcessAddons
+        Task {
+            let started = ContinuousClock.now
+            let reply = await addons.respond(to: url)
+            let level: Log.Level = (200..<300).contains(reply.status) ? .debug : .warning
+            Log.network.write(level) { "#\(id) ← \(reply.status) \(reply.body.count)B in \(ContinuousClock.now - started) \(url.url)" }
+            reply.body.withSBBytes { sb_fetch_resolve(id, reply.status, $0) }
         }
     }
 

@@ -17,6 +17,7 @@ struct PlayerTrackChoicesTests {
     private let synced = AddonSubtitle(
         id: AddonSubtitle.ID(addon: Fixture.manifest, key: Redacted("synced-1")),
         url: Redacted(URL(string: "https://subs.example/synced-1.srt").require()),
+        source: PlaybackSource(url: Redacted(URL(string: "https://subs.example/synced-1.srt").require()), headers: [:]),
         language: "pol",
         label: Redacted("Synced")
     )
@@ -117,9 +118,11 @@ struct PlayerTrackChoicesTests {
     }
 
     private func file(_ key: String, language: String, addon: ManifestURL = Fixture.manifest) -> AddonSubtitle {
-        AddonSubtitle(
+        let url = Redacted(URL(string: "https://subs.example/\(key).srt").require())
+        return AddonSubtitle(
             id: AddonSubtitle.ID(addon: addon, key: Redacted(key)),
-            url: Redacted(URL(string: "https://subs.example/\(key).srt").require()),
+            url: url,
+            source: PlaybackSource(url: url, headers: [:]),
             language: language,
             label: nil
         )

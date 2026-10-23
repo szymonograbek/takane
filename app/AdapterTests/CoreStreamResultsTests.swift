@@ -53,7 +53,7 @@ struct CoreStreamResultsTests {
 
     @Test func streamPickedWhileMetadataLoadsCarriesTheMetaRequest() throws {
         let details = try Self.details(metaItems: Self.metaItem(Self.cinemeta, content: #"{"type": "Loading"}"#))
-        let results = CoreStreamResults.results(for: Fixture.movie, from: details, addonNames: [:])
+        let results = CoreStreamResults(links: NoInProcessAddons()).results(for: Fixture.movie, from: details, addonNames: [:])
         #expect(Self.metaRequests(in: results) == [Self.metaRequestJSON(Self.cinemeta)])
         #expect(!results.isComplete)
     }
@@ -63,7 +63,7 @@ struct CoreStreamResultsTests {
             Self.metaItem(Self.cinemeta, content: #"{"type": "Err", "content": {"type": "UnexpectedResponse"}}"#),
             Self.metaItem(Self.other, content: Self.readyMeta(videos: "[]")),
         ].joined(separator: ","))
-        let results = CoreStreamResults.results(for: Fixture.movie, from: details, addonNames: [:])
+        let results = CoreStreamResults(links: NoInProcessAddons()).results(for: Fixture.movie, from: details, addonNames: [:])
         #expect(Self.metaRequests(in: results) == [Self.metaRequestJSON(Self.other)])
         #expect(results.isComplete)
     }
@@ -72,7 +72,7 @@ struct CoreStreamResultsTests {
         let details = try Self.details(
             metaItems: Self.metaItem(Self.cinemeta, content: #"{"type": "Err", "content": {"type": "UnexpectedResponse"}}"#)
         )
-        let results = CoreStreamResults.results(for: Fixture.movie, from: details, addonNames: [:])
+        let results = CoreStreamResults(links: NoInProcessAddons()).results(for: Fixture.movie, from: details, addonNames: [:])
         #expect(Self.metaRequests(in: results) == [Self.metaRequestJSON(Self.cinemeta)])
     }
 
@@ -101,7 +101,7 @@ struct CoreStreamResultsTests {
             metaStreams: Self.embeddedStreams(Self.other)
         )
         let names = [URL(string: Self.other).require(): Redacted("Other Meta"), URL(string: Self.debrid).require(): Redacted("Debrid")]
-        let results = CoreStreamResults.results(for: Fixture.movie, from: details, addonNames: names)
+        let results = CoreStreamResults(links: NoInProcessAddons()).results(for: Fixture.movie, from: details, addonNames: names)
         #expect(results.sources.map(\.addonName.rawValue) == ["Other Meta", "Debrid"])
         #expect(Self.streamRequests(in: results) == [
             "other-meta.example 0 stream from \(Self.other)",
@@ -116,7 +116,7 @@ struct CoreStreamResultsTests {
             metaItems: Self.metaItem(Self.debrid, content: Self.readyMeta(videos: "[]")),
             metaStreams: Self.embeddedStreams(Self.debrid)
         )
-        let results = CoreStreamResults.results(for: Fixture.movie, from: details, addonNames: [:])
+        let results = CoreStreamResults(links: NoInProcessAddons()).results(for: Fixture.movie, from: details, addonNames: [:])
         #expect(results.sources.map(\.addonName.rawValue) == ["debrid.example"])
         #expect(results.sources.first?.candidates.value?.map(\.name?.rawValue) == ["Embedded", "1080p"])
         #expect(Self.streamRequests(in: results) == [

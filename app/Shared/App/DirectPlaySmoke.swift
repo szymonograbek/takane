@@ -76,7 +76,7 @@ struct DirectPlaySmoke {
         Log.smoke.info("SMOKE direct 1/3 playing: \(session.position) of \(session.duration), route=\(engine.diagnostics()["route"] ?? "?")")
 
         if let subtitles {
-            engine.addSubtitles(subtitles, title: "Sidecar", language: "en")
+            engine.addSubtitles(subtitles, from: PlaybackSource(url: subtitles, headers: source.headers), title: "Sidecar", language: "en")
             let track = try await app.player.until(timeout: .seconds(20), onTimeout: SmokeTest.Failure.timedOut("a cue from \(subtitles)")) { state in
                 guard let session = state.session, !session.subtitles.isEmpty,
                       let track = session.tracks.first(where: { $0.externalFile == subtitles && $0.isSelected })
