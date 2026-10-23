@@ -7,7 +7,7 @@ use std::sync::{Mutex, OnceLock};
 use futures::channel::oneshot;
 use serde::Serialize;
 
-use crate::{host, open_movies};
+use crate::{host, open_movies, sources};
 
 /// The JSON document the host receives for each request.
 #[derive(Serialize, Debug)]
@@ -31,11 +31,12 @@ fn pending() -> &'static Mutex<HashMap<u64, oneshot::Sender<FetchOutcome>>> {
     PENDING.get_or_init(Default::default)
 }
 
-/// Sends `request` to the host. The receiver completes when the host replies. Open Movies'
-/// requests are answered here instead.
-pub fn send(request: &FetchRequest) -> oneshot::Receiver<FetchOutcome> {
+/// Sends `request` to the host, without the user's local titles. The receiver completes when the
+/// host replies. Open Movies' requests, and requests left with nothing to send, are answered here.
+pub fn send(request: &mut FetchRequest) -> oneshot::Receiver<FetchOutcome> {
     let (sender, receiver) = oneshot::channel();
-    if let Some(outcome) = open_movies::respond(&request.url) {
+    let answer = open_movies::respond(&request.url).or_else(|| sources::guard_egress(request));
+    if let Some(outcome) = answer {
         // The receiver is still held here, so the send cannot fail.
         let _ = sender.send(outcome);
         return receiver;

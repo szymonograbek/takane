@@ -40,13 +40,13 @@ impl Env for AppleEnv {
                 )
             })
             .collect::<BTreeMap<_, _>>();
-        let request = FetchRequest {
+        let mut request = FetchRequest {
             method: parts.method.as_str().to_owned(),
             url: parts.uri.to_string(),
             headers,
             body,
         };
-        let receiver = fetch::send(&request);
+        let receiver = fetch::send(&mut request);
         async move {
             let outcome = receiver
                 .await
