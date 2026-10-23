@@ -1,6 +1,6 @@
 # Onboarding and sign-in
 
-On first launch Takane shows Welcome with two choices: Sign In with Stremio, or Continue Without Account. Sign-in shows a link code and QR code from Stremio's API, with email and password as the alternative. Continuing lands on Home and is remembered.
+On first launch Takane shows Welcome with two choices: Sign In, or Continue Without Account. Sign-in shows a link code and QR code from Stremio's API, with email and password as the alternative. Continuing lands on Home and is remembered.
 
 ## Sub-features
 

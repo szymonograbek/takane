@@ -55,7 +55,7 @@ struct AddonSettings: View {
     #else
     private static let hint = "Turning an add-on off affects this Mac only. To move or remove one, Control-click it. \(orderNote)"
     #endif
-    private static let orderNote = "Streams and subtitles list add-ons in this order, which your Stremio account keeps."
+    private static let orderNote = "Streams and subtitles list add-ons in this order, which your account keeps."
 }
 
 /// Typing or pasting a manifest URL, such as a debrid add-on's.
@@ -188,7 +188,7 @@ private extension UpNextNotice {
 private extension SkipSegmentSource {
     var name: String {
         switch self {
-        case .stremio: "Stremio Premium"
+        case .stremio: "Premium Account"
         case .introDB: "IntroDB"
         case .skipDB: "SkipDB"
         }

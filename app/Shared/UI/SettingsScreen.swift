@@ -139,7 +139,7 @@ private struct AccountSettings: View {
                     note: "Sync add-ons, library and watch progress with your Stremio account. "
                         + "Watch progress on this device is replaced by your account's."
                 ) {
-                    NavigationLink("Sign In with Stremio") { SignInScreen() }
+                    NavigationLink("Sign In") { SignInScreen() }
                         .accessibilityIdentifier("account.signIn")
                 }
             case .signedIn(let email, _, let trakt):
@@ -154,7 +154,7 @@ private struct AccountSettings: View {
                     .accessibilityIdentifier("account.signOut")
             }
         }
-        .confirmationDialog("Sign out of Stremio?", isPresented: $confirmingSignOut) {
+        .confirmationDialog("Sign Out?", isPresented: $confirmingSignOut) {
             Button("Sign Out") { app.account.send(.signOut) }
         } message: {
             Text("Add-ons and watch progress on this device go back to the defaults.")
@@ -241,7 +241,7 @@ private struct AboutSettings: View {
         SettingsPage(title: "About") {
             AppLogo(size: Metrics.emblemSize)
         } rows: {
-            SettingsSection(note: "Takane plays streams from your Stremio add-ons. Built on stremio-core and AetherEngine.") {
+            SettingsSection(note: "Takane plays streams from the add-ons you install. Built on stremio-core and AetherEngine.") {
                 ValueRow(title: "Version", value: Bundle.main.version)
             }
             SettingsSection(note: "Download this device's logs on a phone or computer on the same network, to report a problem.") {

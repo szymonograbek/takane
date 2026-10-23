@@ -8,7 +8,7 @@ struct SignInScreen: View {
     var body: some View {
         let account = app.account
         VStack(spacing: 36) {
-            Text("Sign In with Stremio").font(.title2).bold()
+            Text("Sign In to Your Stremio Account").font(.title2).bold()
             switch account.state.signIn {
             case .linking(.loaded(let code)):
                 LinkCodeView(code: code)
@@ -125,7 +125,7 @@ extension AccountError {
         case .rejected(let message): message
         case .linkExpired: "The code expired before it was confirmed."
         case .superseded: "A newer code replaced this one."
-        case .unavailable(let reason): "Stremio could not be reached (\(reason))."
+        case .unavailable(let reason): "The account service could not be reached (\(reason))."
         }
     }
 }

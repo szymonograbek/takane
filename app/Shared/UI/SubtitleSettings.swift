@@ -24,7 +24,7 @@ struct SubtitleSettings: View {
         .confirmationDialog("Reset the subtitle style?", isPresented: $confirmingReset) {
             Button("Reset Style") { app.preferences.send(.setSubtitleStyle(.defaults)) }
         } message: {
-            Text("Size, font, colors, opacity, position and file styling go back to Stremio's defaults.")
+            Text("Size, font, colors, opacity, position and file styling go back to the defaults.")
         }
     }
 
