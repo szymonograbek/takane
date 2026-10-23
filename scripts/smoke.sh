@@ -14,7 +14,8 @@
 #   scripts/smoke.sh                          macOS, movie/tt0063350
 #   scripts/smoke.sh --tvos series/tt1748166:1:1
 #   scripts/smoke.sh --no-addons              core starts without its default add-ons; checks that
-#                                             board, search and details report none installed, then
+#                                             the board lists only Open Movies, search and details
+#                                             report no add-ons, then
 #                                             that installing Cinemeta fills the board
 # On tvOS it runs on the "Stremio Apple TV" simulator (created on first use) and also saves
 # a simulator screenshot taken while the stream is on screen. Playback is muted (STREMIO_MUTE=1),
