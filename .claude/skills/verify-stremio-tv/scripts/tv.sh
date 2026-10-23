@@ -22,7 +22,7 @@
 set -euo pipefail
 
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-bundle_id=com.ograbek.stremio-tv
+bundle_id=com.ograbek.takane
 state="$root/build/verify/current.env"
 session=stremio-tv-verify
 # Secrets live in the main checkout's .env.smoke; a worktree may keep its own.
@@ -89,7 +89,7 @@ launch)
     [[ "${2:-}" == --account ]] && account=true
     "$root/scripts/build-app.sh" tvos-sim >/dev/null
     udid="$("$root/scripts/tvos-simulator.sh")"
-    xcrun simctl install "$udid" "$root/build/DerivedData/Build/Products/Debug-appletvsimulator/StremioTV.app"
+    xcrun simctl install "$udid" "$root/build/DerivedData/Build/Products/Debug-appletvsimulator/Takane.app"
     run_id="$(date +%Y%m%d-%H%M%S)"
     data="$(xcrun simctl get_app_container "$udid" "$bundle_id" data)"
     # The account profile holds a Stremio auth key. It stays in the simulator, outside tmp.

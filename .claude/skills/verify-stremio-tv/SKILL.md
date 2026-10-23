@@ -35,7 +35,7 @@ First build after a clean checkout compiles the Rust bridge for three targets (a
 $T doctor
 ```
 
-Read-only. Checks the simulator is booted, Takane is the foreground app with a readable accessibility tree (on any screen, the player included), and the app log shows `starting bridge, storage at …verify-<run-id>` (proves this run's fresh profile, not the user's). Prints the evidence directory. Run it first whenever anything looks off. After agent-device reports `main thread execution timed out` or `still finishing a previous command`, doctor fails until the runner drains; wait about 20 s and run it again. Menu on the tab bar of a tab's root screen sends the app to the background; `agent-device open com.ograbek.stremio-tv --platform ios --target tv --udid <udid> --session stremio-tv-verify` brings it back with its state.
+Read-only. Checks the simulator is booted, Takane is the foreground app with a readable accessibility tree (on any screen, the player included), and the app log shows `starting bridge, storage at …verify-<run-id>` (proves this run's fresh profile, not the user's). Prints the evidence directory. Run it first whenever anything looks off. After agent-device reports `main thread execution timed out` or `still finishing a previous command`, doctor fails until the runner drains; wait about 20 s and run it again. Menu on the tab bar of a tab's root screen sends the app to the background; `agent-device open com.ograbek.takane --platform ios --target tv --udid <udid> --session stremio-tv-verify` brings it back with its state.
 
 ## Drive
 
@@ -112,7 +112,7 @@ Proof standards:
 - Playback proof is the `player.status` line advancing over time plus the screenshot showing video, not the row press alone.
 - Network goes to the real add-ons and debrid. There are no mocks.
 
-Smoke journey evidence: `smoke-result.json` (pass flag, streams, video size, decoder, audio output, render size, continue-watching offset) next to the app log. macOS: `~/Library/Logs/com.ograbek.stremio-tv/`, plus `smoke-frame.png`. tvOS: the app container's `Library/Caches/Logs/`, plus `smoke-screen.png`. `scripts/smoke.sh` prints the paths.
+Smoke journey evidence: `smoke-result.json` (pass flag, streams, video size, decoder, audio output, render size, continue-watching offset) next to the app log. macOS: `~/Library/Logs/com.ograbek.takane/`, plus `smoke-frame.png`. tvOS: the app container's `Library/Caches/Logs/`, plus `smoke-screen.png`. `scripts/smoke.sh` prints the paths.
 
 ## Cleanup
 
