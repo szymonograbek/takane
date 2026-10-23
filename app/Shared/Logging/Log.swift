@@ -47,6 +47,7 @@ struct Log: Sendable {
     static let ui = Log(category: "ui")
     static let features = Log(category: "features")
     static let smoke = Log(category: "smoke")
+    static let sources = Log(category: "sources")
 
     /// Messages forwarded from Rust keep their Rust module path as the category.
     static func rust(target: String) -> Log { Log(category: "rust:\(target)") }

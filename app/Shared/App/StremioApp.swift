@@ -59,23 +59,31 @@ struct Services: Sendable {
     let skipSegments: @Sendable (SkipSegmentSource) -> any SkipSegmentService
     let subtitles: any SubtitleService
     let logSharing: any LogSharing
+    let sources: any MediaSourceService
 
     /// `STREMIO_MUTE=1` (see `LaunchOptions`) mutes playback, so automated runs play silently.
     @MainActor
     static func live(storageDirectory: URL) async throws(StartupError) -> Services {
-        let (inProcess, sources) = inProcessAddons()
+        let sources = SourceLibrary(
+            store: KeychainSourceStore(service: "\(Bundle.main.bundleIdentifier ?? "com.ograbek.takane").sources"),
+            jellyfin: JellyfinClient(session: .shared, version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"),
+            webDAV: WebDAVClient(session: .shared)
+        )
+        let inProcess = inProcessAddons(sources)
         let core: CoreRuntime
         do {
-            core = try await CoreRuntime.start(storageDirectory: storageDirectory, inProcessAddons: inProcess)
+            core = try await CoreRuntime.start(storageDirectory: storageDirectory, inProcessAddons: inProcess.addons)
         } catch {
             throw .core(error)
         }
-        if !sources.isEmpty {
+        if let fixture = inProcess.fixture {
             do {
-                try core.setSources(sources)
+                try core.setSources([fixture])
             } catch {
-                Log.core.error("setting the source add-ons failed: \(error)")
+                Log.core.error("listing the fixture source failed: \(error)")
             }
+        } else {
+            sources.keepListed(in: core)
         }
         let engine: AetherPlaybackEngine
         do {
@@ -87,11 +95,11 @@ struct Services: Sendable {
             account: CoreAccountService(runtime: core),
             addons: CoreAddonService(runtime: core),
             catalog: CoreCatalogService(runtime: core),
-            streams: CoreStreamService(runtime: core, links: inProcess),
+            streams: CoreStreamService(runtime: core, links: inProcess.addons),
             offers: watchOffers(),
             library: CoreLibraryService(runtime: core),
             preferences: CorePreferencesService(runtime: core),
-            tracker: CorePlaybackTracker(runtime: core, links: inProcess),
+            tracker: CorePlaybackTracker(runtime: core, links: inProcess.addons),
             engine: engine,
             videoSurface: { AnyView(engine.surface()) },
             skipSegments: { source in
@@ -101,21 +109,24 @@ struct Services: Sendable {
                 case .skipDB: SkipDBSkipSegmentService()
                 }
             },
-            subtitles: CoreSubtitleService(runtime: core, links: inProcess),
-            logSharing: LocalLogServer()
+            subtitles: CoreSubtitleService(runtime: core, links: inProcess.addons),
+            logSharing: LocalLogServer(),
+            sources: sources
         )
     }
 
-    /// The add-ons the app answers itself and the source add-ons core lists them as.
-    /// `STREMIO_FIXTURE_SOURCE=1` (debug builds) adds `FixtureSource`.
-    private static func inProcessAddons() -> (any CoreInProcessAddons & CorePlaybackLinks, [SourceAddonDescriptor]) {
+    /// The add-ons the app answers itself: the user's sources. `STREMIO_FIXTURE_SOURCE=1` (debug
+    /// builds) puts `FixtureSource` in their place, with its descriptor, so core lists the fixture alone.
+    private static func inProcessAddons(
+        _ sources: SourceLibrary
+    ) -> (addons: any CoreInProcessAddons & CorePlaybackLinks, fixture: SourceAddonDescriptor?) {
         #if DEBUG
         if LaunchOptions.current["STREMIO_FIXTURE_SOURCE"] == "1", let fixture = FixtureSource() {
-            Log.app.info("fixture source on")
-            return (fixture, [fixture.descriptor])
+            Log.app.info("fixture source on, in place of the user's sources")
+            return (fixture, fixture.descriptor)
         }
         #endif
-        return (NoInProcessAddons(), [])
+        return (sources, nil)
     }
 
     private static func watchOffers() -> any WatchOfferService {
@@ -143,6 +154,7 @@ final class AppContext {
     let home: FeatureStore<HomeFeature>
     let account: FeatureStore<AccountFeature>
     let preferences: FeatureStore<PreferencesFeature>
+    let sources: FeatureStore<SourcesFeature>
 
     init(services: Services) {
         self.services = services
@@ -175,6 +187,11 @@ final class AppContext {
             PreferencesFeature.State(),
             dependencies: PreferencesFeature.Dependencies(preferences: services.preferences),
             start: [.observe]
+        )
+        sources = FeatureStore(
+            SourcesFeature.State(),
+            dependencies: SourcesFeature.Dependencies(sources: services.sources),
+            start: [.observeSources]
         )
     }
 }
@@ -211,6 +228,9 @@ final class Launch {
             await SmokeTest(configuration: smoke, app: app).run()
         }
         #if DEBUG
+        if let seeds = SourceSeeds(options: LaunchOptions.current) {
+            await seeds.add(to: app.services.sources)
+        }
         if let direct = DirectPlaySmoke(options: LaunchOptions.current, app: app) {
             await direct.run()
         }

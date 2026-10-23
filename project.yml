@@ -136,6 +136,9 @@ targets:
       - path: app/Shared/Adapters/IntroDB
       - path: app/Shared/Adapters/SkipDB
       - path: app/Shared/Adapters/StreamingAvailability
+      # Without the library, which needs the bridge.
+      - path: app/Shared/Adapters/Sources
+        excludes: [SourceLibrary.swift]
       - path: app/Shared/Adapters/Core/CoreDeviceSettings.swift
       - path: app/Shared/Adapters/Core/CoreSubtitleSettings.swift
       - path: app/Shared/Adapters/Core/CoreGeneralSettings.swift
