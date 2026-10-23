@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// The languages streams start with subtitles in, and how text subtitles look, beside a live preview.
+/// The size, position and backing most viewers adjust show first; the rest sit behind More Options.
 struct SubtitleSettings: View {
     @Environment(AppContext.self) private var app
     @State private var confirmingReset = false
@@ -11,7 +12,7 @@ struct SubtitleSettings: View {
         SettingsPage(title: "Subtitles") {
             SubtitlePreview(style: style)
         } rows: {
-            SettingsSection(note: "Used when a stream has them.") {
+            SettingsSection(note: Self.languageNote(languages)) {
                 PreferredLanguagesPicker(
                     title: "Language", none: "Off", selection: languages,
                     ids: (primary: "subtitles.language", fallback: "subtitles.secondLanguage")
@@ -31,36 +32,61 @@ struct SubtitleSettings: View {
     @ViewBuilder
     private func styleSections(_ style: SubtitleStyle) -> some View {
         let save = { (edited: SubtitleStyle) in app.preferences.send(.setSubtitleStyle(edited)) }
-        SettingsSection(title: "Text") {
-            StylePicker(setting: .font, style: style, choose: save)
+        SettingsSection(title: "Style", note: "Higher positions lift subtitles further above the bottom of the picture.") {
             StylePicker(setting: .size, style: style, choose: save)
-            Toggle("Bold", isOn: Binding { style.isBold } set: { isBold in
-                var bold = style
-                bold.isBold = isBold
-                save(bold)
-            })
-            .accessibilityIdentifier("subtitles.bold")
             StylePicker(setting: .position, style: style, choose: save)
-        }
-        SettingsSection(title: "Colors") {
-            StylePicker(setting: .textColor, style: style, choose: save)
-            StylePicker(setting: .outlineColor, style: style, choose: save)
             StylePicker(setting: .backgroundColor, style: style, choose: save)
-            StylePicker(setting: .opacity, style: style, choose: save)
         }
-        SettingsSection(note: "Keeps a subtitle file's own colors, fonts and positions. Picture-based subtitles always keep their look.") {
-            Toggle("Use File Styling", isOn: Binding { style.usesFileStyling } set: { usesFileStyling in
-                var styled = style
-                styled.usesFileStyling = usesFileStyling
-                save(styled)
-            })
-            .accessibilityIdentifier("subtitles.fileStyling")
+        MoreOptions(changed: Self.changedHiddenSettings(style)) {
+            SettingsSection(title: "Text") {
+                StylePicker(setting: .font, style: style, choose: save)
+                Toggle("Bold", isOn: Binding { style.isBold } set: { isBold in
+                    var bold = style
+                    bold.isBold = isBold
+                    save(bold)
+                })
+                .accessibilityIdentifier("subtitles.bold")
+            }
+            SettingsSection(title: "Colors", note: "Lower opacity lets the picture show through the text and its background.") {
+                StylePicker(setting: .textColor, style: style, choose: save)
+                StylePicker(setting: .outlineColor, style: style, choose: save)
+                StylePicker(setting: .opacity, style: style, choose: save)
+            }
+            SettingsSection(note: "Keeps the colors, fonts and positions a subtitle file sets, as picture-based subtitles always do.") {
+                Toggle("Use File Styling", isOn: Binding { style.usesFileStyling } set: { usesFileStyling in
+                    var styled = style
+                    styled.usesFileStyling = usesFileStyling
+                    save(styled)
+                })
+                .accessibilityIdentifier("subtitles.fileStyling")
+            }
         }
         SettingsSection(note: app.preferences.state.failure?.message) {
             Button("Reset Style", role: .destructive) { confirmingReset = true }
                 .disabled(style == .defaults)
                 .accessibilityIdentifier("subtitles.reset")
         }
+    }
+
+    private static func languageNote(_ languages: PreferredLanguages?) -> String {
+        if languages == nil {
+            "Streams start with subtitles in this language when they have them."
+        } else {
+            "The second language is used when a stream lacks the first; Second Subtitles in the player shows two at once."
+        }
+    }
+
+    /// The settings behind More Options that differ from the defaults.
+    private static func changedHiddenSettings(_ style: SubtitleStyle) -> Int {
+        let defaults = SubtitleStyle.defaults
+        return [
+            style.font != defaults.font,
+            style.isBold != defaults.isBold,
+            style.textColor != defaults.textColor,
+            style.outlineColor != defaults.outlineColor,
+            style.opacity != defaults.opacity,
+            style.usesFileStyling != defaults.usesFileStyling,
+        ].count { $0 }
     }
 }
 

@@ -28,8 +28,7 @@ struct SourceSettings: View {
         }
     }
 
-    private static let note = "Play films and shows from your own Jellyfin server or WebDAV folder, next to your add-ons. "
-        + "Their logins stay on this device."
+    private static let note = "Plays films and shows from your own server next to your add-ons, keeping its login on this device."
 }
 
 /// One source: browsing it, what it is, editing it and removing it. It goes back once the source is removed.
@@ -47,7 +46,7 @@ struct SourceScreen: View {
             SettingsSymbol(name: "server.rack")
         } rows: {
             if let source {
-                SettingsSection {
+                SettingsSection(note: source.kind == .webDAV ? Self.foldersNote : nil) {
                     NavigationLink("Browse", value: Route.browsing(source))
                         .accessibilityIdentifier("source.browse")
                     if source.kind == .webDAV {
@@ -85,6 +84,8 @@ struct SourceScreen: View {
             if removed { dismiss() }
         }
     }
+
+    private static let foldersNote = "Choose which folders hold movies and which hold shows, so titles get the right details."
 
     private func removalFailure(_ removal: SourcesFeature.Removal) -> SourceError? {
         if case .failed(let failed, let error) = removal, failed == id { error } else { nil }
