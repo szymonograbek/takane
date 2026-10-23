@@ -67,15 +67,7 @@ actor TitleMatcher {
             let batch = Task { await self.look(up: Array(unknown)) }
             for query in unknown { lookups[query.key] = batch }
         }
-        let running = Set(queries.compactMap { lookups[$0.key] })
-        if !running.isEmpty {
-            // Waiting on a task's value ignores cancellation, so the budget ends the wait instead.
-            let (done, end) = AsyncStream<Never>.makeStream()
-            Task { for task in running { await task.value }; end.finish() }
-            let timer = Task { try? await Task.sleep(for: budget); end.finish() }
-            for await _ in done {}
-            timer.cancel()
-        }
+        await waitForAll(Set(queries.compactMap { lookups[$0.key] }), atMost: budget)
         return queries.reduce(into: [:]) { found, query in
             if let id = answer(for: query)?.id.flatMap(MediaID.init) { found[query] = id }
         }
@@ -160,4 +152,15 @@ private struct CinemetaSearch: Decodable {
         guard fitting.count == 1 else { return nil }
         return fitting.first.flatMap(MediaID.init)
     }
+}
+
+/// Returns once every task is done or `budget` has passed, whichever is first. The tasks go on either way.
+func waitForAll(_ tasks: Set<Task<Void, Never>>, atMost budget: Duration) async {
+    guard !tasks.isEmpty else { return }
+    // Waiting on a task's value ignores cancellation, so the budget ends the wait instead.
+    let (done, end) = AsyncStream<Never>.makeStream()
+    Task { for task in tasks { await task.value }; end.finish() }
+    let timer = Task { try? await Task.sleep(for: budget); end.finish() }
+    for await _ in done {}
+    timer.cancel()
 }

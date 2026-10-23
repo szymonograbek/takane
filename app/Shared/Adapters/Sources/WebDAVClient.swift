@@ -123,10 +123,24 @@ struct WebDAVClient: Sendable {
         return listing.entries
     }
 
+    /// A file under `folder`, when it is at most `limit` bytes.
+    func read(_ path: WebDAVPath, in folder: WebDAVFolder, atMost limit: Int) async throws(SourceError) -> Data {
+        var request = URLRequest(url: folder.url(of: path))
+        request.setValue(folder.authorization, forHTTPHeaderField: "Authorization")
+        let answer = try await send(request, named: "GET \(Redacted(path.names.joined(separator: "/")))", in: folder, atMost: limit + 1)
+        switch answer.status {
+        case 200: break
+        case 401: throw .badCredentials
+        default: throw .invalidResponse(reason: "GET answered \(answer.status)")
+        }
+        guard !answer.isCut else { throw .invalidResponse(reason: "a file over \(limit) bytes") }
+        return answer.body
+    }
+
     private struct Answer {
         let status: Int
         let body: Data
-        /// Whether the body was cut at `WebDAVLimits.answerBytes`.
+        /// Whether the body was cut at the limit it was read to.
         let isCut: Bool
     }
 
@@ -137,7 +151,12 @@ struct WebDAVClient: Sendable {
         request.setValue("application/xml; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.setValue(folder.authorization, forHTTPHeaderField: "Authorization")
         request.httpBody = Data(Self.properties.utf8)
-        Log.network.debug("→ PROPFIND \(depth) \(folder.endpoint)")
+        return try await send(request, named: "PROPFIND \(depth)", in: folder, atMost: limits.answerBytes)
+    }
+
+    /// Reads the answer's body up to `limit` bytes. `name` says what it asks in the log.
+    private func send(_ request: URLRequest, named name: String, in folder: WebDAVFolder, atMost limit: Int) async throws(SourceError) -> Answer {
+        Log.network.debug("→ \(name) \(folder.endpoint)")
         var body = Data()
         var isCut = false
         let response: URLResponse
@@ -146,18 +165,18 @@ struct WebDAVClient: Sendable {
             response = answer
             for try await byte in bytes {
                 body.append(byte)
-                if body.count >= limits.answerBytes {
+                if body.count >= limit {
                     isCut = true
                     bytes.task.cancel()
                     break
                 }
             }
         } catch {
-            Log.network.error("✕ PROPFIND \(folder.endpoint): \(error)")
+            Log.network.error("✕ \(name) \(folder.endpoint): \(error)")
             throw .unreachable
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        Log.network.debug("← \(status) PROPFIND \(depth) \(folder.endpoint), \(body.count) bytes")
+        Log.network.debug("← \(status) \(name) \(folder.endpoint), \(body.count) bytes")
         return Answer(status: status, body: body, isCut: isCut)
     }
 

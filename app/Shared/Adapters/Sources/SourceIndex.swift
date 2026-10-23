@@ -18,6 +18,12 @@ extension MediaID {
     static func local(_ key: SourceItemID, on source: SourceID) -> MediaID? {
         MediaID("\(SourceAddonDescriptor.localIDPrefix)\(source.rawValue)-\(key)")
     }
+
+    /// An IMDb id as a file, a folder's name or an `.nfo` file writes it: `tt` and seven to nine digits.
+    static func imdb(_ text: String) -> MediaID? {
+        guard text.wholeMatch(of: /tt\d{7,9}/) != nil else { return nil }
+        return MediaID(text)
+    }
 }
 
 /// What a source's add-on offers, read from a full listing of its libraries: the catalogs, the

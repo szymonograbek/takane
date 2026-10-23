@@ -106,7 +106,7 @@ final class SourceAddon<Server: SourceServer>: ListedSourceAddon {
 
     /// The current listing, read from the server when there is none or it is older than `lifetime`.
     /// Requests that arrive while it is read wait for the same read.
-    private func listing() async throws(SourceError) -> Server.Listing {
+    func listing() async throws(SourceError) -> Server.Listing {
         let reading = state.withLock { state -> ListingRead in
             switch state.listing {
             case .read(let listing, let at) where ContinuousClock.now - at < lifetime:
