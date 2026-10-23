@@ -1,4 +1,4 @@
-/// The user's media sources: adding one, changing its settings and removing it.
+/// The user's media sources: adding one, renaming it or changing its settings, and removing it.
 enum SourcesFeature: Feature {
     struct Dependencies: Sendable {
         let sources: any MediaSourceService
@@ -37,7 +37,7 @@ enum SourcesFeature: Feature {
         /// keeps reporting there.
         case formOpened
         case add(SourceKind, SourceLogin)
-        case update(SourceID, SourceEndpoint, SourceUsername, PasswordChange)
+        case update(SourceID, SourceEdit)
         case saveFinished(SaveTarget, Result<MediaSource, SourceError>)
         case remove(SourceID)
         case removeFinished(SourceID, Result<Void, SourceError>)
@@ -47,7 +47,7 @@ enum SourcesFeature: Feature {
         /// Start it once, when the store is created.
         case observeSources
         case add(SourceKind, SourceLogin)
-        case update(SourceID, SourceEndpoint, SourceUsername, PasswordChange)
+        case update(SourceID, SourceEdit)
         case remove(SourceID)
     }
 
@@ -71,12 +71,10 @@ enum SourcesFeature: Feature {
         case (.idle, .add(let kind, let login)), (.saved, .add(let kind, let login)), (.failed, .add(let kind, let login)):
             state.save = .saving(.new(kind, login.endpoint))
             return [.add(kind, login)]
-        case (.idle, .update(let id, let endpoint, let username, let password)),
-             (.saved, .update(let id, let endpoint, let username, let password)),
-             (.failed, .update(let id, let endpoint, let username, let password)):
+        case (.idle, .update(let id, let edit)), (.saved, .update(let id, let edit)), (.failed, .update(let id, let edit)):
             guard state.sources.contains(where: { $0.id == id }) else { return [] }
             state.save = .saving(.existing(id))
-            return [.update(id, endpoint, username, password)]
+            return [.update(id, edit)]
         case (.saving(let pending), .saveFinished(let target, let result)) where pending == target:
             switch result {
             case .success(let source): state.save = .saved(source)
@@ -122,9 +120,9 @@ enum SourcesFeature: Feature {
             } catch {
                 send(.saveFinished(target, .failure(error)))
             }
-        case .update(let id, let endpoint, let username, let password):
+        case .update(let id, let edit):
             do {
-                let source = try await dependencies.sources.update(id, endpoint: endpoint, username: username, password: password)
+                let source = try await dependencies.sources.update(id, edit)
                 send(.saveFinished(.existing(id), .success(source)))
             } catch {
                 send(.saveFinished(.existing(id), .failure(error)))

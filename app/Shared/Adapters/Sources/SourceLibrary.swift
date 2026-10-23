@@ -68,7 +68,7 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
             return id
         }
         let (name, credential) = try await signIn(kind, login, for: id)
-        let source = MediaSource(id: id, kind: kind, name: Redacted(name), endpoint: login.endpoint, username: login.username)
+        let source = MediaSource(id: id, kind: kind, name: name, endpoint: login.endpoint, username: login.username)
         try change { state throws(SourceError) in
             try store.save(source, credential)
             state.sources.append(source)
@@ -77,20 +77,17 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
         return source
     }
 
-    func update(
-        _ id: SourceID, endpoint: SourceEndpoint, username: SourceUsername, password: PasswordChange
-    ) async throws(SourceError) -> MediaSource {
+    func update(_ id: SourceID, _ edit: SourceEdit) async throws(SourceError) -> MediaSource {
         guard let current = state.withLock({ $0.sources.first { $0.id == id } }) else { throw .notFound }
-        let name: String
         let credential: SourceCredential
-        switch password {
+        switch edit.password {
         case .replace(let password):
-            (name, credential) = try await signIn(current.kind, SourceLogin(endpoint: endpoint, username: username, password: password), for: id)
+            (_, credential) = try await signIn(current.kind, SourceLogin(endpoint: edit.endpoint, username: edit.username, password: password), for: id)
         case .keep:
             credential = try store.credential(for: id)
-            name = try await check(credential, at: endpoint, as: username, for: id)
+            try await check(credential, at: edit.endpoint, as: edit.username, for: id)
         }
-        let source = MediaSource(id: id, kind: current.kind, name: Redacted(name), endpoint: endpoint, username: username)
+        let source = MediaSource(id: id, kind: current.kind, name: edit.name, endpoint: edit.endpoint, username: edit.username)
         try change { state throws(SourceError) in
             // Removed while signing in.
             guard let index = state.sources.firstIndex(where: { $0.id == id }) else { throw .notFound }
@@ -130,7 +127,7 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
         let addons = sources.compactMap { addon(for: $0.id)?.listed }
         let descriptors = sources.compactMap { source in
             addons.first { $0.source.id == source.id }?.descriptor
-                ?? SourceAddonDescriptor(id: source.id.rawValue, name: source.name.rawValue, catalogs: [])
+                ?? SourceAddonDescriptor(id: source.id.rawValue, name: source.name.text.rawValue, catalogs: [])
         }
         do {
             try core.setSources(descriptors)
@@ -150,7 +147,7 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
         }
         let source = state.withLock { $0.sources.first { $0.id == id } }
         guard let source, SourceAddonRequest(url) == .manifest,
-              let manifest = try? SourceAddonDescriptor(id: source.id.rawValue, name: source.name.rawValue, catalogs: [])?.encodedManifest()
+              let manifest = try? SourceAddonDescriptor(id: source.id.rawValue, name: source.name.text.rawValue, catalogs: [])?.encodedManifest()
         else { return SourceAddonReplies.notFound }
         return CoreFetchReply(status: 200, body: manifest)
     }
@@ -188,36 +185,34 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
         }
     }
 
-    /// Signs in with `login`, returning the source's name and what to keep to sign in again.
-    private func signIn(_ kind: SourceKind, _ login: SourceLogin, for id: SourceID) async throws(SourceError) -> (String, SourceCredential) {
+    /// Signs in with `login`, returning the server's name for the source and what to keep to sign in again.
+    private func signIn(_ kind: SourceKind, _ login: SourceLogin, for id: SourceID) async throws(SourceError) -> (SourceName, SourceCredential) {
         switch kind {
         case .jellyfin:
             let (serverName, session) = try await jellyfin.signIn(login, for: id)
-            return (serverName, .jellyfin(session))
+            return (SourceName(serverName) ?? SourceName(hostOf: login.endpoint), .jellyfin(session))
         case .webDAV:
             try await webDAV.check(login.endpoint, login.username, login.password)
             return (Self.folderName(login.endpoint), .webDAV(login.password))
         }
     }
 
-    /// Signs in with a kept credential, returning the source's name.
+    /// Signs in with a kept credential.
     private func check(
         _ credential: SourceCredential, at endpoint: SourceEndpoint, as username: SourceUsername, for id: SourceID
-    ) async throws(SourceError) -> String {
+    ) async throws(SourceError) {
         switch credential {
         case .jellyfin(let session):
-            return try await jellyfin.check(session, at: endpoint, as: username, for: id)
+            _ = try await jellyfin.check(session, at: endpoint, as: username, for: id)
         case .webDAV(let password):
             try await webDAV.check(endpoint, username, password)
-            return Self.folderName(endpoint)
         }
     }
 
     /// The folder's last path component, or the host for a server's root.
-    private static func folderName(_ endpoint: SourceEndpoint) -> String {
-        let url = endpoint.url.rawValue
-        let folder = url.lastPathComponent
-        return folder.isEmpty || folder == "/" ? url.host() ?? folder : folder
+    private static func folderName(_ endpoint: SourceEndpoint) -> SourceName {
+        let folder = endpoint.url.rawValue.lastPathComponent
+        return folder == "/" ? SourceName(hostOf: endpoint) : SourceName(folder) ?? SourceName(hostOf: endpoint)
     }
 
     /// Applies `body` to the sources, storage included, and tells every observer and core when it succeeds.

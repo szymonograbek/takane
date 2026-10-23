@@ -244,7 +244,7 @@ private enum Subject {
 
     static func source(_ endpoint: String = "http://nas.local:8197") -> MediaSource {
         MediaSource(
-            id: SourceID("abcd2345").require(), kind: .webDAV, name: Redacted("nas.local"),
+            id: SourceID("abcd2345").require(), kind: .webDAV, name: SourceName("nas.local").require(),
             endpoint: SourceEndpoint(endpoint).require(), username: SourceUsername("takane").require()
         )
     }
@@ -334,7 +334,7 @@ private final class BundleMarker {}
 struct WebDAVAddonLiveTests {
     private static let environment = ProcessInfo.processInfo.environment
     private static let source = MediaSource(
-        id: SourceID("livetest").require(), kind: .webDAV, name: Redacted("Dev WebDAV"),
+        id: SourceID("livetest").require(), kind: .webDAV, name: SourceName("Dev WebDAV").require(),
         endpoint: SourceEndpoint(environment["DEV_WEBDAV_URL"] ?? "http://localhost:8197").require(),
         username: SourceUsername(environment["DEV_SOURCES_USER"] ?? "takane").require()
     )
