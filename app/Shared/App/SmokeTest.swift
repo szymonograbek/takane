@@ -12,8 +12,8 @@ import UniformTypeIdentifiers
 /// - `STREMIO_SMOKE_SUBTITLES_ADDON_URL`: a subtitles add-on to install; the journey then waits for its
 ///   files for the stream playing and plays the first one
 /// - `STREMIO_SMOKE_EXIT=1`: quit when done, exit code 0 on pass
-/// - `STREMIO_SMOKE_CATALOG_EMPTY=1`: instead, check that a profile without add-ons reports none for
-///   catalogs, search and metadata, then that installing Cinemeta fills the board (core starts
+/// - `STREMIO_SMOKE_CATALOG_EMPTY=1`: instead, check that a profile without add-ons lists only Open Movies'
+///   catalog and reports no search or metadata add-ons, then that installing Cinemeta fills the board (core starts
 ///   without its default add-ons under `EMPTY_OFFICIAL_ADDONS=1`)
 ///
 /// Writes `smoke-result.json`, `smoke-frame.png` and `smoke-export.log` next to the log file.
@@ -235,13 +235,16 @@ extension SmokeTest {
             case .loading: return Probe<([CatalogRow], CatalogRow), Failure>.pending
             case .noCatalogAddons: return .failed(.catalog("no catalog add-ons on a fresh profile"))
             case .rows(let rows):
-                guard let first = rows.first else { return .failed(.catalog("board has rows but none listed")) }
-                switch first.items {
-                case .loading: return .pending
-                case .failed(let error): return .failed(.catalog("\(first.name): \(error)"))
-                case .loaded where !first.canLoadMore: return .failed(.catalog("\(first.name) cannot load more"))
-                case .loaded: return .done((rows, first))
+                // Cinemeta pages reliably; Open Movies lists all its films at once.
+                if let paged = rows.first(where: { $0.id.addon == Self.cinemeta && $0.canLoadMore }) {
+                    switch paged.items {
+                    case .loading: return .pending
+                    case .failed(let error): return .failed(.catalog("\(paged.name): \(error)"))
+                    case .loaded: return .done((rows, paged))
+                    }
                 }
+                if rows.allSatisfy({ $0.items.value != nil }) { return .failed(.catalog("no Cinemeta row can load more")) }
+                return .pending
             }
         }
         result.board = "rows"
@@ -308,7 +311,8 @@ extension SmokeTest {
             switch board {
             case .loading: Probe<String, Failure>.pending
             case .noCatalogAddons: .done("noCatalogAddons")
-            case .rows(let rows): .failed(.catalog("expected no catalog add-ons, got \(rows.count) rows"))
+            case .rows(let rows) where rows.allSatisfy({ $0.id.addon == Self.openMovies }): .done("Open Movies only")
+            case .rows(let rows): .failed(.catalog("expected only Open Movies, got \(rows.count) rows"))
             }
         }
         result.search = try await Self.until(catalog.search(query), timeout: .seconds(15), "empty search") { results in
@@ -334,11 +338,12 @@ extension SmokeTest {
 
     /// The board stream opened before the install must pick up the new add-on's rows by itself.
     private func firstCatalogAddonSteps(_ result: inout CatalogResult) async throws(Failure) {
-        let cinemeta = try Self.parsed(ManifestURL("https://v3-cinemeta.strem.io/manifest.json"))
+        let cinemeta = try Self.parsed(Self.cinemeta)
         let board = app.services.catalog.board()
         app.addons.send(.install(cinemeta))
         let rows = try await Self.until(board, timeout: .seconds(45), "board rows after installing Cinemeta") { board in
-            guard case .rows(let rows) = board, rows.contains(where: { !($0.items.value ?? []).isEmpty }) else {
+            guard case .rows(let rows) = board,
+                  rows.contains(where: { $0.id.addon != Self.openMovies && !($0.items.value ?? []).isEmpty }) else {
                 return Probe<[CatalogRow], Failure>.pending
             }
             return .done(rows)
@@ -346,6 +351,10 @@ extension SmokeTest {
         result.boardRowsAfterInstall = rows.count
         Log.smoke.info("SMOKE installed Cinemeta: board has \(rows.count) rows")
     }
+
+    /// The add-on the bridge lists first on every signed-out profile, default add-ons or not.
+    nonisolated private static let openMovies = ManifestURL("https://open-movies.invalid/manifest.json")
+    nonisolated private static let cinemeta = ManifestURL("https://v3-cinemeta.strem.io/manifest.json")
 
     private static func parsed<Value>(_ value: Value?) throws(Failure) -> Value {
         guard let value else { throw .catalog("invalid smoke input") }
