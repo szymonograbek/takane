@@ -39,6 +39,13 @@ untagged=(
     "Movies/Night of the Living Dead 1968 720p/Night.of.the.Living.Dead.1968.720p.mkv"
     "Untagged Shows/Pioneer One/Season 1/Pioneer.One.S01E01.mkv"
 )
+# Titles named only by a Kodi .nfo file beside them, with names no search would find, and a home
+# video named like a film Cinemeta finds, which stays local while Home Videos holds other videos.
+nfo_titles=(
+    "Movies/Tears of Steel/Tears of Steel.mkv"
+    "Shows/Pioneer One (nfo)/Season 01/Pioneer One S01E04.mkv"
+    "Home Videos/Night of the Living Dead (1968).mp4"
+)
 
 lan_address() {
     ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo localhost
@@ -59,9 +66,17 @@ make_clip() {
 
 make_media() {
     local clip
-    for clip in "${movies[@]}" "${episodes[@]}" "${home_videos[@]}" "${untagged[@]}"; do make_clip "$clip"; done
+    for clip in "${movies[@]}" "${episodes[@]}" "${home_videos[@]}" "${untagged[@]}" "${nfo_titles[@]}"; do make_clip "$clip"; done
     local subtitles="$DEV_SOURCES_DIR/media/${movies[0]%.*}.en.srt"
     [[ -f "$subtitles" ]] || printf '1\n00:00:01,000 --> 00:00:30,000\nA subtitle from a sidecar file.\n' >"$subtitles"
+    make_nfo "Movies/Tears of Steel/movie.nfo" \
+        '<movie><title>Tears of Steel</title><uniqueid type="imdb" default="true">tt2285752</uniqueid></movie>'
+    make_nfo "Shows/Pioneer One (nfo)/tvshow.nfo" '<tvshow><title>Pioneer One</title><imdbid>tt1748166</imdbid></tvshow>'
+}
+
+make_nfo() {
+    local path="$DEV_SOURCES_DIR/media/$1"
+    [[ -f "$path" ]] || printf '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n%s\n' "$2" >"$path"
 }
 
 jellyfin() {

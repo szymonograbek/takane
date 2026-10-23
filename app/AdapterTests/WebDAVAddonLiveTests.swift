@@ -11,8 +11,10 @@ struct WebDAVAddonLiveTests {
     )
     private static let password = Password(environment["DEV_SOURCES_PASSWORD"] ?? "takane-dev").require()
 
-    private static func addon() -> WebDAVAddon {
+    private static func addon(kinds: [LibraryFolder: FolderKind] = [:]) -> WebDAVAddon {
         let titles = TitleMatcher(session: .shared, defaults: TitleMatcherTests.defaults())
+        var source = source
+        source.folderKinds = kinds
         return WebDAVAddon(source: source, password: password, client: WebDAVClient(session: .shared), titles: titles, matchingBudget: .seconds(30)) {}
     }
 
@@ -45,7 +47,34 @@ struct WebDAVAddonLiveTests {
         #expect(Set(movies.titles.map(\.id.rawValue)).isSuperset(of: ["tt1727587", "tt1254207", "tt2285752", "tt0807840", "tt0063350"]))
         #expect(index.items[PlayableID("tt1748166:1:3").require()]?.count == 1)
         #expect(index.items[PlayableID("tt1748166:1:1").require()]?.count == 2)
-        #expect(Set(index.libraries.flatMap(\.titles).filter { !$0.id.rawValue.hasPrefix("tt") }.map(\.name.rawValue)) == ["Beach Day", "Big Buck Bunny"])
+        let local = index.libraries.flatMap(\.titles).filter { !$0.id.rawValue.hasPrefix("tt") }
+        #expect(Set(local.map(\.name.rawValue)) == ["Beach Day", "Big Buck Bunny", "Night of the Living Dead"])
+    }
+
+    @Test(.enabled(if: LiveTests.enabled, "set STREMIO_LIVE_TESTS=1 and run scripts/dev-sources.sh up"))
+    func nfoFilesNameUntaggedTitlesAndHomeVideosStayLocal() async throws {
+        let addon = Self.addon()
+
+        let index = try await addon.index()
+        let suggestions = try await addon.folderSuggestions()
+
+        let kinds = suggestions.map { "\($0.folder.name.rawValue) \($0.kind)" }
+        #expect(kinds == ["Home Videos otherVideos", "Movies movies", "Shows shows", "Untagged Shows shows"])
+        let tears = try #require(index.items[PlayableID("tt2285752").require()])
+        #expect(tears.count == 2)
+        #expect(index.items[PlayableID("tt1748166:1:4").require()]?.count == 1)
+        #expect(index.items[PlayableID("tt0063350").require()]?.count == 1)
+        let homeVideos = try #require(index.libraries.first { $0.name.rawValue == "Home Videos" })
+        #expect(homeVideos.titles.allSatisfy { !$0.id.rawValue.hasPrefix("tt") })
+    }
+
+    @Test(.enabled(if: LiveTests.enabled, "set STREMIO_LIVE_TESTS=1 and run scripts/dev-sources.sh up"))
+    func homeVideosAsMoviesMatchesTheHomeVideoNamedLikeAFilm() async throws {
+        let index = try await Self.addon(kinds: [LibraryFolder("Home Videos").require(): .movies]).index()
+
+        #expect(index.items[PlayableID("tt0063350").require()]?.count == 2)
+        let homeVideos = try #require(index.libraries.first { $0.name.rawValue == "Home Videos" })
+        #expect(homeVideos.titles.map(\.id.rawValue).contains("tt0063350"))
     }
 
     @Test(.enabled(if: LiveTests.enabled, "set STREMIO_LIVE_TESTS=1 and run scripts/dev-sources.sh up"))
