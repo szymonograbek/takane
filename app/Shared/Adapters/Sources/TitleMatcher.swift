@@ -27,7 +27,7 @@ extension TitleQuery {
 }
 
 /// Finds the IMDb ids of titles a source names without one, on Cinemeta's search. It takes an id
-/// only when exactly one result has the title's name and, when the name gives one, its year, so a
+/// only when exactly one result has the title's name and year (a show's year may be missing), so a
 /// title is never guessed. Answers, found or not, are kept on this device, so relaunching and
 /// reading a source again ask nothing more. A title not found is asked again after `retryAfter`,
 /// in case Cinemeta has it by then; a failed request is asked again on the next read.
@@ -148,8 +148,11 @@ private struct CinemetaSearch: Decodable {
 
     let metas: [Meta]
 
-    /// The only result with `query`'s name and year, or with its name when it has no year.
+    /// The only result with `query`'s name and year. A show may match on its name alone, since
+    /// show folders rarely carry a year; a film may not, or a home video called "Beach Day" would
+    /// become someone else's film and sync to the account as one.
     func only(_ query: TitleQuery) -> MediaID? {
+        if query.kind == .movie && query.year == nil { return nil }
         let name = TitleQuery.comparable(query.name)
         let fitting = Set(metas.filter { meta in
             meta.id.hasPrefix("tt") && TitleQuery.comparable(meta.name) == name && (query.year.map { $0 == meta.year } ?? true)

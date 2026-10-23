@@ -93,6 +93,13 @@ struct TitleMatcherTests {
         #expect(found.isEmpty)
     }
 
+    @Test func aFilmWithoutAYearIsNeverMatchedEvenWhenItsNameIsUnique() async {
+        let stub = HTTPStub { _ in .json(#"{"metas":[{"id":"tt0211915","name":"Amélie","releaseInfo":"2001"}]}"#) }
+        let query = TitleQuery(kind: .movie, name: "Amelie", year: nil)
+
+        #expect(await Self.matcher(stub).ids(for: [query], within: .seconds(10)).isEmpty)
+    }
+
     @Test func namesMatchWhateverTheirCaseAccentsAndPunctuation() async {
         let stub = HTTPStub { _ in .json(#"{"metas":[{"id":"tt0211915","name":"Amélie","releaseInfo":"2001"}]}"#) }
         let query = TitleQuery(kind: .movie, name: "AMELIE!", year: 2001)
