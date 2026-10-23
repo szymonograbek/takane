@@ -49,6 +49,9 @@ enum PlayerFeature: Feature {
         var scan: Scan?
         var streak: StepStreak?
         var restore = Restore.awaiting
+        var subtitleLanguages: PreferredLanguages?
+        /// False once the viewer or remembered choices picked the subtitles, which the app then leaves alone.
+        var picksSubtitles = true
         /// When to offer the next episode and whether it plays by itself, from the preferences.
         var upNextBehavior = UpNextBehavior.defaults
         var upNext = UpNextOffer.notFound
@@ -261,7 +264,7 @@ enum PlayerFeature: Feature {
             session.decoder = name
         case .tracks(let tracks):
             session.tracks = tracks
-            return session.continueRestore()
+            return session.continueRestore() + session.preferredSubtitles()
         case .speed(let speed):
             session.speed = speed
         case .subtitles(let cues):
@@ -337,9 +340,10 @@ extension PlayerFeature {
 }
 
 extension PlayerFeature.Session {
-    /// Takes the seek step, up next behavior and skip segment source from the preferences.
+    /// Takes the seek step, subtitle languages, up next behavior and skip segment source from the preferences.
     mutating func read(_ preferences: Preferences) {
         seekStep = preferences.seekStep
+        subtitleLanguages = preferences.languages.subtitles
         upNextBehavior = preferences.upNext
         skipSegmentSource = preferences.skipSegmentSource
     }
