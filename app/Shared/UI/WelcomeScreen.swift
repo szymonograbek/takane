@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The first launch: sign in to sync with Stremio, or start without an account.
+/// The first launch: sign in to sync with a Stremio account, or start without an account.
 struct WelcomeScreen: View {
     let continueWithoutAccount: () -> Void
     @FocusState private var isSignInFocused: Bool
@@ -10,7 +10,7 @@ struct WelcomeScreen: View {
             VStack(spacing: 28) {
                 AppLogo(size: Metrics.welcomeLogoSize)
                 Text("Welcome to Takane").font(.largeTitle).bold()
-                Text("Sign in with Stremio to bring your add-ons and watch progress. Or start fresh: everything stays on this device.")
+                Text("Sign in with your Stremio account to bring your add-ons and watch progress. Or start fresh: everything stays on this device.")
                     .font(.body)
                     .foregroundStyle(Palette.secondary)
                     .multilineTextAlignment(.center)
@@ -19,7 +19,7 @@ struct WelcomeScreen: View {
                     NavigationLink {
                         SignInScreen()
                     } label: {
-                        Label("Sign In with Stremio", systemImage: "person.crop.circle")
+                        Label("Sign In", systemImage: "person.crop.circle")
                     }
                     .primaryActionStyle()
                     .focused($isSignInFocused)
