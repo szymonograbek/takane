@@ -190,6 +190,11 @@ final class Launch {
         if let smoke = SmokeTest.Configuration(options: LaunchOptions.current) {
             await SmokeTest(configuration: smoke, app: app).run()
         }
+        #if DEBUG
+        if let direct = DirectPlaySmoke(options: LaunchOptions.current, app: app) {
+            await direct.run()
+        }
+        #endif
     }
 
     /// `STREMIO_STORAGE_DIRECTORY` overrides it, so the smoke test runs against a fresh profile.

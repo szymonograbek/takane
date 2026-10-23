@@ -126,7 +126,7 @@ struct SmokeTest {
         if result.passed {
             Log.smoke.info("SMOKE PASS in \(result.elapsedSeconds)s")
         }
-        write(result)
+        Self.write(result)
 
         if configuration.exitWhenDone {
             // Let the screenshot and log writes land before quitting.
@@ -211,7 +211,7 @@ struct SmokeTest {
 
     static var outputDirectory: URL { Log.fileURL.deletingLastPathComponent() }
 
-    private static func writePNG(_ image: CGImage, to url: URL) -> Bool {
+    static func writePNG(_ image: CGImage, to url: URL) -> Bool {
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else { return false }
         CGImageDestinationAddImage(destination, image, nil)
         let written = CGImageDestinationFinalize(destination)

@@ -10,6 +10,10 @@
 # The default titles are free to share: Night of the Living Dead (1968) is in the public domain and
 # Pioneer One is released under Creative Commons, so a run never streams copyrighted work.
 #
+# With STREMIO_SMOKE_PLAY_URL set (debug builds), it skips the add-on journey and plays that URL
+# instead, with STREMIO_SMOKE_PLAY_HEADER ("Name: Value") on every request and, if set,
+# STREMIO_SMOKE_PLAY_SUBTITLES added as a subtitle file. See app/Shared/App/DirectPlaySmoke.swift.
+#
 # Usage: scripts/smoke.sh [--tvos] [--no-addons] [type/id]
 #   scripts/smoke.sh                          macOS, movie/tt0063350
 #   scripts/smoke.sh --tvos series/tt1748166:1:1
@@ -38,7 +42,11 @@ bundle_id=com.ograbek.takane
 if [[ -z "${STREMIO_SMOKE_ADDON_URL:-}" && -f "$root/.env.smoke" ]]; then
     source "$root/.env.smoke"
 fi
-: "${STREMIO_SMOKE_ADDON_URL:?set STREMIO_SMOKE_ADDON_URL or add it to .env.smoke}"
+if [[ -n "${STREMIO_SMOKE_PLAY_URL:-}" ]]; then
+    STREMIO_SMOKE_ADDON_URL=
+else
+    : "${STREMIO_SMOKE_ADDON_URL:?set STREMIO_SMOKE_ADDON_URL or add it to .env.smoke}"
+fi
 
 report() {
     local logs="$1"
@@ -64,6 +72,9 @@ if [[ "$platform" == macos ]]; then
     STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
     STREMIO_SMOKE_SUBTITLES_ADDON_URL="${STREMIO_SMOKE_SUBTITLES_ADDON_URL:-}" \
     STREMIO_SMOKE_ITEM="$item" \
+    STREMIO_SMOKE_PLAY_URL="${STREMIO_SMOKE_PLAY_URL:-}" \
+    STREMIO_SMOKE_PLAY_HEADER="${STREMIO_SMOKE_PLAY_HEADER:-}" \
+    STREMIO_SMOKE_PLAY_SUBTITLES="${STREMIO_SMOKE_PLAY_SUBTITLES:-}" \
     STREMIO_SMOKE_EXIT=1 \
     STREMIO_MUTE=1 \
     STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
@@ -90,6 +101,9 @@ SIMCTL_CHILD_STREMIO_STORAGE_DIRECTORY="$storage" \
 SIMCTL_CHILD_STREMIO_SMOKE_ADDON_URL="$STREMIO_SMOKE_ADDON_URL" \
 SIMCTL_CHILD_STREMIO_SMOKE_SUBTITLES_ADDON_URL="${STREMIO_SMOKE_SUBTITLES_ADDON_URL:-}" \
 SIMCTL_CHILD_STREMIO_SMOKE_ITEM="$item" \
+SIMCTL_CHILD_STREMIO_SMOKE_PLAY_URL="${STREMIO_SMOKE_PLAY_URL:-}" \
+SIMCTL_CHILD_STREMIO_SMOKE_PLAY_HEADER="${STREMIO_SMOKE_PLAY_HEADER:-}" \
+SIMCTL_CHILD_STREMIO_SMOKE_PLAY_SUBTITLES="${STREMIO_SMOKE_PLAY_SUBTITLES:-}" \
 SIMCTL_CHILD_STREMIO_SMOKE_EXIT=1 \
 SIMCTL_CHILD_STREMIO_MUTE=1 \
 SIMCTL_CHILD_STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
