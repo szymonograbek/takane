@@ -10,7 +10,7 @@ import SwiftUI
 /// jumps in one direction add up beside the picture ("+30s"). macOS: space, arrows and Esc. While
 /// the controls are hidden, the next episode's card takes focus near the end, ahead of a skip button.
 /// Subtitles › Timing swaps the controls for the subtitle timing strip, and Menu swaps it back for
-/// the bare video.
+/// the bare video, as does the stream ending or failing or the subtitles going off.
 struct PlayerScreen: View {
     @Environment(AppContext.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -111,6 +111,9 @@ struct PlayerScreen: View {
             nextStreams = nil
             if controls == .timing { controls = .hidden }
         }
+        .onChange(of: canTimeSubtitles) {
+            if !canTimeSubtitles, controls == .timing { controls = .hidden }
+        }
         .sheet(isPresented: Binding { nextStreams != nil } set: { if !$0 { nextStreams = nil } }) {
             if let nextStreams {
                 StreamsScreen(request: nextStreams)
@@ -162,6 +165,12 @@ struct PlayerScreen: View {
     /// Playing at normal speed, so the controls may hide. A scan keeps them up.
     private var isPlaying: Bool {
         app.player.state.session.map { $0.phase == .playing && $0.scan == nil } ?? false
+    }
+
+    /// Whether the subtitle timing strip has subtitles to move: they are on, and the stream has
+    /// neither ended nor failed.
+    private var canTimeSubtitles: Bool {
+        app.player.state.session.map { $0.phase != .ended && $0.subtitleChoice != .off } ?? false
     }
 
     /// Where focus rests while the controls are hidden: the up next card, the skip button or the bare video.
