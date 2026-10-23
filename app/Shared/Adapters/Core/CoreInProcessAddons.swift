@@ -12,10 +12,13 @@ struct InProcessURL: Hashable, Sendable {
 
     /// Can name a file on the user's server.
     let url: Redacted<URL>
+    /// The add-on it belongs to: the host's first label, `SourceAddonDescriptor.id`.
+    let addonID: String
 
     init?(_ url: URL) {
         guard url.scheme == "https", let host = url.host(), host.hasSuffix(".\(Self.domain)") else { return nil }
         self.url = Redacted(url)
+        addonID = String(host.prefix { $0 != "." })
     }
 }
 
@@ -53,15 +56,6 @@ extension CorePlaybackLinks {
             .unsupported(kind: kind)
         }
     }
-}
-
-/// The in-process add-ons of a launch that has none.
-struct NoInProcessAddons: CoreInProcessAddons, CorePlaybackLinks {
-    func respond(to url: InProcessURL) async -> CoreFetchReply {
-        CoreFetchReply(status: 404, body: Data())
-    }
-
-    func playbackSource(for placeholder: InProcessURL) -> PlaybackSource? { nil }
 }
 
 /// A source add-on as `setSources` lists it, in core's `Descriptor` shape: transport URL
