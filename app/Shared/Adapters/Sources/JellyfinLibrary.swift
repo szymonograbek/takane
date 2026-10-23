@@ -150,7 +150,7 @@ private struct IndexBuilder {
     private func title(_ item: Item, _ kind: SourceTitle.Kind, episodes: [SourceEpisode]) -> SourceTitle? {
         guard let id = media(of: item) else { return nil }
         let isMatched = id.rawValue.hasPrefix("tt")
-        let poster = isMatched ? URL(string: "https://images.metahub.space/poster/medium/\(id.rawValue)/img") : image(item, "Primary")
+        let poster = isMatched ? SourceTitle.cinemetaPoster(of: id) : image(item, "Primary")
         return SourceTitle(
             id: id,
             kind: kind,
@@ -169,8 +169,7 @@ private struct IndexBuilder {
         if let imdb = item.providerIDs?.imdb, imdb.hasPrefix("tt"), let id = MediaID(imdb) {
             return id
         }
-        guard let key = SourceItemID(item.id) else { return nil }
-        return MediaID("\(SourceAddonDescriptor.localIDPrefix)\(server.source.rawValue)-\(key)")
+        return SourceItemID(item.id).flatMap { MediaID.local($0, on: server.source) }
     }
 
     /// Jellyfin's artwork, which it serves without a token.

@@ -212,8 +212,10 @@ struct JellyfinAddonTests {
         let video = Self.url("/play/\(Self.sintel)/\(Self.sintel)")
         let subtitle = Self.url("/subtitle/\(Self.sintel)/\(Self.sintel)/0")
 
-        let file = addon.playbackSource(for: try #require(SourcePlaceholder(video)))
-        let subtitles = addon.playbackSource(for: try #require(SourcePlaceholder(subtitle)))
+        let videoLink = try #require(SourcePlaceholder(video))
+        let subtitleLink = try #require(SourcePlaceholder(subtitle))
+        let file = try #require(addon.playbackSource(for: videoLink))
+        let subtitles = try #require(addon.playbackSource(for: subtitleLink))
 
         #expect(SourcePlaceholder(video) == .video(item, file: item))
         #expect(file.url.rawValue.absoluteString == "http://jellyfin.local:8096/Videos/\(Self.sintel)/stream?static=true&mediaSourceId=\(Self.sintel)")
@@ -351,8 +353,10 @@ struct JellyfinAddonLiveTests {
         let video = try #require(Self.placeholder(streams?.first))
         let srt = try #require(Self.placeholder(subtitles?.first))
 
-        let (bytes, status) = try await Self.fetch(addon.playbackSource(for: video), range: "bytes=0-1023")
-        let (text, subtitleStatus) = try await Self.fetch(addon.playbackSource(for: srt))
+        let videoSource = try #require(addon.playbackSource(for: video))
+        let srtSource = try #require(addon.playbackSource(for: srt))
+        let (bytes, status) = try await Self.fetch(videoSource, range: "bytes=0-1023")
+        let (text, subtitleStatus) = try await Self.fetch(srtSource)
         #expect(status == 206)
         #expect(bytes.count == 1024)
         #expect(subtitleStatus == 200)
