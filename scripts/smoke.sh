@@ -33,7 +33,7 @@ if [[ "${1:-}" == "--no-addons" ]]; then
     shift
 fi
 item="${1:-movie/tt0063350}"
-bundle_id=com.ograbek.stremio-tv
+bundle_id=com.ograbek.takane
 
 if [[ -z "${STREMIO_SMOKE_ADDON_URL:-}" && -f "$root/.env.smoke" ]]; then
     source "$root/.env.smoke"
@@ -50,7 +50,7 @@ report() {
 if [[ "$platform" == macos ]]; then
     # Always test what the sources build today, never a stale app.
     "$root/scripts/build-app.sh" macos >/dev/null
-    app="$root/build/DerivedData/Build/Products/Debug/StremioTV.app"
+    app="$root/build/DerivedData/Build/Products/Debug/Takane.app"
     logs="$HOME/Library/Logs/$bundle_id"
     rm -f "$logs/smoke-result.json" "$logs/smoke-frame.png"
 
@@ -69,14 +69,14 @@ if [[ "$platform" == macos ]]; then
     STREMIO_SMOKE_CATALOG_EMPTY="$no_addons" \
     EMPTY_OFFICIAL_ADDONS="$no_addons" \
     STREMIO_LOG_LEVEL="${STREMIO_LOG_LEVEL:-debug}" \
-        "$app/Contents/MacOS/StremioTV" -ApplePersistenceIgnoreState YES >/dev/null 2>&1 || status=$?
+        "$app/Contents/MacOS/Takane" -ApplePersistenceIgnoreState YES >/dev/null 2>&1 || status=$?
     echo "exit code: $status"
     report "$logs"
     exit "$status"
 fi
 
 "$root/scripts/build-app.sh" tvos-sim >/dev/null
-app="$root/build/DerivedData/Build/Products/Debug-appletvsimulator/StremioTV.app"
+app="$root/build/DerivedData/Build/Products/Debug-appletvsimulator/Takane.app"
 
 device="$("$root/scripts/tvos-simulator.sh")"
 xcrun simctl install "$device" "$app"
