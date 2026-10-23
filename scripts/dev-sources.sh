@@ -31,6 +31,14 @@ episodes=(
     "Shows/Pioneer One (2010) [imdbid-tt1748166]/Season 01/Pioneer One S01E03.mkv"
 )
 home_videos=("Home Videos/Beach Day.mp4")
+# Copies named the way downloads are, without ids, for matching titles by name on Cinemeta.
+# Cinemeta's search has no short films, so Big Buck Bunny stays local; Night of the Living Dead
+# (1968, public domain) is the film it finds.
+untagged=(
+    "Movies/Big Buck Bunny 2008 1080p/Big.Buck.Bunny.2008.1080p.mkv"
+    "Movies/Night of the Living Dead 1968 720p/Night.of.the.Living.Dead.1968.720p.mkv"
+    "Untagged Shows/Pioneer One/Season 1/Pioneer.One.S01E01.mkv"
+)
 
 lan_address() {
     ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo localhost
@@ -51,7 +59,7 @@ make_clip() {
 
 make_media() {
     local clip
-    for clip in "${movies[@]}" "${episodes[@]}" "${home_videos[@]}"; do make_clip "$clip"; done
+    for clip in "${movies[@]}" "${episodes[@]}" "${home_videos[@]}" "${untagged[@]}"; do make_clip "$clip"; done
     local subtitles="$DEV_SOURCES_DIR/media/${movies[0]%.*}.en.srt"
     [[ -f "$subtitles" ]] || printf '1\n00:00:01,000 --> 00:00:30,000\nA subtitle from a sidecar file.\n' >"$subtitles"
 }

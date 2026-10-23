@@ -18,14 +18,16 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
     private let store: KeychainSourceStore
     private let jellyfin: JellyfinClient
     private let webDAV: WebDAVClient
+    private let titles: TitleMatcher
     private let state: Mutex<State>
     private let playbackEvents: AsyncStream<InProcessPlayback>.Continuation
 
     /// Reads the stored sources.
-    init(store: KeychainSourceStore, jellyfin: JellyfinClient, webDAV: WebDAVClient) {
+    init(store: KeychainSourceStore, jellyfin: JellyfinClient, webDAV: WebDAVClient, titles: TitleMatcher) {
         self.store = store
         self.jellyfin = jellyfin
         self.webDAV = webDAV
+        self.titles = titles
         let stored: [MediaSource]
         do {
             stored = try store.sources()
@@ -183,7 +185,7 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
             }
             let addon: ServerAddon = switch credential {
             case .jellyfin(let session): .jellyfin(JellyfinAddon(source: source, session: session, client: jellyfin, catalogsChanged: relist))
-            case .webDAV(let password): .webDAV(WebDAVAddon(source: source, password: password, client: webDAV, catalogsChanged: relist))
+            case .webDAV(let password): .webDAV(WebDAVAddon(source: source, password: password, client: webDAV, titles: titles, catalogsChanged: relist))
             }
             state.addons[id] = addon
             return addon

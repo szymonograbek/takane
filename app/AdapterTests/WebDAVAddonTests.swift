@@ -276,9 +276,13 @@ enum Subject {
         return (try? String(contentsOf: url, encoding: .utf8)).require()
     }
 
-    static func addon(_ stub: HTTPStub, endpoint: String = "http://nas.local:8197", limits: WebDAVLimits = WebDAVLimits()) -> WebDAVAddon {
+    static func addon(
+        _ stub: HTTPStub, endpoint: String = "http://nas.local:8197", limits: WebDAVLimits = WebDAVLimits(),
+        titles: TitleMatcher = TitleMatcherTests.knowingNothing(), matchingBudget: Duration = .seconds(10), lifetime: Duration = WebDAVAddon.indexLifetime
+    ) -> WebDAVAddon {
         WebDAVAddon(
-            source: source(endpoint), password: Password("secret").require(), client: WebDAVClient(session: stub.session, limits: limits)
+            source: source(endpoint), password: Password("secret").require(), client: WebDAVClient(session: stub.session, limits: limits),
+            titles: titles, matchingBudget: matchingBudget, lifetime: lifetime
         ) {}
     }
 
@@ -341,7 +345,8 @@ struct WebDAVAddonLiveTests {
     private static let password = Password(environment["DEV_SOURCES_PASSWORD"] ?? "takane-dev").require()
 
     private static func addon() -> WebDAVAddon {
-        WebDAVAddon(source: source, password: password, client: WebDAVClient(session: .shared)) {}
+        let titles = TitleMatcher(session: .shared, defaults: TitleMatcherTests.defaults())
+        return WebDAVAddon(source: source, password: password, client: WebDAVClient(session: .shared), titles: titles, matchingBudget: .seconds(30)) {}
     }
 
     private static func json(_ addon: WebDAVAddon, _ path: String) async throws -> [String: Any] {
@@ -368,11 +373,12 @@ struct WebDAVAddonLiveTests {
     func theIndexListsTheDevFoldersTitles() async throws {
         let index = try await Self.addon().index()
 
-        #expect(index.libraries.map(\.name.rawValue) == ["Home Videos", "Movies", "Shows"])
+        #expect(index.libraries.map(\.name.rawValue) == ["Home Videos", "Movies", "Shows", "Untagged Shows"])
         let movies = try #require(index.libraries.first { $0.name.rawValue == "Movies" })
-        #expect(Set(movies.titles.map(\.id.rawValue)) == ["tt1727587", "tt1254207", "tt2285752", "tt0807840"])
+        #expect(Set(movies.titles.map(\.id.rawValue)).isSuperset(of: ["tt1727587", "tt1254207", "tt2285752", "tt0807840", "tt0063350"]))
         #expect(index.items[PlayableID("tt1748166:1:3").require()]?.count == 1)
-        #expect(index.localTitles.values.map(\.name.rawValue) == ["Beach Day"])
+        #expect(index.items[PlayableID("tt1748166:1:1").require()]?.count == 2)
+        #expect(Set(index.libraries.flatMap(\.titles).filter { !$0.id.rawValue.hasPrefix("tt") }.map(\.name.rawValue)) == ["Beach Day", "Big Buck Bunny"])
     }
 
     @Test(.enabled(if: LiveTests.enabled, "set STREMIO_LIVE_TESTS=1 and run scripts/dev-sources.sh up"))

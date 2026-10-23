@@ -9,11 +9,13 @@ extension SourceAddon where Server == WebDAVConnection {
         source: MediaSource,
         password: Password,
         client: WebDAVClient,
+        titles: TitleMatcher,
+        matchingBudget: Duration = .seconds(3),
         lifetime: Duration = indexLifetime,
         catalogsChanged: @escaping @Sendable () -> Void
     ) {
         let folder = WebDAVFolder(endpoint: source.endpoint, username: source.username, password: password)
-        let server = WebDAVConnection(source: source.id, client: client, folder: folder)
+        let server = WebDAVConnection(source: source.id, client: client, folder: folder, titles: titles, matchingBudget: matchingBudget)
         self.init(source: source, server: server, lifetime: lifetime, catalogsChanged: catalogsChanged)
     }
 }
@@ -23,9 +25,21 @@ struct WebDAVConnection: SourceServer {
     let source: SourceID
     let client: WebDAVClient
     let folder: WebDAVFolder
+    let titles: TitleMatcher
+    /// How long a listing waits for Cinemeta to name its untagged titles. Core's catalogs wait for
+    /// the listing, and an uncached search can take seconds, so titles still looked up then keep
+    /// their local ids until a later listing finds them.
+    let matchingBudget: Duration
 
     func list() async throws(SourceError) -> WebDAVListing {
-        WebDAVMatcher(source: source).listing(of: try await client.list(folder))
+        let entries = try await client.list(folder)
+        let untagged = WebDAVMatcher(source: source).listing(of: entries)
+        let queries = untagged.index.localTitles.compactMapValues(TitleQuery.init)
+        guard !queries.isEmpty else { return untagged }
+        let found = await titles.ids(for: Set(queries.values), within: matchingBudget)
+        let matched = queries.compactMapValues { found[$0] }
+        guard !matched.isEmpty else { return untagged }
+        return WebDAVMatcher(source: source, matched: matched).listing(of: entries)
     }
 
     func files(of id: PlayableID, in listing: WebDAVListing) -> [SourceFile] {
@@ -58,14 +72,17 @@ struct WebDAVVideo: Equatable, Sendable {
 }
 
 /// Turns a WebDAV listing into titles. Each top-level folder is a library. A title is known by the
-/// IMDb id in its file's or a parent folder's name (`[imdbid-tt…]`, `{imdb-tt…}`), else by a local
-/// id keyed by its path. A file named `S01E02` or `1x02` is an episode of the show whose folder
-/// carries the id, or else of the folder above its `Season NN` folder or its own.
+/// IMDb id in its file's or a parent folder's name (`[imdbid-tt…]`, `{imdb-tt…}`), else by the one
+/// `matched` gives its local id, else by a local id keyed by its path. A file named `S01E02` or
+/// `1x02` is an episode of the show whose folder carries the id, or else of the folder above its
+/// `Season NN` folder or its own.
 struct WebDAVMatcher {
     static let videoExtensions: Set<String> = ["mkv", "mp4", "m4v", "mov", "avi", "webm", "ts"]
     static let subtitleExtensions: Set<String> = ["srt", "vtt", "ass", "ssa"]
 
     let source: SourceID
+    /// IMDb ids found by name, keyed by the local id each title had without them.
+    var matched: [MediaID: MediaID] = [:]
 
     /// A video file as matched to the title it plays.
     private struct Match {
@@ -79,6 +96,8 @@ struct WebDAVMatcher {
     /// The title a video plays, and for an episode, which.
     private struct Title {
         let id: MediaID
+        /// The local id of a title matched by name, still answered so what was watched under it opens.
+        let formerID: MediaID?
         /// As the folder or file names it, tags and year included.
         let name: String
         let episode: SourceEpisode?
@@ -106,14 +125,20 @@ struct WebDAVMatcher {
         for (name, found) in Dictionary(grouping: matches, by: \.library) {
             guard let id = Self.key(of: [name]) else { continue }
             for match in found {
-                let media = match.title.id
-                let playable = match.title.episode.map { PlayableID.episode(media, season: $0.season, episode: $0.episode) } ?? .movie(media)
-                items[playable, default: []].append(match.key)
+                for media in [match.title.id, match.title.formerID].compactMap(\.self) {
+                    let playable = match.title.episode.map { PlayableID.episode(media, season: $0.season, episode: $0.episode) } ?? .movie(media)
+                    items[playable, default: []].append(match.key)
+                }
             }
-            let libraryTitles = Dictionary(grouping: found, by: \.title.id).values.compactMap(title).sorted(by: Self.newestFirst).map(\.title)
+            let libraryTitles = Dictionary(grouping: found, by: \.title.id).compactMap { title(of: $1, as: $0) }
+                .sorted(by: Self.newestFirst).map(\.title)
             for title in libraryTitles {
                 titles[title.id] = title
                 if !title.id.rawValue.hasPrefix("tt") { localTitles[title.id] = title }
+            }
+            for (former, renamed) in Dictionary(grouping: found.filter { $0.title.formerID != nil }, by: \.title.formerID) {
+                guard let former, let title = title(of: renamed, as: former) else { continue }
+                localTitles[former] = title.title
             }
             let type: SourceTitle.Kind = libraryTitles.contains { $0.kind == .series } ? .series : .movie
             libraries.append(SourceIndex.Library(id: id, name: Redacted(name), type: type, titles: libraryTitles))
@@ -156,18 +181,18 @@ struct WebDAVMatcher {
         return one.title.name.rawValue.localizedStandardCompare(other.title.name.rawValue) == .orderedAscending
     }
 
-    /// The title that `matches`, the files of one id, make, with when its newest file changed.
-    private func title(_ matches: [Match]) -> (title: SourceTitle, modified: Date)? {
-        guard let first = matches.first else { return nil }
+    /// The title that `matches`, the files of one title, make as `id`, with when its newest file changed.
+    private func title(of matches: [Match], as id: MediaID) -> (title: SourceTitle, modified: Date)? {
+        guard let first = matches.first?.title else { return nil }
         var seen: Set<[Int]> = []
         let episodes = matches.compactMap(\.title.episode)
             .filter { seen.insert([$0.season, $0.episode]).inserted }
             .sorted { ($0.season, $0.episode) < ($1.season, $1.episode) }
-        let id = first.title.id
+        let name = ReleaseName(first.name)
         let title = SourceTitle(
-            id: id, kind: first.title.episode == nil ? .movie : .series, name: Redacted(Self.cleaned(first.title.name)),
-            poster: id.rawValue.hasPrefix("tt") ? SourceTitle.cinemetaPoster(of: id).map(Redacted.init) : nil,
-            isLandscape: false, background: nil, overview: nil, year: Self.year(in: first.title.name), episodes: episodes
+            id: id, kind: first.episode == nil ? .movie : .series, name: Redacted(name.title.isEmpty ? first.name : name.title),
+            poster: first.id.rawValue.hasPrefix("tt") ? SourceTitle.cinemetaPoster(of: first.id).map(Redacted.init) : nil,
+            isLandscape: false, background: nil, overview: nil, year: name.year, episodes: episodes
         )
         return (title, matches.map(\.modified).max() ?? .distantPast)
     }
@@ -206,25 +231,29 @@ struct WebDAVMatcher {
         }
         let name = folder >= 1 ? names[folder] : String(place.base[..<marker.range.lowerBound])
         let path = folder >= 1 ? Array(names[...folder]) : [names[0], Self.cleaned(name)]
-        guard let id = place.imdb?.id ?? local(path) else { return nil }
-        let rest = Self.cleaned(String(place.base[marker.range.upperBound...]))
+        guard let (id, formerID) = identity(of: place, local: path) else { return nil }
+        let rest = ReleaseName(String(place.base[marker.range.upperBound...])).title
         let episode = SourceEpisode(
             season: marker.season, episode: marker.episode, name: Redacted(rest.isEmpty ? "Episode \(marker.episode)" : rest),
             overview: nil, thumbnail: nil, released: nil
         )
-        return Title(id: id, name: name, episode: episode, folder: nil)
+        return Title(id: id, formerID: formerID, name: name, episode: episode, folder: nil)
     }
 
     /// A movie is the folder carrying its id or holding it alone, else the file itself.
     private func movie(of place: Place, isAlone: Bool) -> Title? {
         let carrier = place.imdb?.carrier ?? (place.file > 1 && isAlone ? place.file - 1 : place.file)
         let name = carrier == place.file ? place.base : place.names[carrier]
-        guard let id = place.imdb?.id ?? local(Array(place.names[...carrier])) else { return nil }
-        return Title(id: id, name: name, episode: nil, folder: carrier < place.file ? carrier : nil)
+        guard let (id, formerID) = identity(of: place, local: Array(place.names[...carrier])) else { return nil }
+        return Title(id: id, formerID: formerID, name: name, episode: nil, folder: carrier < place.file ? carrier : nil)
     }
 
-    private func local(_ path: [String]) -> MediaID? {
-        Self.key(of: path).flatMap { MediaID.local($0, on: source) }
+    /// The id a title is known by: its tagged IMDb id, else the one matched to the local id of
+    /// `path` and that local id, else the local id.
+    private func identity(of place: Place, local path: [String]) -> (id: MediaID, formerID: MediaID?)? {
+        if let imdb = place.imdb { return (imdb.id, nil) }
+        guard let local = Self.key(of: path).flatMap({ MediaID.local($0, on: source) }) else { return nil }
+        return matched[local].map { ($0, local) } ?? (local, nil)
     }
 
     private func file(_ entry: WebDAVEntry, key: SourceItemID, base: String, sidecars: [WebDAVPath]) -> SourceFile {
@@ -292,11 +321,8 @@ struct WebDAVMatcher {
         name.wholeMatch(of: /(?i)(season|series|staffel|saison)?\s*\d{1,3}|s\d{1,3}|specials/) != nil
     }
 
-    private static func year(in name: String) -> Int? {
-        name.firstMatch(of: /\((\d{4})\)/).flatMap { Int($0.1) }
-    }
-
-    /// The name without its tags and year: `Sintel (2010) [imdbid-tt1727587]` is `Sintel`.
+    /// The name of a show loose in its library without its tags and year, which its local id's key
+    /// hashes: `Show (2010).` is `Show`.
     private static func cleaned(_ name: String) -> String {
         let bare = name.replacing(/\[[^\]]*\]|\{[^}]*\}|\(\d{4}\)/, with: "")
             .split(whereSeparator: \.isWhitespace).joined(separator: " ")
