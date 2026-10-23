@@ -3,13 +3,14 @@ import Synchronization
 
 /// The user's media sources: signed in to when added or edited, kept in the Keychain, and listed in
 /// core as in-process add-ons, one per source. A Jellyfin source's add-on (`JellyfinAddon`) offers
-/// the server's films and shows and hears how they play; a WebDAV source's answers its manifest only.
+/// the server's films and shows and hears how they play; a WebDAV source's (`WebDAVAddon`) offers
+/// the videos in its folders.
 final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlaybackLinks, CorePlaybackReports {
     private struct State {
         var sources: [MediaSource]
         var observers: [UUID: AsyncStream<[MediaSource]>.Continuation] = [:]
         /// Made when first needed, and dropped when their source changes.
-        var addons: [SourceID: JellyfinAddon] = [:]
+        var addons: [SourceID: ServerAddon] = [:]
         /// Asks for the add-ons to be listed in core again, once `keepListed` runs.
         var relist: AsyncStream<Void>.Continuation?
     }
@@ -40,7 +41,8 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
             var reports = JellyfinPlaybackReports()
             for await event in events {
                 for report in reports.reports(after: event, at: .now) {
-                    await self?.addon(for: report.source)?.report(report)
+                    guard case .jellyfin(let addon) = self?.addon(for: report.source) else { continue }
+                    await addon.report(report)
                 }
             }
         }
@@ -125,7 +127,7 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
 
     private func list(in core: CoreRuntime) {
         let sources = state.withLock { $0.sources }
-        let addons = sources.compactMap { addon(for: $0.id) }
+        let addons = sources.compactMap { addon(for: $0.id)?.listed }
         let descriptors = sources.compactMap { source in
             addons.first { $0.source.id == source.id }?.descriptor
                 ?? SourceAddonDescriptor(id: source.id.rawValue, name: source.name.rawValue, catalogs: [])
@@ -144,7 +146,7 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
     func respond(to url: InProcessURL) async -> CoreFetchReply {
         guard let id = SourceID(url.addonID) else { return SourceAddonReplies.notFound }
         if let addon = addon(for: id) {
-            return await addon.respond(to: url)
+            return await addon.listed.respond(to: url)
         }
         let source = state.withLock { $0.sources.first { $0.id == id } }
         guard let source, SourceAddonRequest(url) == .manifest,
@@ -155,28 +157,31 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
 
     func playbackSource(for placeholder: InProcessURL) -> PlaybackSource? {
         guard let id = SourceID(placeholder.addonID), let addon = addon(for: id), let link = SourcePlaceholder(placeholder) else { return nil }
-        return addon.playbackSource(for: link)
+        return addon.listed.playbackSource(for: link)
     }
 
     func playback(_ event: InProcessPlayback) {
         playbackEvents.yield(event)
     }
 
-    /// The Jellyfin source's add-on, made with the stored sign-in when first needed.
-    private func addon(for id: SourceID) -> JellyfinAddon? {
+    /// The source's add-on, made with the stored sign-in when first needed.
+    private func addon(for id: SourceID) -> ServerAddon? {
         state.withLock { state in
             if let addon = state.addons[id] { return addon }
-            guard let source = state.sources.first(where: { $0.id == id }), source.kind == .jellyfin else { return nil }
-            let session: JellyfinSession
+            guard let source = state.sources.first(where: { $0.id == id }) else { return nil }
+            let credential: SourceCredential
             do {
-                guard case .jellyfin(let stored) = try store.credential(for: id) else { return nil }
-                session = stored
+                credential = try store.credential(for: id)
             } catch {
                 Log.sources.error("reading the sign-in of source \(id) failed: \(error)")
                 return nil
             }
-            let addon = JellyfinAddon(source: source, session: session, client: jellyfin) { [weak self] in
+            let relist: @Sendable () -> Void = { [weak self] in
                 self?.state.withLock { $0.relist }?.yield()
+            }
+            let addon: ServerAddon = switch credential {
+            case .jellyfin(let session): .jellyfin(JellyfinAddon(source: source, session: session, client: jellyfin, catalogsChanged: relist))
+            case .webDAV(let password): .webDAV(WebDAVAddon(source: source, password: password, client: webDAV, catalogsChanged: relist))
             }
             state.addons[id] = addon
             return addon
@@ -221,6 +226,20 @@ final class SourceLibrary: MediaSourceService, CoreInProcessAddons, CorePlayback
             try body(&state)
             state.observers.values.forEach { $0.yield(state.sources) }
             state.relist?.yield()
+        }
+    }
+}
+
+/// A source's add-on, by the kind of its server.
+private enum ServerAddon: Sendable {
+    /// Also hears what plays, for the server's resume position and watched state.
+    case jellyfin(JellyfinAddon)
+    case webDAV(WebDAVAddon)
+
+    var listed: any ListedSourceAddon {
+        switch self {
+        case .jellyfin(let addon): addon
+        case .webDAV(let addon): addon
         }
     }
 }

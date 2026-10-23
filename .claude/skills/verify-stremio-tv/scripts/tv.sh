@@ -8,6 +8,7 @@
 #                                    -STREMIO_KEY value pair is passed to the app as a launch option
 #   tv.sh sign-in                    from Welcome, sign in with STREMIO_TEST_EMAIL and STREMIO_TEST_PASSWORD
 #                                    (env or .env.smoke); launch --account runs it when the profile is signed out
+#   tv.sh relaunch                   quit the app and open it again on this run's profile, as after a reboot
 #   tv.sh doctor                     read-only health check of the current run
 #   tv.sh trakt-check                pass once Trakt shows a play or pause from this run (needs launch --account
 #                                    and Trakt linked on the account)
@@ -119,6 +120,19 @@ launch)
     done
     query ready || { echo "neither Welcome nor Home appeared" >&2; exit 1; }
     if $account && ! query text home.screen >/dev/null; then "$0" sign-in; fi
+    "$0" doctor
+    ;;
+relaunch)
+    load_state
+    xcrun simctl terminate "$udid" "$bundle_id" >/dev/null 2>&1 || true
+    ad open "$bundle_id" --platform ios --target tv --udid "$udid" --relaunch \
+        --launch-args -STREMIO_STORAGE_DIRECTORY --launch-args "$storage" \
+        --launch-args -STREMIO_MUTE --launch-args 1 >/dev/null
+    for _ in $(seq 1 100); do
+        query ready && break
+        sleep 0.3
+    done
+    query ready || { echo "neither Welcome nor Home appeared" >&2; exit 1; }
     "$0" doctor
     ;;
 doctor)
@@ -275,7 +289,7 @@ cleanup)
     echo "cleaned up; evidence kept in $run_dir"
     ;;
 *)
-    sed -n '2,17p' "$0"
+    sed -n '2,18p' "$0"
     exit 1
     ;;
 esac

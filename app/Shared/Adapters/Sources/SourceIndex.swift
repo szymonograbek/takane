@@ -1,7 +1,7 @@
 import Foundation
 
-/// A source server's own id for an item or one of its files, such as a Jellyfin item id. Letters
-/// and digits only, so it is safe in a placeholder's path and inside a local id.
+/// A source server's own id for an item or one of its files, such as a Jellyfin item id, or a key
+/// of a WebDAV path. Letters and digits only, so it is safe in a placeholder's path and inside a local id.
 struct SourceItemID: Hashable, Sendable, CustomStringConvertible {
     let rawValue: String
 
@@ -11,6 +11,13 @@ struct SourceItemID: Hashable, Sendable, CustomStringConvertible {
     }
 
     var description: String { rawValue }
+}
+
+extension MediaID {
+    /// `takane-<source>-<key>`: a title only this source has, which only its add-on gives details of.
+    static func local(_ key: SourceItemID, on source: SourceID) -> MediaID? {
+        MediaID("\(SourceAddonDescriptor.localIDPrefix)\(source.rawValue)-\(key)")
+    }
 }
 
 /// What a source's add-on offers, read from a full listing of its libraries: the catalogs, the
@@ -35,6 +42,11 @@ struct SourceIndex: Equatable, Sendable {
 
 /// A movie, show or video on a source, as its catalog lists it and, for a local id, its details.
 struct SourceTitle: Equatable, Sendable {
+    /// Stremio's poster of a title known by its IMDb id.
+    static func cinemetaPoster(of id: MediaID) -> URL? {
+        URL(string: "https://images.metahub.space/poster/medium/\(id.rawValue)/img")
+    }
+
     enum Kind: Equatable, Sendable {
         case movie
         case series
@@ -76,7 +88,7 @@ struct SourceEpisode: Equatable, Sendable {
 /// A file of an item that the player can play, read when streams or subtitles are asked for.
 struct SourceFile: Equatable, Sendable {
     let item: SourceItemID
-    /// Which of the item's files: Jellyfin's media source id.
+    /// Which of the item's files: Jellyfin's media source id, or for WebDAV the item itself.
     let file: SourceItemID
     /// Its name on the server, without the folder.
     let name: Redacted<String>
@@ -88,7 +100,7 @@ struct SourceFile: Equatable, Sendable {
 
 /// A subtitle file beside a video on the server.
 struct SourceSubtitle: Equatable, Sendable {
-    /// The server's number for it among the file's streams.
+    /// The server's number for it among the file's streams, or its place among WebDAV's sidecars.
     let index: Int
     /// ISO 639-2, such as `eng`.
     let language: String?
