@@ -50,6 +50,10 @@ struct SourceScreen: View {
                 SettingsSection {
                     NavigationLink("Browse", value: Route.browsing(source))
                         .accessibilityIdentifier("source.browse")
+                    if source.kind == .webDAV {
+                        NavigationLink("Folders") { SourceFolderSettings(id: source.id) }
+                            .accessibilityIdentifier("source.folders")
+                    }
                 }
                 SettingsSection {
                     ValueRow(title: "Name", value: name).accessibilityIdentifier("source.name")

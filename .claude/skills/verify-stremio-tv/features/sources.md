@@ -10,6 +10,8 @@ In Settings › Sources the user adds their own Jellyfin server or WebDAV folder
 - `rename` sets the name on Edit; stream lists label the source's files with it.
 - `remove` asks "Remove <name>?" and removes the source; its Home rows and streams go.
 - `persist` keeps the sources across a relaunch.
+- `folder-kinds` shows a WebDAV source's top-level folders with what each holds (Movies, Shows, Other Videos), suggested from its videos until the user picks one. Titles are looked up by name only in Movies and Shows; a home video named like a film stays local in Other Videos. Changing a kind lists the source again, and the choice survives a relaunch.
+- `nfo` names a title from a Kodi `.nfo` file beside it (`movie.nfo`, `tvshow.nfo`, `<video>.nfo`) before its tag or name.
 
 ## How to get to it (user POV)
 
@@ -32,6 +34,8 @@ Preconditions:
 - **Rename.** Select the Jellyfin row, `$T focus source.edit down`, `$T select`; focus lands on `sourceForm.name`. `$T type sourceForm.name down "Home Server"`, then `$T remote menu` to leave the address keyboard it chains to. Save goes back to the source page; `$T text source.name` reads `Name, Home Server`. Sintel's stream list (Home › Movies › Sintel › Play) has a `streams.row` labeled `Home Server, Sintel (2010).mkv …`.
 - **Remove.** Select the WebDAV row, `$T focus source.remove down`, `$T select`: "Remove localhost?" with Remove focused. `$T select` goes back to the list with only Home Server. Sintel's stream list no longer has a `localhost, …` row, and the log reads `removed source <id>` then `listed 1 source add-ons`.
 - **Persisted.** `$T relaunch`, then Settings: `Sources, 1 source`, and the list shows `Home Server, Jellyfin`.
+- **Nfo.** With only the WebDAV source (`$T launch -STREMIO_SOURCES '[{"kind":"webdav",…}]'`), Home › Movies › `poster.tt2285752` › Play lists `localhost, Tears of Steel.mkv` (named only by `Movies/Tears of Steel/movie.nfo`) beside `localhost, Tears of Steel (2012).mkv`, and it plays. The log reads `GET Movies/Tears of Steel/movie.nfo` once per launch, not again when the source is listed again.
+- **Folder kinds.** Settings › Sources › `localhost, WebDAV` › `source.folders`: `sourceFolders.row` rows read `Home Videos, Other Videos`, `Movies, Movies`, `Shows, Shows`, `Untagged Shows, Shows`, focus on the first. Browse › Home Videos shows `Night of the Living Dead` as `poster.takane-<source>-…`, with the add-on's own details. Back on Folders, select Home Videos, press up twice to `Movies`, select: the row reads `Home Videos, Movies` and the log `source <id> holds movies in Home Videos`, then `listed 1 source add-ons in core, [4] catalogs`. Browse › Home Videos now shows `poster.tt0063350`, whose streams list `localhost, Night of the Living Dead (1968).mp4` and `localhost, Night.of.the.Living.Dead.1968.720p.mkv`. Choosing Other Videos again makes it local again. `$T relaunch`: Folders still reads the chosen kind.
 - **Proof.** `$T evidence sources-<step>` after each step.
 
 ## Gotchas
@@ -39,4 +43,5 @@ Preconditions:
 - tvOS chains the form's keyboards: done or next on one field opens the next field's keyboard. `$T type` handles only the first; type the rest with `agent-device type <text> --session stremio-tv-verify`, then press down until `$T focused` prints `next` or `done` and select. `$T remote menu` leaves a chained keyboard without changing its field.
 - `$T type` replaces a field's text, so retyping a password after a failure needs no clearing.
 - Sources stay in the simulator's Keychain across runs and `cleanup`; reset it before a run that starts from none.
+- rclone caches folder listings for five minutes; after `scripts/dev-sources.sh up` adds media, `docker restart takane-dev-sources-webdav-1` makes it list them at once.
 - The source rows on Home share library names (Movies, Home Videos, Shows) across servers; tell sources apart by the stream labels.
