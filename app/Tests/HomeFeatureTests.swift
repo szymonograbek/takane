@@ -4,7 +4,7 @@ import Testing
 struct HomeFeatureTests {
     private func row(_ id: String, items: Remote<[MetaPreview], CatalogError>, canLoadMore: Bool = true) -> CatalogRow {
         CatalogRow(
-            id: CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted(id)), addonName: Redacted("Cinemeta"), name: Redacted(id),
+            id: CatalogID(addon: Fixture.manifest, type: .movie, id: Redacted(id)), addonName: Redacted("Cinemeta"), name: .catalog(Redacted(id)),
             items: items, canLoadMore: canLoadMore
         )
     }

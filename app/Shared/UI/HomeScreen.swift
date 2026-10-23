@@ -176,10 +176,15 @@ extension StreamsRequest {
 }
 
 extension CatalogRow {
-    /// "Popular Movies": the catalog's name with its type, since add-ons reuse names across types.
+    /// "Popular Movies": an add-on's catalog name with its type, since add-ons reuse names across
+    /// types. A library keeps the name the user gave it.
     var title: String {
-        let type = id.type.pluralName
-        let name = name.rawValue
-        return name.localizedCaseInsensitiveContains(type) ? name : "\(name) \(type)"
+        switch name {
+        case .library(let name):
+            return name.rawValue
+        case .catalog(let name):
+            let type = id.type.pluralName
+            return name.rawValue.localizedCaseInsensitiveContains(type) ? name.rawValue : "\(name.rawValue) \(type)"
+        }
     }
 }

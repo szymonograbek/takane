@@ -249,7 +249,7 @@ extension SmokeTest {
         }
         result.board = "rows"
         result.boardRows = rows.count
-        result.pagedRow = "\(paged.addonName.rawValue) \(paged.name.rawValue) (\(paged.id.type))"
+        result.pagedRow = "\(paged.addonName.rawValue) \(paged.name.text.rawValue) (\(paged.id.type))"
         let before = paged.items.value?.count ?? 0
         result.pagedRowItems = before
         Log.smoke.info("SMOKE catalog 1/4 board: \(rows.count) rows, \(paged.addonName) \(paged.name) (\(paged.id.type)) has \(before) items")
@@ -285,7 +285,7 @@ extension SmokeTest {
         }
         result.search = "rows"
         result.searchRows = searchRows
-        result.searchHitRow = "\(hit.addonName.rawValue) \(hit.name.rawValue) (\(hit.id.type))"
+        result.searchHitRow = "\(hit.addonName.rawValue) \(hit.name.text.rawValue) (\(hit.id.type))"
         Log.smoke.info("SMOKE catalog 3/4 search \(query): \(searchRows) rows, \(searched) in \(hit.addonName) \(hit.name) (\(hit.id.type))")
 
         let details: TitleDetails
