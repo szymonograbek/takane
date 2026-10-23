@@ -46,6 +46,8 @@ enum PlayerFeature: Feature {
         var subtitleDelay = SubtitleDelay.zero
         /// The selected subtitle track's cues, for timing them.
         var cueTimeline: [TimedCue] = []
+        /// In order of start.
+        var chapters: [Chapter] = []
         /// What was heard of the speech, for the timing strip and the delay it suggests.
         var speech = SpeechTiming()
         /// Parts of the stream the viewer may skip, found once the duration is known.
@@ -282,6 +284,8 @@ enum PlayerFeature: Feature {
             session.subtitles = cues
         case .cueTimeline(let cues):
             session.cueTimeline = cues
+        case .chapters(let chapters):
+            session.chapters = chapters
         }
         return []
     }
@@ -386,12 +390,6 @@ extension PlayerFeature.State {
         case .active(let session): session.candidate
         case .failed(let candidate, _): candidate
         }
-    }
-
-    /// The skippable segment playing now. Segments whose timestamps may not fit this cut are left out.
-    var activeSegment: SkipSegment? {
-        guard let session else { return nil }
-        return session.segments?.value?.first { $0.fit != .uncertain && $0.range.contains(session.position) }
     }
 
     func tracks(_ kind: TrackKind) -> [MediaTrack] {
