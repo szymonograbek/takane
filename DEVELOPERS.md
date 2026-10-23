@@ -53,3 +53,7 @@ UI verification on tvOS (agent-device driving the simulator with remote presses,
 Unit tests for the domain and feature state machines: `scripts/test.sh`. SwiftLint runs on every build as an Xcode build tool plugin; its warnings fail the build (`.swiftlint.yml`). Architecture and conventions for contributors and agents: [CLAUDE.md](CLAUDE.md) and [docs/architecture.md](docs/architecture.md).
 
 Rust tests: `cd core && rustup run nightly-2026-10-18 cargo test` (the toolchain in `rust-toolchain.toml`; a Homebrew `cargo` on PATH would ignore it).
+
+## Media source servers
+
+`scripts/dev-sources.sh up` runs a Jellyfin server and a WebDAV folder in Docker (OrbStack or Docker Desktop) over the same silent test clips: four Creative Commons films, three episodes of Pioneer One and one home video. The first run generates the clips with ffmpeg and sets up Jellyfin through its API, about 30 s. It prints the URLs and the user and password (`takane` / `takane-dev`): `localhost` for the simulator, the Mac's network address for an Apple TV. `env` prints them again, `down` stops the servers and `reset` deletes their state under `build/dev-sources`.
