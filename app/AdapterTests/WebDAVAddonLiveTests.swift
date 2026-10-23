@@ -42,13 +42,16 @@ struct WebDAVAddonLiveTests {
     func theIndexListsTheDevFoldersTitles() async throws {
         let index = try await Self.addon().index()
 
-        #expect(index.libraries.map(\.name.rawValue) == ["Home Videos", "Movies", "Shows", "Untagged Shows"])
+        #expect(index.libraries.map(\.name.rawValue) == ["Home Videos", "Movies", "Paging Test", "Shows", "Untagged Shows"])
         let movies = try #require(index.libraries.first { $0.name.rawValue == "Movies" })
         #expect(Set(movies.titles.map(\.id.rawValue)).isSuperset(of: ["tt1727587", "tt1254207", "tt2285752", "tt0807840", "tt0063350"]))
         #expect(index.items[PlayableID("tt1748166:1:3").require()]?.count == 1)
         #expect(index.items[PlayableID("tt1748166:1:1").require()]?.count == 2)
-        let local = index.libraries.flatMap(\.titles).filter { !$0.id.rawValue.hasPrefix("tt") }
+        let local = index.libraries.filter { $0.name.rawValue != "Paging Test" }.flatMap(\.titles).filter { !$0.id.rawValue.hasPrefix("tt") }
         #expect(Set(local.map(\.name.rawValue)) == ["Beach Day", "Big Buck Bunny", "Night of the Living Dead"])
+        let clips = index.titles(of: nil, sortedBy: .recentlyAdded).filter { $0.name.rawValue.hasPrefix("Test Clip") }
+        #expect(clips.count == 150 && clips.first?.name.rawValue == "Test Clip 150")
+        #expect(index.titles(of: nil, sortedBy: .name).page(from: 100).titles.isEmpty == false)
     }
 
     @Test(.enabled(if: LiveTests.enabled, "set STREMIO_LIVE_TESTS=1 and run scripts/dev-sources.sh up"))
@@ -59,7 +62,7 @@ struct WebDAVAddonLiveTests {
         let suggestions = try await addon.folderSuggestions()
 
         let kinds = suggestions.map { "\($0.folder.name.rawValue) \($0.kind)" }
-        #expect(kinds == ["Home Videos otherVideos", "Movies movies", "Shows shows", "Untagged Shows shows"])
+        #expect(kinds == ["Home Videos otherVideos", "Movies movies", "Paging Test otherVideos", "Shows shows", "Untagged Shows shows"])
         let tears = try #require(index.items[PlayableID("tt2285752").require()])
         #expect(tears.count == 2)
         #expect(index.items[PlayableID("tt1748166:1:4").require()]?.count == 1)

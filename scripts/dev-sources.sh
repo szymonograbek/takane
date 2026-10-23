@@ -46,6 +46,12 @@ nfo_titles=(
     "Shows/Pioneer One (nfo)/Season 01/Pioneer One S01E04.mkv"
     "Home Videos/Night of the Living Dead (1968).mp4"
 )
+# A folder only WebDAV serves, holding more titles than a catalog's page of 100. Copies of one
+# short clip rather than hard links, so each can carry its own date, a minute after the one before,
+# for Recently Added. No name carries a year, so the folder holds Other Videos and no title is
+# looked up on Cinemeta.
+paging_folder="Paging Test"
+paging_count=150
 
 lan_address() {
     ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo localhost
@@ -72,6 +78,21 @@ make_media() {
     make_nfo "Movies/Tears of Steel/movie.nfo" \
         '<movie><title>Tears of Steel</title><uniqueid type="imdb" default="true">tt2285752</uniqueid></movie>'
     make_nfo "Shows/Pioneer One (nfo)/tvshow.nfo" '<tvshow><title>Pioneer One</title><imdbid>tt1748166</imdbid></tvshow>'
+    make_paging_clips
+}
+
+make_paging_clips() {
+    local folder="$DEV_SOURCES_DIR/media/$paging_folder" clip="$DEV_SOURCES_DIR/paging-clip.mp4" i path
+    [[ -f "$folder/$(printf 'Test Clip %03d.mp4' "$paging_count")" ]] && return
+    [[ -f "$clip" ]] || ffmpeg -hide_banner -loglevel error \
+        -f lavfi -i "testsrc2=size=320x180:rate=24:duration=5" -f lavfi -i "anullsrc=r=48000:cl=mono" \
+        -shortest -c:v libx264 -preset veryfast -crf 40 -c:a aac -b:a 16k "$clip"
+    mkdir -p "$folder"
+    for i in $(seq 1 "$paging_count"); do
+        path="$folder/$(printf 'Test Clip %03d.mp4' "$i")"
+        cp "$clip" "$path"
+        touch -t "$(printf '20260101%02d%02d' $((i / 60)) $((i % 60)))" "$path"
+    done
 }
 
 make_nfo() {
