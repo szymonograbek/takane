@@ -18,5 +18,6 @@ Custom Apple TV / macOS client for Stremio accounts, built on [stremio-core](htt
 | Player with subtitle and audio track selection | |
 | Player settings (languages, subtitle style) | |
 | Debrid / HTTP streams | |
+| The user's Jellyfin server and WebDAV folders | |
 
 Distribution is sideload today. The App Store is the goal, with sideloading as the fallback. Nightly Rust is acceptable.
