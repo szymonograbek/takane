@@ -101,7 +101,8 @@ struct CoreInProcessAddonsTests {
             "nextVideo": null,
             "nextStreams": null,
             "nextStream": null,
-            "streamState": null
+            "streamState": null,
+            "watchedVideos": []
         }
         """.utf8))
     }

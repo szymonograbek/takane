@@ -262,12 +262,15 @@ extension TitleDetails {
         return numbers.filter { $0 > 0 }.sorted() + (numbers.contains(0) ? [0] : [])
     }
 
-    func episodes(in season: Int) -> [Video] {
-        videos.filter { $0.season == season }.sorted { ($0.episode ?? 0) < ($1.episode ?? 0) }
-    }
-
     /// What Play starts: the movie, the live channel, or the first episode of the first regular season.
     var firstPlayable: PlayableID? {
-        preview.playable ?? seasons.first.flatMap { episodes(in: $0).first?.playable }
+        preview.playable ?? seasons.first.flatMap { videos.episodes(in: $0).first?.playable }
+    }
+}
+
+extension [Video] {
+    /// The season's episodes in order.
+    func episodes(in season: Int) -> [Video] {
+        filter { $0.season == season }.sorted { ($0.episode ?? 0) < ($1.episode ?? 0) }
     }
 }

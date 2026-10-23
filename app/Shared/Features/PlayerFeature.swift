@@ -1,6 +1,7 @@
 import Foundation
 
-/// Plays one stream at a time, keeps the tracker informed of progress and offers the next episode.
+/// Plays one stream at a time, keeps the tracker informed of progress, knows the title it plays and
+/// offers the next episode.
 enum PlayerFeature: Feature {
     struct Dependencies: Sendable {
         let engine: any PlaybackEngine
@@ -63,6 +64,8 @@ enum PlayerFeature: Feature {
         /// When to offer the next episode and whether it plays by itself, from the preferences.
         var upNextBehavior = UpNextBehavior.defaults
         var upNext = UpNextOffer.notFound
+        /// What the tracker knows about the title, nil until its metadata loads.
+        var meta: PlayingTitle?
     }
 
     enum State: Equatable, Sendable {
@@ -89,6 +92,7 @@ enum PlayerFeature: Feature {
         case subtitlesFound(StreamCandidate, [SubtitleSource])
         case preferencesRead(StreamCandidate, Preferences)
         case remembered(StreamCandidate, TrackChoices)
+        case titleFound(StreamCandidate, PlayingTitle?)
         case upNext(UpNextEvent)
     }
 
@@ -108,8 +112,9 @@ enum PlayerFeature: Feature {
         /// Reads the preferences and starts playback, then follows the add-ons' subtitles and what was
         /// remembered for it until another candidate replaces it.
         case begin(StreamCandidate, PlaybackSource, from: Duration)
-        /// Feeds the episode after the candidate back as `.upNext(.found)` until another candidate replaces it.
-        case watchUpNext(StreamCandidate)
+        /// Feeds what the tracker knows about the candidate's title back as `.titleFound` until another
+        /// candidate replaces it.
+        case watchTitle(StreamCandidate)
         case setPaused(Bool)
         case seek(by: Duration)
         case seekTo(Duration)
@@ -183,6 +188,9 @@ enum PlayerFeature: Feature {
             state = .active(session)
             return []
 
+        case (.active(let session), .titleFound(let candidate, let title)) where candidate == session.candidate:
+            return update(&state, session) { $0.receive(title); return [] }
+
         case (.active(let session), .upNext(let event)):
             return reduce(event, in: session, replacing: &state)
 
@@ -205,7 +213,8 @@ enum PlayerFeature: Feature {
              (.failed, .select), (.failed, .chooseSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
              (.idle, .subtitlesFound), (.failed, .subtitlesFound), (.idle, .timeline), (.failed, .timeline),
              (.idle, .preferencesRead), (.failed, .preferencesRead), (.idle, .remembered), (.failed, .remembered),
-             (.idle, .upNext), (.failed, .upNext), (.active, .jump), (.active, .timeline),
+             (.idle, .upNext), (.failed, .upNext), (.idle, .titleFound), (.failed, .titleFound), (.active, .titleFound),
+             (.active, .jump), (.active, .timeline),
              (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .preferencesRead), (.active, .skip), (.active, .remembered):
             return []
         }
@@ -216,7 +225,7 @@ enum PlayerFeature: Feature {
         switch candidate.playability {
         case .playable(let source):
             state = .active(Session(candidate: candidate, title: title))
-            return [.begin(candidate, source, from: start), .watchUpNext(candidate)]
+            return [.begin(candidate, source, from: start), .watchTitle(candidate)]
         case .unsupported(let kind):
             let wasActive = state.session != nil
             state = .failed(candidate, .unsupported(kind: kind))
@@ -251,9 +260,9 @@ extension PlayerFeature {
             tracker.begin(candidate)
             engine.load(source, from: start, languages: preferences?.languages ?? .streamDefaults)
             await follow(candidate, playing: source, dependencies, send)
-        case .watchUpNext(let candidate):
-            for await next in tracker.upNext(after: candidate) {
-                send(.upNext(.found(candidate, next)))
+        case .watchTitle(let candidate):
+            for await title in tracker.title(of: candidate) {
+                send(.titleFound(candidate, title))
             }
         case .setPaused(let paused):
             engine.setPaused(paused)

@@ -10,8 +10,6 @@ extension PlayerFeature {
     }
 
     enum UpNextEvent: Sendable {
-        /// The tracker's latest answer for `candidate`.
-        case found(StreamCandidate, UpNext?)
         /// Moves on to the offered episode: plays its stream, or leaves the choice of one to the viewer.
         case play
         case dismiss
@@ -20,13 +18,6 @@ extension PlayerFeature {
     static func reduce(_ event: UpNextEvent, in session: Session, replacing state: inout State) -> [Effect] {
         var session = session
         switch event {
-        case .found(let candidate, let next):
-            guard candidate == session.candidate else { return [] }
-            switch (session.upNext, next) {
-            case (.dismissed, _): return []
-            case (.notFound, let next?), (.offered, let next?): session.upNext = .offered(next)
-            case (.notFound, nil), (.offered, nil): session.upNext = .notFound
-            }
         case .play:
             guard case .offered(let next) = session.upNext else { return [] }
             if let stream = next.stream { return play(stream, of: next, replacing: &state) }
@@ -55,6 +46,15 @@ extension PlayerFeature {
 }
 
 extension PlayerFeature.Session {
+    /// Offers the tracker's latest answer for the next episode, unless the viewer turned it down.
+    mutating func offer(_ next: UpNext?) {
+        switch (upNext, next) {
+        case (.dismissed, _): break
+        case (.notFound, let next?), (.offered, let next?): upNext = .offered(next)
+        case (.notFound, nil), (.offered, nil): upNext = .notFound
+        }
+    }
+
     /// The episode to offer now: from its notice before the end until the viewer acts on it.
     var upNextCard: UpNext? {
         guard case .offered(let next) = upNext, let lead = upNextBehavior.notice.lead else { return nil }

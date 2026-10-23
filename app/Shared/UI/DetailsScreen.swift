@@ -54,7 +54,7 @@ private struct DetailsContent: View {
                 case .loaded(let details) where !details.seasons.isEmpty:
                     ForEach(details.seasons, id: \.self) { season in
                         Shelf(title: season == 0 ? "Specials" : "Season \(season)") {
-                            let episodes = details.episodes(in: season)
+                            let episodes = details.videos.episodes(in: season)
                             let isSeasonWatched = episodes.allSatisfy(\.isWatched)
                             ForEach(episodes) { video in
                                 EpisodeCard(video: video, show: details.preview, isSeasonWatched: isSeasonWatched) {

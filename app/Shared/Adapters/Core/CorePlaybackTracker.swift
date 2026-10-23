@@ -48,21 +48,21 @@ struct CorePlaybackTracker: PlaybackTracker {
         reports.playback(.stopped)
     }
 
-    /// Core finds the next video once the selection's meta item loads, then asks the selected
-    /// stream's add-on for its streams and picks the one in the same binge group.
-    func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?> {
-        let (results, continuation) = AsyncStream.makeStream(of: UpNext?.self, bufferingPolicy: .bufferingNewest(1))
+    /// Core loads the selection's meta item and finds the next video in it, then asks the selected
+    /// stream's add-on for that video's streams and picks the one in the same binge group.
+    func title(of candidate: StreamCandidate) -> AsyncStream<PlayingTitle?> {
+        let (results, continuation) = AsyncStream.makeStream(of: PlayingTitle?.self, bufferingPolicy: .bufferingNewest(1))
         let links = links
         let answers = runtime.observe(.player, as: PlayerState.self) { Self.answer(for: candidate, in: $0, links: links) }
         let task = Task {
             var isSelected = false
             for await answer in answers {
-                guard case .selected(let next) = answer else {
+                guard case .selected(let title) = answer else {
                     // Before the load lands another selection still shows; after, another candidate replaced this one.
                     if isSelected { break } else { continue }
                 }
                 isSelected = true
-                continuation.yield(next)
+                continuation.yield(title)
             }
             continuation.finish()
         }
@@ -130,25 +130,30 @@ struct CorePlaybackTracker: PlaybackTracker {
 }
 
 private extension CorePlaybackTracker {
-    /// What one state of core's player model says about the episode after a candidate.
+    /// What one state of core's player model says about a candidate's title.
     enum Answer: Equatable, Sendable {
         case otherSelection
-        case selected(UpNext?)
+        case selected(PlayingTitle?)
     }
 
     static func answer(for candidate: StreamCandidate, in player: PlayerState, links: any CorePlaybackLinks) -> Answer {
         guard let selected = player.selected, let source = candidate.source,
               links.playability(of: selected.stream) == .playable(source), selected.streamRequest?.path.id == candidate.item.rawValue
         else { return .otherSelection }
-        guard let video = player.nextVideo, let id = PlayableID(video.id) else { return .selected(nil) }
-        let show = player.metaItem?.content?.readyContent
-        return .selected(UpNext(
-            video: id,
-            show: Redacted(show?.name ?? ""),
-            title: Redacted(video.title),
-            thumbnail: video.thumbnail.flatMap(URL.init(string:)),
-            backdrop: show?.background.flatMap(URL.init(string:)),
-            stream: nextCandidate(for: id, in: player, links: links)
+        guard let show = player.metaItem?.content?.readyContent else { return .selected(nil) }
+        let backdrop = show.background.flatMap(URL.init(string:))
+        let next = player.nextVideo.flatMap { video in
+            PlayableID(video.id).map { id in
+                UpNext(
+                    video: id, show: Redacted(show.name), title: Redacted(video.title),
+                    thumbnail: video.thumbnail.flatMap(URL.init(string:)), backdrop: backdrop,
+                    stream: nextCandidate(for: id, in: player, links: links)
+                )
+            }
+        }
+        return .selected(PlayingTitle(
+            name: Redacted(show.name), description: show.description.map(Redacted.init), backdrop: backdrop,
+            videos: show.videos.compactMap { $0.video(watched: player.watchedVideos) }, next: next
         ))
     }
 

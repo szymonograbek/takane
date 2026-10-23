@@ -86,7 +86,7 @@ struct BrowsingFeatureTests {
         }
         let details = Fixture.details(Fixture.preview("tt1", type: .series), videos: videos)
         #expect(details.seasons == [1, 2, 0])
-        #expect(details.episodes(in: 1).map(\.playable.rawValue) == ["tt1:1:1", "tt1:1:2"])
+        #expect(details.videos.episodes(in: 1).map(\.playable.rawValue) == ["tt1:1:1", "tt1:1:2"])
         #expect(details.firstPlayable == PlayableID("tt1:1:1"))
     }
 
