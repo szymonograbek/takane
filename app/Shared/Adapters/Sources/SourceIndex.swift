@@ -34,7 +34,7 @@ struct SourceIndex: Equatable, Sendable {
         let id: SourceItemID
         let name: Redacted<String>
         let type: SourceTitle.Kind
-        /// Its movies, shows and videos, newest first.
+        /// Its movies, shows and videos, in the server's order.
         let titles: [SourceTitle]
     }
 
@@ -47,6 +47,45 @@ struct SourceIndex: Equatable, Sendable {
     let localTitles: [MediaID: SourceTitle]
     /// The libraries and folders the titles are in, for browsing.
     let folders: SourceFolders
+}
+
+extension SourceIndex {
+    /// The titles of every library, of `type` or of every type, in `sort`'s order. A title in two
+    /// libraries shows once, where `sort` puts it first: its newest copy, or the one with a year.
+    func titles(of type: ContentType?, sortedBy sort: SourceSort) -> [SourceTitle] {
+        var seen: Set<MediaID> = []
+        return libraries.flatMap(\.titles)
+            .filter { title in type.map { $0 == title.kind.contentType } ?? true }
+            .sorted(by: sort)
+            .filter { seen.insert($0.id).inserted }
+    }
+}
+
+extension [SourceTitle] {
+    /// How many titles a page holds, a catalog's or the source's, as add-ons page theirs.
+    static var pageSize: Int { 100 }
+
+    /// Ties go by name, then by id, so a page always starts where the one before it ended.
+    func sorted(by sort: SourceSort) -> [SourceTitle] {
+        sorted { one, other in
+            switch sort {
+            case .recentlyAdded where one.added != other.added:
+                return (one.added ?? .distantPast) > (other.added ?? .distantPast)
+            case .year where one.year != other.year:
+                return (one.year ?? .min) > (other.year ?? .min)
+            case .recentlyAdded, .year, .name:
+                let order = one.name.rawValue.localizedStandardCompare(other.name.rawValue)
+                return order == .orderedSame ? one.id.rawValue < other.id.rawValue : order == .orderedAscending
+            }
+        }
+    }
+
+    /// The page that starts `skip` titles in, and whether another follows it.
+    func page(from skip: Int) -> (titles: ArraySlice<SourceTitle>, hasMore: Bool) {
+        let start = Swift.min(skip, count)
+        let end = Swift.min(start + Self.pageSize, count)
+        return (self[start..<end], end < count)
+    }
 }
 
 /// A source's folders as its server arranges them, each holding its subfolders, then its titles
@@ -106,9 +145,13 @@ struct SourceTitle: Equatable, Sendable {
 
         /// The add-on protocol's type.
         var name: String {
+            contentType.rawValue
+        }
+
+        var contentType: ContentType {
             switch self {
-            case .movie: "movie"
-            case .series: "series"
+            case .movie: .movie
+            case .series: .series
             }
         }
     }
@@ -123,6 +166,9 @@ struct SourceTitle: Equatable, Sendable {
     let background: Redacted<URL>?
     let overview: Redacted<String>?
     let year: Int?
+    /// When it came to the server: Jellyfin's creation date, or a WebDAV file's last change. A
+    /// show's is its newest episode's.
+    let added: Date?
     /// A show's episodes in order. Empty for a movie.
     let episodes: [SourceEpisode]
 }
@@ -131,7 +177,7 @@ extension SourceTitle {
     /// As browsing shows it, opening its details.
     var preview: MetaPreview {
         MetaPreview(
-            media: id, type: kind == .series ? .series : .movie, name: name, poster: poster?.rawValue,
+            media: id, type: kind.contentType, name: name, poster: poster?.rawValue,
             posterShape: isLandscape ? .landscape : .poster, background: background?.rawValue, logo: nil,
             releaseInfo: year.map { Redacted(String($0)) }, description: overview
         )

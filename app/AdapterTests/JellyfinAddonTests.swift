@@ -77,15 +77,25 @@ struct JellyfinAddonTests {
         _ = try await Self.json(addon, "/catalog/movie/f137a2dd21bbc1b99aa5c0f6bf02a805.json")
 
         #expect(addon.descriptor?.catalogs == [
-            SourceAddonDescriptor.Catalog(type: "movie", id: "f4415c72cc16920fce19d78d636a3ce7", name: "Home Videos", searchable: true),
-            SourceAddonDescriptor.Catalog(type: "movie", id: "f137a2dd21bbc1b99aa5c0f6bf02a805", name: "Movies", searchable: true),
-            SourceAddonDescriptor.Catalog(type: "series", id: "a656b907eb3a73532e40e44b968d0225", name: "Shows", searchable: true),
+            SourceAddonDescriptor.Catalog(type: "movie", id: "f4415c72cc16920fce19d78d636a3ce7", name: "Home Videos", extra: [.search, .skip]),
+            SourceAddonDescriptor.Catalog(type: "movie", id: "f137a2dd21bbc1b99aa5c0f6bf02a805", name: "Movies", extra: [.search, .skip]),
+            SourceAddonDescriptor.Catalog(type: "series", id: "a656b907eb3a73532e40e44b968d0225", name: "Shows", extra: [.search, .skip]),
         ])
         #expect(changes.withLock { $0 } == 1)
         let manifest = try await Self.json(addon, "/manifest.json")
         let catalogs = try Self.list(manifest, "catalogs")
         #expect(catalogs.map { $0["name"] as? String } == ["Home Videos", "Movies", "Shows"])
-        #expect(catalogs.allSatisfy { ($0["extra"] as? [[String: String]]) == [["name": "search"]] })
+        #expect(catalogs.allSatisfy { ($0["extra"] as? [[String: String]]) == [["name": "search"], ["name": "skip"]] })
+    }
+
+    @Test func aCatalogListsWhatTheServerAddedLastFirst() async throws {
+        let addon = Self.addon(HTTPStub(Self.server()))
+
+        let movies = try Self.list(try await Self.json(addon, "/catalog/movie/f137a2dd21bbc1b99aa5c0f6bf02a805.json"), "metas")
+        let further = try Self.list(try await Self.json(addon, "/catalog/movie/f137a2dd21bbc1b99aa5c0f6bf02a805/skip=3.json"), "metas")
+
+        #expect(movies.map { $0["name"] as? String } == ["Elephants Dream", "Tears of Steel", "Big Buck Bunny", "Sintel"])
+        #expect(further.map { $0["name"] as? String } == ["Sintel"])
     }
 
     @Test func matchedTitlesUseTheirIMDbIdAndOthersALocalOne() async throws {

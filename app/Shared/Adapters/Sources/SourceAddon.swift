@@ -30,7 +30,7 @@ protocol ListedSourceAddon: Sendable {
 
 /// One source as a Stremio add-on. It answers core's requests from a listing of the server, read
 /// when first asked for and again once older than `lifetime`, offers one searchable catalog per
-/// library, and turns its placeholders into the server's files.
+/// library, paged by 100 as add-ons page theirs, and turns its placeholders into the server's files.
 final class SourceAddon<Server: SourceServer>: ListedSourceAddon {
     /// How long a listing answers before the next request reads the server again.
     static var indexLifetime: Duration { .seconds(300) }
@@ -74,9 +74,9 @@ final class SourceAddon<Server: SourceServer>: ListedSourceAddon {
             switch request {
             case .manifest:
                 return CoreFetchReply(status: 200, body: try descriptor.encodedManifest())
-            case .catalog(let library, let search):
+            case .catalog(let library, let search, let skip):
                 guard let found = try await index().libraries.first(where: { $0.id == library }) else { return SourceAddonReplies.notFound }
-                return replies.catalog(found, search: search)
+                return replies.catalog(found, search: search, skip: skip)
             case .meta(let id):
                 guard let title = try await index().localTitles[id] else { return SourceAddonReplies.notFound }
                 return replies.meta(title)
@@ -162,7 +162,7 @@ final class SourceAddon<Server: SourceServer>: ListedSourceAddon {
 
     private static func catalogs(of listing: Server.Listing?) -> [SourceAddonDescriptor.Catalog] {
         (listing?.index.libraries ?? []).map { library in
-            SourceAddonDescriptor.Catalog(type: library.type.name, id: library.id.rawValue, name: library.name.rawValue, searchable: true)
+            SourceAddonDescriptor.Catalog(type: library.type.name, id: library.id.rawValue, name: library.name.rawValue, extra: [.search, .skip])
         }
     }
 }

@@ -4,8 +4,8 @@ import Foundation
 /// or with extras, `/<resource>/<type>/<id>/<name>=<value>&….json`.
 enum SourceAddonRequest: Equatable, Sendable {
     case manifest
-    /// A library's titles, or those whose name holds `search`.
-    case catalog(SourceItemID, search: String?)
+    /// A page of a library's titles, or of those whose name holds `search`, `skip` titles in.
+    case catalog(SourceItemID, search: String?, skip: Int)
     case meta(MediaID)
     case streams(PlayableID)
     case subtitles(PlayableID)
@@ -24,7 +24,9 @@ enum SourceAddonRequest: Equatable, Sendable {
         switch parts[0] {
         case "catalog":
             guard let library = SourceItemID(id) else { return nil }
-            self = .catalog(library, search: extra["search"])
+            let skip: Int? = if let text = extra["skip"] { Int(text) } else { 0 }
+            guard let skip, skip >= 0 else { return nil }
+            self = .catalog(library, search: extra["search"], skip: skip)
         case "meta":
             guard let media = MediaID(id) else { return nil }
             self = .meta(media)
@@ -86,11 +88,12 @@ enum SourcePlaceholder: Equatable, Sendable {
 struct SourceAddonReplies {
     let addon: SourceAddonDescriptor
 
-    func catalog(_ library: SourceIndex.Library, search: String?) -> CoreFetchReply {
+    /// Newest first, as a source's row on Home shows them.
+    func catalog(_ library: SourceIndex.Library, search: String?, skip: Int) -> CoreFetchReply {
         let titles = search.map { query in
             library.titles.filter { $0.name.rawValue.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
         } ?? library.titles
-        return Self.reply(["metas": titles.map(Preview.init)])
+        return Self.reply(["metas": titles.sorted(by: .recentlyAdded).page(from: skip).titles.map(Preview.init)])
     }
 
     func meta(_ title: SourceTitle) -> CoreFetchReply {

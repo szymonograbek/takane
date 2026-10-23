@@ -13,7 +13,7 @@ struct WebDAVAddonTests {
 
         #expect(names == ["Home Videos movie", "Movies movie", "Shows series"])
         let manifest = try Subject.list(try await Subject.json(addon, "/manifest.json"), "catalogs")
-        #expect(manifest.allSatisfy { ($0["extra"] as? [[String: String]]) == [["name": "search"]] })
+        #expect(manifest.allSatisfy { ($0["extra"] as? [[String: String]]) == [["name": "search"], ["name": "skip"]] })
         #expect(stub.requests.count == 1)
         let request = try #require(stub.requests.first)
         #expect(request.httpMethod == "PROPFIND")
@@ -61,9 +61,29 @@ struct WebDAVAddonTests {
         let addon = Subject.addon(HTTPStub(Subject.devServer))
         let (_, ids) = try await Subject.catalogs(addon)
 
-        let found = try await Subject.titles(addon, "movie", in: ids["Movies"], search: "tears%20of")
+        let found = try await Subject.titles(addon, "movie", in: ids["Movies"], extra: "search=tears%20of")
 
         #expect(found.map { $0["id"] as? String } == ["tt2285752"])
+    }
+
+    @Test func aCatalogPagesItsNewestTitlesByAHundred() async throws {
+        let paths = (1...150).map { String(format: "/Clips/Clip %03d.mp4", $0) }
+        let modified = Dictionary(uniqueKeysWithValues: paths.enumerated().map { ($1, Date(timeIntervalSince1970: 1_767_225_600 + Double($0) * 60)) })
+        let addon = Subject.addon(HTTPStub { _ in .json(Subject.multistatus(["/Clips/"] + paths, modified: modified), status: 207) })
+        let (_, ids) = try await Subject.catalogs(addon)
+        let clips = try #require(ids["Clips"])
+
+        let first = try await Subject.titles(addon, "movie", in: clips)
+        let second = try await Subject.titles(addon, "movie", in: clips, extra: "skip=100")
+        let past = try await Subject.titles(addon, "movie", in: clips, extra: "skip=150")
+        let found = try await Subject.titles(addon, "movie", in: clips, extra: "search=clip%201&skip=10")
+
+        #expect(first.count == 100 && second.count == 50 && past.isEmpty)
+        #expect([first.first, first.last, second.first, second.last].map { $0?["name"] as? String } == ["Clip 150", "Clip 051", "Clip 050", "Clip 001"])
+        #expect([found.count == 41 ? found.first : nil, found.last].map { $0?["name"] as? String } == ["Clip 140", "Clip 100"])
+        for skip in ["-1", "ten"] {
+            #expect(await addon.respond(to: Subject.url("/catalog/movie/\(clips)/skip=\(skip).json")).status == 404)
+        }
     }
 
     @Test func aMovieStreamsItsFileWithBasicAuthenticationInAHeader() async throws {
@@ -261,12 +281,15 @@ enum Subject {
         { _ in .json(multistatus(paths), status: 207) }
     }
 
-    /// A multi-status naming each path, a folder when it ends in `/`, each file of 1000 bytes or its `sizes`.
-    static func multistatus(_ paths: [String], sizes: [String: Int] = [:]) -> String {
+    /// A multi-status naming each path, a folder when it ends in `/`, each file of 1000 bytes or its
+    /// `sizes`, changed when `modified` says.
+    static func multistatus(_ paths: [String], sizes: [String: Int] = [:], modified: [String: Date] = [:]) -> String {
         let responses = paths.map { path in
             let type = path.hasSuffix("/") ? "<d:collection/>" : ""
+            let changed = modified[path].map { "<d:getlastmodified>\($0.formatted(httpDate))</d:getlastmodified>" } ?? ""
             return "<d:response><d:href>\(path)</d:href><d:propstat><d:prop><d:resourcetype>\(type)</d:resourcetype>"
-                + "<d:getcontentlength>\(sizes[path] ?? 1000)</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
+                + "<d:getcontentlength>\(sizes[path] ?? 1000)</d:getcontentlength>\(changed)</d:prop>"
+                + "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
         }
         return #"<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:">"# + responses.joined() + "</d:multistatus>"
     }
@@ -312,11 +335,20 @@ enum Subject {
         return (names, ids)
     }
 
-    static func titles(_ addon: WebDAVAddon, _ type: String, in catalog: String?, search: String? = nil) async throws -> [[String: Any]] {
+    /// `extra` as the request's path writes it, such as `search=tears&skip=100`.
+    static func titles(_ addon: WebDAVAddon, _ type: String, in catalog: String?, extra: String? = nil) async throws -> [[String: Any]] {
         let id = try #require(catalog)
-        let extra = search.map { "/search=\($0)" } ?? ""
-        return try list(try await json(addon, "/catalog/\(type)/\(id)\(extra).json"), "metas")
+        return try list(try await json(addon, "/catalog/\(type)/\(id)\(extra.map { "/\($0)" } ?? "").json"), "metas")
     }
+
+    /// `getlastmodified`'s format.
+    private static let httpDate = Date.VerbatimFormatStyle(
+        format: """
+        \(weekday: .abbreviated), \(day: .twoDigits) \(month: .abbreviated) \(year: .defaultDigits) \
+        \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\(second: .twoDigits) GMT
+        """,
+        locale: Locale(identifier: "en_US_POSIX"), timeZone: .gmt, calendar: Calendar(identifier: .gregorian)
+    )
 
     /// What the add-on's first stream for `id` plays.
     static func stream(_ addon: WebDAVAddon, _ type: String, _ id: String) async throws -> (stream: [String: Any], plays: PlaybackSource) {

@@ -168,6 +168,31 @@ enum SourceEntry: Hashable, Sendable {
     case episode(show: MetaPreview, season: Int, episode: Int, name: Redacted<String>)
 }
 
+/// The order a source's titles list in.
+enum SourceSort: CaseIterable, Hashable, Sendable {
+    /// Added to the server most recently first: for a show, its newest episode.
+    case recentlyAdded
+    /// A to Z.
+    case name
+    /// Released most recently first, titles without a year last.
+    case year
+}
+
+/// Which of a source's titles to list, and in what order.
+struct SourceTitlesFilter: Hashable, Sendable {
+    let source: SourceID
+    /// Movies or series, or both when nil.
+    let type: ContentType?
+    let sort: SourceSort
+}
+
+/// One page of a source's titles.
+struct SourceTitlesPage: Equatable, Sendable {
+    let titles: [MetaPreview]
+    /// Another page follows.
+    let hasMore: Bool
+}
+
 enum SourceError: Error, Equatable, Sendable {
     /// The server did not answer.
     case unreachable
@@ -204,6 +229,10 @@ protocol MediaSourceService: Sendable {
     /// What a folder of the source holds: its folders, then its titles and episode files. Nil is the
     /// source's root: a Jellyfin server's libraries, or the top of a WebDAV folder.
     func browse(_ id: SourceID, folder: SourceFolderID?) async throws(SourceError) -> [SourceEntry]
+
+    /// The page of the source's titles, from all its libraries and each once, that starts `skip`
+    /// titles into the ones `filter` lists. Pages hold 100 titles.
+    func titles(_ filter: SourceTitlesFilter, skip: Int) async throws(SourceError) -> SourceTitlesPage
 
     /// A WebDAV source's library folders, by name, with the kind each one's videos suggest. Empty for
     /// a Jellyfin server.
