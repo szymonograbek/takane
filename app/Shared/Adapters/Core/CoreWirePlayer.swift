@@ -77,8 +77,8 @@ extension PlayerState {
 }
 
 /// core's `StreamItemState`: what the viewer changed from the defaults for one video. The app manages
-/// the track and speed keys and sends the others back as core gave them, since core replaces the
-/// whole state on `StreamStateChanged`.
+/// the track, subtitle delay and speed keys and sends the others back as core gave them, since core
+/// replaces the whole state on `StreamStateChanged`.
 struct StreamItemState: Codable, Equatable, Sendable {
     struct SubtitleTrack: Codable, Equatable, Sendable {
         /// The engine's track number for an embedded track, the file's URL for an add-on's.
@@ -94,11 +94,13 @@ struct StreamItemState: Codable, Equatable, Sendable {
 
     var subtitleTrack: SubtitleTrack?
     var audioTrack: AudioTrack?
+    /// In milliseconds, positive showing subtitles later, as Stremio's other apps keep it.
+    var subtitleDelay: Int64?
     var playbackSpeed: Double?
-    /// Keys the app does not manage, such as delays and the subtitle size.
+    /// Keys the app does not manage, such as the audio delay and the subtitle size.
     var others: [String: JSONValue] = [:]
 
-    private enum CodingKeys: String, CodingKey { case subtitleTrack, audioTrack, playbackSpeed }
+    private enum CodingKeys: String, CodingKey { case subtitleTrack, audioTrack, subtitleDelay, playbackSpeed }
 
     init() {}
 
@@ -106,6 +108,7 @@ struct StreamItemState: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         subtitleTrack = try container.decodeIfPresent(SubtitleTrack.self, forKey: .subtitleTrack)
         audioTrack = try container.decodeIfPresent(AudioTrack.self, forKey: .audioTrack)
+        subtitleDelay = try container.decodeIfPresent(Int64.self, forKey: .subtitleDelay)
         playbackSpeed = try container.decodeIfPresent(Double.self, forKey: .playbackSpeed)
         others = try [String: JSONValue](from: decoder).filter { key, _ in CodingKeys(stringValue: key) == nil }
     }
@@ -117,6 +120,7 @@ struct StreamItemState: Codable, Equatable, Sendable {
         }
         try container.encodeIfPresent(subtitleTrack, forKey: DynamicKey(CodingKeys.subtitleTrack.stringValue))
         try container.encodeIfPresent(audioTrack, forKey: DynamicKey(CodingKeys.audioTrack.stringValue))
+        try container.encodeIfPresent(subtitleDelay, forKey: DynamicKey(CodingKeys.subtitleDelay.stringValue))
         try container.encodeIfPresent(playbackSpeed, forKey: DynamicKey(CodingKeys.playbackSpeed.stringValue))
     }
 }

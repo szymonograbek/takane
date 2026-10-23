@@ -174,7 +174,7 @@ private enum RememberedSelection: Equatable, Sendable {
 
 private extension StreamItemState {
     /// The managed keys, in core's terms: an embedded track by the engine's number, an add-on's file
-    /// by its URL. Ids the app did not write read as nothing chosen.
+    /// by its URL. Ids the app did not write read as nothing chosen, and no delay as zero.
     var choices: TrackChoices {
         get {
             let subtitles: TrackChoices.Subtitles? = subtitleTrack.flatMap { track in
@@ -187,7 +187,8 @@ private extension StreamItemState {
             return TrackChoices(
                 audio: audioTrack.flatMap { track in Int(track.id).map { TrackChoices.Track(number: $0, language: track.language) } },
                 subtitles: subtitles,
-                speed: playbackSpeed.flatMap(PlaybackSpeed.init(rawValue:))
+                speed: playbackSpeed.flatMap(PlaybackSpeed.init(rawValue:)),
+                subtitleDelay: subtitleDelay.map { SubtitleDelay(clamping: .milliseconds($0)) } ?? .zero
             )
         }
         set {
@@ -198,6 +199,7 @@ private extension StreamItemState {
             case .addon(let url, let language): SubtitleTrack(id: url.rawValue.absoluteString, embedded: false, language: language)
             }
             playbackSpeed = newValue.speed?.rawValue
+            subtitleDelay = newValue.subtitleDelay == .zero ? nil : Int64((newValue.subtitleDelay.duration / .milliseconds(1)).rounded())
         }
     }
 }

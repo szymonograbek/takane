@@ -42,6 +42,18 @@ extension SubtitleCue {
     }
 }
 
+extension TimedCue {
+    /// An engine cue, `start` to `end` in source seconds; `text` is nil for a bitmap.
+    init(number: Int, start: Double, end: Double, text: String?) {
+        let line = text?.split(separator: "\n", omittingEmptySubsequences: true).first ?? ""
+        self.init(
+            id: ID(number: number),
+            range: .seconds(start) ..< .seconds(max(start, end)),
+            text: Redacted(line.trimmingCharacters(in: .whitespaces))
+        )
+    }
+}
+
 extension SubtitleText {
     /// The runs of a text cue, placed where the cue asks.
     init(runs: [SubtitleTextRun], placement: SubtitleTextPlacement?) {

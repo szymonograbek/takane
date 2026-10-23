@@ -1,7 +1,7 @@
 import Foundation
 
-/// The viewer's audio, subtitles and speed: applying a choice, remembering it through the tracker,
-/// and restoring what was remembered when the title plays again.
+/// The viewer's audio, subtitles, subtitle timing and speed: applying a choice, remembering it
+/// through the tracker, and restoring what was remembered when the title plays again.
 extension PlayerFeature {
     /// Restoring what the viewer chose when this title last played. It applies once and gives way to
     /// any choice the viewer makes first.
@@ -55,27 +55,40 @@ extension PlayerFeature.Session {
     mutating func select(_ id: MediaTrack.ID) -> [Effect] {
         guard let track = tracks.first(where: { $0.id == id }), !track.isSelected else { return [] }
         var choices = self.choices
+        var effects: [Effect] = [.select(id)]
         switch id.kind {
         case .audio:
             choices.audio = TrackChoices.Track(track)
         case .subtitle:
             choices.subtitles = remembered(subtitleChoice(of: track))
+            choices.subtitleDelay = .zero
             picksSubtitles = false
+            effects += moveSubtitles(to: .zero)
         }
-        return viewerChose([.select(id)], choices)
+        return viewerChose(effects, choices)
     }
 
     mutating func chooseSubtitles(_ choice: PlayerFeature.SubtitleChoice) -> [Effect] {
         var choices = self.choices
         choices.subtitles = remembered(choice)
+        choices.subtitleDelay = .zero
         picksSubtitles = false
-        return viewerChose(effects(choosing: choice), choices)
+        let chosen = effects(choosing: choice)
+        guard !chosen.isEmpty else { return [] }
+        return viewerChose(chosen + moveSubtitles(to: .zero), choices)
     }
 
     mutating func setSpeed(_ speed: PlaybackSpeed) -> [Effect] {
         var choices = self.choices
         choices.speed = speed
         return viewerChose(speed == self.speed ? [] : [.setSpeed(speed)], choices)
+    }
+
+    /// The viewer moved the subtitles, which settles which file shows: the app stops picking one.
+    mutating func retime(to delay: SubtitleDelay) -> [Effect] {
+        let moved = moveSubtitles(to: delay)
+        if !moved.isEmpty { picksSubtitles = false }
+        return viewerChose(moved, choices)
     }
 
     /// Restores `choices`, remembered for this title, unless they already arrived or the viewer chose first.
@@ -134,13 +147,14 @@ extension PlayerFeature.Session {
             if let track = saved.match(in: builtInSubtitles) {
                 picksSubtitles = false
                 if !track.isSelected { effects.append(.select(track.id)) }
+                effects += moveSubtitles(to: choices.subtitleDelay)
             }
         case .addon(let url, _):
             if let offered = addonSubtitles.lazy.compactMap(\.subtitles.value).joined().first(where: { $0.url == url }) {
                 picksSubtitles = false
-                effects += self.effects(choosing: .addon(offered.id))
+                effects += self.effects(choosing: .addon(offered.id)) + moveSubtitles(to: choices.subtitleDelay)
             } else if addonSubtitles.isEmpty || addonSubtitles.contains(where: { !$0.subtitles.isSettled }) {
-                restore = .pending(TrackChoices(subtitles: choices.subtitles))
+                restore = .pending(TrackChoices(subtitles: choices.subtitles, subtitleDelay: choices.subtitleDelay))
             }
         }
         if let speed = choices.speed, speed != self.speed {
@@ -161,7 +175,8 @@ extension PlayerFeature.Session {
         TrackChoices(
             audio: tracks.first { $0.id.kind == .audio && $0.isSelected }.map(TrackChoices.Track.init),
             subtitles: remembered(subtitleChoice),
-            speed: speed
+            speed: speed,
+            subtitleDelay: subtitleDelay
         )
     }
 
@@ -179,6 +194,13 @@ extension PlayerFeature.Session {
         guard !effects.isEmpty else { return [] }
         restore = .settled
         return effects + [.report(.choices(choices))]
+    }
+
+    /// Shows the subtitles `delay` away from their file's times, unless they are already.
+    private mutating func moveSubtitles(to delay: SubtitleDelay) -> [Effect] {
+        guard delay != subtitleDelay else { return [] }
+        subtitleDelay = delay
+        return [.setSubtitleDelay(delay)]
     }
 
     /// An add-on file plays from the track it was added as; one not added yet is added.

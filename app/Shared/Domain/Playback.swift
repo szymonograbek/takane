@@ -169,6 +169,8 @@ enum PlaybackEvent: Equatable, Sendable {
     case speed(PlaybackSpeed)
     /// The subtitles to show now, replacing the previous ones. Empty when none is visible.
     case subtitles([SubtitleCue])
+    /// Every cue the selected subtitle track holds so far, after any change to them. Empty without one.
+    case cueTimeline([TimedCue])
 }
 
 enum PlaybackError: Error, Equatable, Sendable {
@@ -194,6 +196,8 @@ protocol PlaybackEngine: AnyObject, Sendable {
     /// `externalFile` is `file`. A file that fails to load is logged.
     func addSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String)
     func setSpeed(_ speed: PlaybackSpeed)
+    /// Shows the subtitles `delay` away from their file's times, at once. A new load starts at zero.
+    func setSubtitleDelay(_ delay: SubtitleDelay)
     func stop()
     /// Output health by name (route, decoders, audio delivery, frame counters), for logs and the smoke test.
     func diagnostics() -> [String: String]
@@ -201,7 +205,8 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func snapshot() async -> CGImage?
 }
 
-/// The tracks and speed the viewer chose for a title, remembered so it plays the same way next time.
+/// The tracks, subtitle timing and speed the viewer chose for a title, remembered so it plays the
+/// same way next time.
 struct TrackChoices: Hashable, Sendable {
     /// A track by the engine's number and its language. Another file, such as the next episode, may
     /// number its tracks differently, so the language confirms the number.
@@ -222,6 +227,8 @@ struct TrackChoices: Hashable, Sendable {
     var subtitles: Subtitles?
     /// Nil when none was chosen.
     var speed: PlaybackSpeed?
+    /// The timing of `subtitles`, which another file would not share.
+    var subtitleDelay = SubtitleDelay.zero
 }
 
 /// The episode after the one playing.
