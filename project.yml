@@ -47,8 +47,8 @@ targetTemplates:
         RapidAPIKey: $(RAPIDAPI_KEY)
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.stremio-tv
-        PRODUCT_NAME: StremioTV
+        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.takane
+        PRODUCT_NAME: Takane
         GENERATE_INFOPLIST_FILE: NO
         DEAD_CODE_STRIPPING: YES
     scheme:
@@ -117,7 +117,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.stremio-tv.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.takane.tests
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
     scheme:
@@ -157,7 +157,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.stremio-tv.adapter-tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.ograbek.takane.adapter-tests
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
     scheme:

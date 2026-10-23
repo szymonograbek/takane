@@ -27,7 +27,7 @@ fi
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 mkdir "$staging/Payload"
-cp -R build/DerivedData/Build/Products/Release-appletvos/StremioTV.app "$staging/Payload/"
+cp -R build/DerivedData/Build/Products/Release-appletvos/Takane.app "$staging/Payload/"
 rm -f build/Takane.ipa
 (cd "$staging" && zip -qry "$root/build/Takane.ipa" Payload)
 echo "build/Takane.ipa"
