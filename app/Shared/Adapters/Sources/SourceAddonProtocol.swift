@@ -51,7 +51,7 @@ enum SourceAddonRequest: Equatable, Sendable {
 }
 
 /// What a placeholder URL that a source's add-on gives core stands for. Core only ever holds the
-/// placeholder; `JellyfinAddon` turns it into the server's file when the player needs it.
+/// placeholder; the source's add-on turns it into the server's file when the player needs it.
 enum SourcePlaceholder: Equatable, Sendable {
     /// `/play/<item>/<file>`
     case video(SourceItemID, file: SourceItemID)
@@ -103,7 +103,8 @@ struct SourceAddonReplies {
             StreamItem(
                 url: SourcePlaceholder.video(file.item, file: file.file).url(on: addon).absoluteString,
                 name: addon.name,
-                description: [file.name.rawValue, file.quality].compactMap { $0 }.joined(separator: "\n"),
+                description: [file.name.rawValue, file.quality, file.size.map { Int64($0).formatted(.byteCount(style: .file)) }]
+                    .compactMap { $0 }.joined(separator: "\n"),
                 behaviorHints: StreamItem.Hints(filename: file.name.rawValue, videoSize: file.size, bingeGroup: addon.localIDPrefix)
             )
         }])
