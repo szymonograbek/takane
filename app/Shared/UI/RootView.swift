@@ -57,7 +57,7 @@ private struct MainTabs: View {
                 RouteStack { SearchScreen() }
             }
             Tab("Settings", systemImage: "gearshape", value: .settings) {
-                SettingsScreen()
+                RouteStack { SettingsScreen() }
             }
         }
         .onChange(of: tab) { _, tab in Log.ui.info("tab → \(tab.rawValue)") }
@@ -79,6 +79,9 @@ private struct RouteStack<Root: View>: View {
                 case .details(let preview): DetailsScreen(preview: preview)
                 case .streams(let request): StreamsScreen(request: request)
                 case .genre(let filter): GenreScreen(filter: filter)
+                case .sourceSettings: SourceSettings()
+                case .source(let id): SourceScreen(id: id)
+                case .sourceFolder(let folder, let name): SourceBrowserScreen(folder: folder, name: name)
                 }
             }
         }

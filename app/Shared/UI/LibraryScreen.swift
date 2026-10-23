@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The titles the user added to their library, as a grid of posters of one type or all, in the
-/// order they pick. A long press on a poster removes it.
+/// order they pick, below the user's own sources to browse. A long press on a poster removes it.
 struct LibraryScreen: View {
     @Environment(AppContext.self) private var app
     @State private var store: FeatureStore<LibraryFeature>?
@@ -37,6 +37,9 @@ private struct LibraryContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 // In every state, so the screen always has something to focus.
                 LibraryFilters(filter: store.state.filter, types: types, open: $openFilter) { store.send(.select($0)) }
+                SourceLinks()
+                    .padding(.top, Metrics.sectionSpacing)
+                    .disabled(openFilter != nil)
                 Group {
                     switch store.state {
                     case .loading:
@@ -87,6 +90,28 @@ private struct LibraryContent: View {
 
     private var types: [ContentType] {
         if case .loaded(let contents) = store.state { contents.types } else { [] }
+    }
+}
+
+/// A button per source opening its folders. The library is where people look for their own videos.
+private struct SourceLinks: View {
+    @Environment(AppContext.self) private var app
+
+    var body: some View {
+        let sources = app.sources.state.sources
+        if !sources.isEmpty {
+            HStack(spacing: 24) {
+                ForEach(sources) { source in
+                    NavigationLink(value: Route.browsing(source)) {
+                        Label(source.name.text.rawValue, systemImage: "server.rack")
+                    }
+                    .accessibilityIdentifier("library.source")
+                }
+            }
+            #if os(tvOS)
+            .focusSection()
+            #endif
+        }
     }
 }
 

@@ -36,6 +36,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Continue watching](./continue-watching.md) covers the Home row and resuming from the saved position.
 - [Playback settings](./playback-settings.md) covers Settings › Playback (audio languages, skip interval, Up Next card, autoplay, hide spoilers) and Settings › Subtitles (languages, style, reset).
 - [Media sources](./sources.md) covers Settings › Sources: adding a Jellyfin server or WebDAV folder, sign-in errors, renaming, removing and persistence.
+- [Browse sources](./browse-sources.md) covers walking a source's folders from Library or Settings to a title's details, and the failed state.
 - [Library and calendar](./library-calendar.md) covers Add to Library on Details, the Library tab and the Calendar tab.
 - [Trakt](./trakt.md) covers Settings › Account › Trakt and scrobbling playback to Trakt; it needs the test account.
 - [Share logs](./share-logs.md) covers Settings › About › Share Logs: the link, its time range and stopping on leave.

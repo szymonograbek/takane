@@ -12,9 +12,7 @@ struct SourceSettings: View {
             if !sources.isEmpty {
                 SettingsSection {
                     ForEach(sources) { source in
-                        NavigationLink {
-                            SourceScreen(id: source.id)
-                        } label: {
+                        NavigationLink(value: Route.source(source.id)) {
                             LabeledContent(source.name.text.rawValue, value: source.kind.name)
                         }
                         .accessibilityIdentifier("sources.row")
@@ -34,8 +32,8 @@ struct SourceSettings: View {
         + "Their logins stay on this device."
 }
 
-/// One source: what it is, editing it and removing it. It goes back once the source is removed.
-private struct SourceScreen: View {
+/// One source: browsing it, what it is, editing it and removing it. It goes back once the source is removed.
+struct SourceScreen: View {
     @Environment(AppContext.self) private var app
     @Environment(\.dismiss) private var dismiss
     let id: SourceID
@@ -49,6 +47,10 @@ private struct SourceScreen: View {
             SettingsSymbol(name: "server.rack")
         } rows: {
             if let source {
+                SettingsSection {
+                    NavigationLink("Browse", value: Route.browsing(source))
+                        .accessibilityIdentifier("source.browse")
+                }
                 SettingsSection {
                     ValueRow(title: "Name", value: name).accessibilityIdentifier("source.name")
                     ValueRow(title: "Kind", value: source.kind.name).accessibilityIdentifier("source.kind")
@@ -309,8 +311,8 @@ extension SourceError {
         case .notWebDAV: "This address answers, but not as a WebDAV folder. Check the address and its port."
         case .invalidResponse(let reason): "The server answered in a way Takane can't read (\(reason))."
         case .notFound: "This source was removed."
+        case .folderGone: "This folder is no longer on the server."
         case .storageFailed(let reason): "This device couldn't keep the login (\(reason))."
         }
-        case .folderGone: "This folder is no longer on the server."
     }
 }
