@@ -29,6 +29,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
     /// How far the clock the cues are stamped on runs ahead of the position reported.
     private var sourceClock = SourceClock()
     private var observations: Set<AnyCancellable> = []
+    /// Where people spoke in the audio heard since the current load.
+    private var speech = SpeechHistory()
+    /// Hears the playing session's audio into `speech`.
+    private var listening: Task<Void, Never>?
 
     /// `muted` plays every stream silently, for automated runs.
     init(muted: Bool) throws(PlaybackError) {
@@ -60,6 +64,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
         externalFiles = [:]
         subtitleDelay.send(0)
         sourceClock = SourceClock()
+        stopListening()
         let url = source.url.rawValue
         let startPosition = start > .zero ? start / .seconds(1) : nil
         let options = LoadOptions(
@@ -126,9 +131,14 @@ final class AetherPlaybackEngine: PlaybackEngine {
         subtitleDelay.send(delay.duration / .seconds(1))
     }
 
+    func speechActivity(in range: Range<Duration>) -> SpeechActivity {
+        speech.activity(in: range)
+    }
+
     func stop() {
         loading?.cancel()
         loading = nil
+        stopListening()
         player.stop()
     }
 
@@ -160,6 +170,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private func observe() {
         player.$playbackPhase.removeDuplicates()
             .sink { [weak self] phase in self?.phaseChanged(phase) }
+            .store(in: &observations)
+        // Published before they change: read once both have.
+        player.$playbackPhase.combineLatest(player.$playbackBackend).receive(on: DispatchQueue.main)
+            .sink { [weak self] phase, backend in self?.listenForSpeech(phase: phase, backend: backend) }
             .store(in: &observations)
         player.clock.$currentTime.removeDuplicates()
             .sink { [weak self] seconds in self?.positionChanged(seconds) }
@@ -286,6 +300,38 @@ final class AetherPlaybackEngine: PlaybackEngine {
         guard reported[keyPath: channel] != event else { return }
         reported[keyPath: channel] = event
         continuation.yield(event)
+    }
+}
+
+/// Hearing speech in the playing session's audio.
+private extension AetherPlaybackEngine {
+    /// Starts hearing the playing session's audio into `speech`, once it plays. A reload of the
+    /// session, such as for another audio track, ends what the engine sends, and the next play
+    /// starts it again.
+    func listenForSpeech(phase: PlaybackPhase, backend: PlaybackBackend) {
+        guard listening == nil, phase == .playing, backend != .none else { return }
+        let taps = player.installAudioTap()
+        guard player.audioTapHasDeliverySource else {
+            Log.player.info("no audio to hear speech in")
+            return
+        }
+        listening = Task { [weak self] in
+            for await tap in taps {
+                guard let channel = tap.buffer.floatChannelData?[0] else { continue }
+                let samples = Array(UnsafeBufferPointer(start: channel, count: Int(tap.buffer.frameLength)))
+                self?.speech.hear(samples, from: tap.sourceTime, continuing: !tap.discontinuity)
+            }
+            // A load or a stop cancelled it and cleared `listening` itself.
+            guard !Task.isCancelled else { return }
+            self?.listening = nil
+        }
+    }
+
+    /// Forgets the speech heard. The engine ends its tap with the session.
+    func stopListening() {
+        listening?.cancel()
+        listening = nil
+        speech = SpeechHistory()
     }
 }
 
