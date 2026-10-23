@@ -191,7 +191,7 @@ enum PlayerFeature: Feature {
             return [.stop]
 
         case (.active(var session), .engine(let event)):
-            let effects = apply(event, to: &session)
+            let effects = session.apply(event)
             switch event {
             case .failed(let reason): state = .failed(session.candidate, .failed(reason: reason))
             case .stopped where session.phase != .opening: state = .idle
@@ -230,64 +230,6 @@ enum PlayerFeature: Feature {
         let effects = change(&session)
         state = .active(session)
         return effects
-    }
-
-    /// Updates `session` for an engine event. A `.stopped` while opening is the previous file
-    /// making way for this one, so it changes nothing.
-    private static func apply(_ event: PlaybackEvent, to session: inout Session) -> [Effect] {
-        switch event {
-        case .loaded:
-            session.phase = .playing
-        case .ended:
-            session.phase = .ended
-            session.scan = nil
-            return [.report(.ended)]
-        case .stopped, .failed:
-            break
-        case .position(let reported):
-            // Engines can report a slightly negative position for streams starting before PTS 0.
-            let position = max(.zero, reported)
-            session.position = position
-            let second = position.components.seconds
-            guard second != session.reportedSecond, session.duration > .zero else { return [] }
-            session.reportedSecond = second
-            return [.report(.progress(position, of: session.duration))]
-        case .seeking(let target):
-            guard session.duration > .zero else { return [] }
-            // The position that follows lands on the target, which this report already covers.
-            session.reportedSecond = target.components.seconds
-            return [.report(.seek(to: target, of: session.duration))]
-        case .duration(let duration):
-            session.duration = duration
-            guard session.segments == nil, duration > .zero else { return [] }
-            session.segments = .loading
-            return [.findSegments(session.candidate.item, duration: duration, from: session.skipSegmentSource)]
-        case .paused(let paused):
-            switch session.phase {
-            case .playing where paused: session.phase = .paused
-            case .paused where !paused: session.phase = .playing
-            case .opening, .playing, .paused, .ended: break
-            }
-            return [.report(.paused(paused))]
-        case .buffering(let buffering):
-            session.isBuffering = buffering
-        case .videoSize(let size):
-            session.videoSize = size
-        case .decoder(let name):
-            session.decoder = name
-        case .tracks(let tracks):
-            session.tracks = tracks
-            return session.continueRestore() + session.preferredSubtitles()
-        case .speed(let speed):
-            session.speed = speed
-        case .subtitles(let cues):
-            session.subtitles = cues
-        case .cueTimeline(let cues):
-            session.cueTimeline = cues
-        case .chapters(let chapters):
-            session.chapters = chapters
-        }
-        return []
     }
 }
 
