@@ -87,7 +87,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `streams.offer` | signed out, in builds with `RAPIDAPI_KEY`: each service under Other Services below the streams, label its name and how it offers the title (`Prime Video`, `Rent 9.99 PLN · Buy 39.99 PLN`); focus lands on the first when no stream is listed. Selecting one opens its link, or an alert when nothing on the device opens it (always in the simulator) |
 | `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · <decoder>`, such as `libavcodec H264 (SW)` |
 | `player.subtitle` | the text subtitle on screen; its label is the cue's text. Bitmap subtitles have no element |
-| `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |
+| `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right. Its value is the chapter at the playhead (`Chapter 2`, or the file's title for it), empty when the stream has no chapters; read it from a raw snapshot (`"value"`) |
 | `player.live` | the LIVE badge that replaces the progress bar, times and skip buttons on a live channel (type `tv`) |
 | `player.playPause`, `player.subtitles`, `player.audio`, `player.speed` | player controls; back and forward have no identifier (`focused` prints their symbol, such as `goforward.30`) |
 | `player.skip` | Skip Intro, Recap, Credits or Preview: shows while the controls are hidden during a segment with skip data (Stremio Premium, IntroDB or SkipDB) |
