@@ -92,6 +92,8 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.playPause`, `player.subtitles`, `player.audio`, `player.speed` | player controls; back and forward have no identifier (`focused` prints their symbol, such as `goforward.30`) |
 | `player.skip` | Skip Intro, Recap, Credits or Preview: shows while the controls are hidden during a segment with skip data (Stremio Premium, IntroDB or SkipDB) |
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
+| `player.subtitles.timing` | Timing, first on the subtitles page while subtitles are on; label `Timing, In Sync`, `Timing, 0,3 s Later` or `Timing, 1,5 s Earlier` (the decimal follows the simulator's locale). Selecting it opens the timing strip. Reset Timing follows it as a `player.option` while the delay is not zero |
+| `player.timing`, `player.timing.offset` | the subtitle timing strip, which takes focus and the remote's presses (label `Subtitle Timing`, value the delay), and the delay in words above its lane |
 | `player.upNext.play`, `player.upNext.dismiss` | the up next card's Play Now (Choose Stream when the next episode has no matching stream) and Cancel; the card shows near an episode's end while the controls are hidden, with Play Now focused |
 | `settings.account`, `settings.addons`, `settings.sources`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows; Sources reads `Sources, None`, `Sources, 1 source` or `Sources, <n> sources` |
 | `settings.trakt` | Trakt on Settings › Account when signed in; its value reads Connected or Not Connected |
