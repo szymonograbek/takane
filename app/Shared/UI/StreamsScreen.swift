@@ -12,6 +12,7 @@ struct StreamsScreen: View {
     var body: some View {
         let state = app.streams.state
         let sections = state.sections(for: request.video)
+        let offers = state.offers(for: request.video)
         // At large text sizes the title stacks above the list, which then gets the full width.
         let columns = textLayout == .large
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: Metrics.sectionSpacing))
@@ -29,7 +30,7 @@ struct StreamsScreen: View {
             }
             .frame(width: textLayout == .large ? nil : Metrics.streamsInfoWidth, alignment: .leading)
             Group {
-                if sections.firstCandidate == nil {
+                if sections.firstCandidate == nil && offers.isEmpty {
                     if state.isLookingUp(request.video) {
                         CancellableProgress("Asking your add-ons…")
                     } else {
@@ -39,12 +40,12 @@ struct StreamsScreen: View {
                             Text("Your add-ons have nothing Takane can play for this. Torrent streams need a debrid add-on.")
                         } actions: {
                             // Also gives the screen something to focus, so Menu goes back from it.
-                            Button("Try Again") { app.streams.send(.lookUp(request.video)) }
+                            Button("Try Again") { lookUp() }
                         }
                     }
                 } else {
                     StreamList(
-                        sections: sections, title: request.playerTitle,
+                        sections: sections, offers: offers, title: request.playerTitle,
                         resumeFrom: app.home.state.resumePosition(for: request.video) ?? .zero
                     )
                 }
@@ -58,7 +59,7 @@ struct StreamsScreen: View {
                 .overlay(Palette.canvas.opacity(0.88))
                 .ignoresSafeArea()
         }
-        .onAppear { app.streams.send(.lookUp(request.video)) }
+        .onAppear { lookUp() }
         .onChange(of: isPlayingRequest) { _, playing in
             if playing { dismiss() }
         }
@@ -66,6 +67,10 @@ struct StreamsScreen: View {
 }
 
 extension StreamsScreen {
+    private func lookUp() {
+        app.streams.send(.lookUp(request.video, account: app.account.state.account))
+    }
+
     /// A stream for this video got past opening.
     private var isPlayingRequest: Bool {
         app.player.state.session.map { $0.candidate.item == request.video && $0.phase != .opening } ?? false
@@ -73,12 +78,21 @@ extension StreamsScreen {
 }
 
 private struct StreamList: View {
+    private enum Row: Hashable {
+        case stream(StreamCandidate.ID)
+        case offer(service: String)
+    }
+
     @Environment(AppContext.self) private var app
+    @Environment(\.openURL) private var openURL
     let sections: [StreamSection]
+    let offers: [WatchOffer]
     let title: Redacted<String>
     let resumeFrom: Duration
     /// Streams often arrive after the screen opens; focus then moves to the first one.
-    @FocusState private var focused: StreamCandidate.ID?
+    @FocusState private var focused: Row?
+    /// An offer whose link nothing on this device opens, such as a service whose app is not installed.
+    @State private var unopened: WatchOffer?
 
     var body: some View {
         List {
@@ -95,7 +109,7 @@ private struct StreamList: View {
                             } label: {
                                 StreamRow(candidate: candidate)
                             }
-                            .focused($focused, equals: candidate.id)
+                            .focused($focused, equals: .stream(candidate.id))
                             .accessibilityIdentifier("streams.row")
                         }
                     }
@@ -103,11 +117,40 @@ private struct StreamList: View {
                     Text(section.addonName).padding(.bottom, Metrics.headerSpacing)
                 }
             }
+            if !offers.isEmpty {
+                Section {
+                    ForEach(offers, id: \.service) { offer in
+                        Button {
+                            openURL(offer.link) { opened in
+                                if !opened { unopened = offer }
+                            }
+                        } label: {
+                            OfferRow(offer: offer)
+                        }
+                        .focused($focused, equals: .offer(service: offer.service))
+                        .accessibilityIdentifier("streams.offer")
+                    }
+                } header: {
+                    Text("Other Services").padding(.bottom, Metrics.headerSpacing)
+                }
+            }
         }
         .accessibilityIdentifier("streams.list")
-        .onChange(of: sections.firstCandidate, initial: true) { _, first in
+        .alert(
+            "Open \(unopened?.service ?? "the service") Yourself", isPresented: Binding { unopened != nil } set: { if !$0 { unopened = nil } },
+            presenting: unopened
+        ) { _ in
+            Button("OK") {}
+        } message: { offer in
+            Text("Nothing on this device opens \(offer.service) links. Find the title in the \(offer.service) app.")
+        }
+        .onChange(of: firstRow, initial: true) { _, first in
             if focused == nil { focused = first }
         }
+    }
+
+    private var firstRow: Row? {
+        sections.firstCandidate.map(Row.stream) ?? offers.first.map { .offer(service: $0.service) }
     }
 }
 
@@ -149,6 +192,31 @@ private struct StreamRow: View {
     }
 }
 
+/// A service outside this app that has the title, and how it offers it.
+private struct OfferRow: View {
+    let offer: WatchOffer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(offer.service).font(.callout).bold().lineLimit(1)
+            Text(offer.access.map(\.label).joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension WatchOffer.Access {
+    fileprivate var label: String {
+        switch self {
+        case .subscription: "Subscription"
+        case .free: "Free"
+        case .addon(let name): name.map { "With \($0)" } ?? "Add-on"
+        case .rent(let price): price.map { "Rent \($0)" } ?? "Rent"
+        case .buy(let price): price.map { "Buy \($0)" } ?? "Buy"
+        }
+    }
+}
+
 extension StreamsRequest {
     /// "Twin Peaks · S1 E3", or the movie's name.
     var playerTitle: Redacted<String> {
@@ -160,7 +228,7 @@ extension StreamsFeature.State {
     /// Sources still answering, and sources with at least one stream this app can play, holding only
     /// those streams, in add-on order. Sources that failed or have nothing playable are left out.
     func sections(for item: PlayableID) -> [StreamSection] {
-        guard case .lookingUp(item, let results?) = self else { return [] }
+        guard case .lookingUp(item, let results?, _) = self else { return [] }
         return results.sources.compactMap { source in
             switch source.candidates {
             case .loading:
@@ -174,9 +242,16 @@ extension StreamsFeature.State {
         }
     }
 
+    /// Offers found for the item. None while they load, or when they failed or were not looked up.
+    func offers(for item: PlayableID) -> [WatchOffer] {
+        guard case .lookingUp(item, _, .loaded(let offers)?) = self else { return [] }
+        return offers
+    }
+
+    /// Streams or offers for the item are still on their way.
     func isLookingUp(_ item: PlayableID) -> Bool {
-        guard case .lookingUp(item, _) = self else { return true }
-        return isLookingUp
+        guard case .lookingUp(item, _, let offers) = self else { return true }
+        return isLookingUp || offers == .loading
     }
 }
 

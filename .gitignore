@@ -6,4 +6,5 @@
 xcuserdata/
 .env.smoke
 /Signing.local.xcconfig
+/Secrets.local.xcconfig
 /.audit/

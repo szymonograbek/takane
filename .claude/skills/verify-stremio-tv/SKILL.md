@@ -78,6 +78,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `details.back` | Go Back on a series whose add-ons list no episodes |
 | `loading.cancel` | Cancel under the spinner while Details or Streams loads; it goes back |
 | `streams.row` | each playable stream (unplayable ones are not listed); focus lands on the first once one arrives |
+| `streams.offer` | signed out, in builds with `RAPIDAPI_KEY`: each service under Other Services below the streams, label its name and how it offers the title (`Prime Video`, `Rent 9.99 PLN · Buy 39.99 PLN`); focus lands on the first when no stream is listed. Selecting one opens its link, or an alert when nothing on the device opens it (always in the simulator) |
 | `player.status` | the player container; label `H:MM:SS / H:MM:SS · <phase> · <w>×<h> · <decoder>`, such as `libavcodec H264 (SW)` |
 | `player.subtitle` | the text subtitle on screen; its label is the cue's text. Bitmap subtitles have no element |
 | `player.progress` | the player's progress bar; focus it with up from the buttons, then tap or hold left and right |

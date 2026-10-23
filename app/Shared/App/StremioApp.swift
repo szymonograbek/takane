@@ -49,6 +49,7 @@ struct Services: Sendable {
     let addons: any AddonService
     let catalog: any CatalogService
     let streams: any StreamService
+    let offers: any WatchOfferService
     let library: any LibraryService
     let preferences: any PreferencesService
     let tracker: any PlaybackTracker
@@ -79,6 +80,7 @@ struct Services: Sendable {
             addons: CoreAddonService(runtime: core),
             catalog: CoreCatalogService(runtime: core),
             streams: CoreStreamService(runtime: core),
+            offers: watchOffers(),
             library: CoreLibraryService(runtime: core),
             preferences: CorePreferencesService(runtime: core),
             tracker: CorePlaybackTracker(runtime: core),
@@ -95,6 +97,19 @@ struct Services: Sendable {
             logSharing: LocalLogServer()
         )
     }
+
+    private static func watchOffers() -> any WatchOfferService {
+        guard let key = RapidAPIKey.bundled else {
+            Log.app.warning("built without RAPIDAPI_KEY, so the streams list shows no other services")
+            return NoWatchOffers()
+        }
+        return StreamingAvailabilityWatchOfferService(key: key)
+    }
+}
+
+/// Offers in builds without a provider key: none.
+private struct NoWatchOffers: WatchOfferService {
+    func offers(for title: MediaID) async throws(WatchOfferError) -> [WatchOffer] { [] }
 }
 
 /// What screens use once the app has started: the services and the app-wide feature stores.
@@ -125,7 +140,7 @@ final class AppContext {
             dependencies: AddonsFeature.Dependencies(addons: services.addons),
             start: [.observeInstalled]
         )
-        streams = FeatureStore(.idle, dependencies: StreamsFeature.Dependencies(streams: services.streams))
+        streams = FeatureStore(.idle, dependencies: StreamsFeature.Dependencies(streams: services.streams, offers: services.offers))
         home = FeatureStore(
             HomeFeature.State(),
             dependencies: HomeFeature.Dependencies(library: services.library, catalog: services.catalog),
