@@ -133,6 +133,57 @@ struct SourcesFeatureTests {
         #expect(SourcesFeature.reduce(&state, .remove(source.id)) == [.remove(source.id)])
     }
 
+    @Test func listsAWebDAVSourcesFoldersAndDropsAnswersForAnotherSource() {
+        let movies = FolderSuggestion(folder: LibraryFolder("Movies").require(), kind: .movies)
+        var state = SourcesFeature.State(sources: [source, other])
+        #expect(SourcesFeature.reduce(&state, .foldersOpened(source.id)).isEmpty)
+        #expect(SourcesFeature.reduce(&state, .foldersOpened(other.id)) == [.listFolders(other.id)])
+        #expect(SourcesFeature.reduce(&state, .foldersOpened(other.id)).isEmpty)
+        _ = SourcesFeature.reduce(&state, .foldersListed(source.id, .success([])))
+        #expect(state.folders == .loading(other.id))
+        _ = SourcesFeature.reduce(&state, .foldersListed(other.id, .success([movies])))
+        #expect(state.folders == .loaded(other.id, [movies]))
+        #expect(SourcesFeature.reduce(&state, .foldersOpened(other.id)) == [.listFolders(other.id)])
+        _ = SourcesFeature.reduce(&state, .foldersListed(other.id, .failure(.unreachable)))
+        #expect(state.folders == .failed(other.id, .unreachable))
+    }
+
+    @Test func setsOneFolderKindAtATime() {
+        let videos = LibraryFolder("Home Videos").require()
+        let movies = LibraryFolder("Movies").require()
+        var state = SourcesFeature.State(sources: [source, other])
+        #expect(SourcesFeature.reduce(&state, .setKind(.movies, videos, source.id)).isEmpty)
+        #expect(SourcesFeature.reduce(&state, .setKind(.movies, videos, other.id)) == [.setKind(.movies, videos, other.id)])
+        #expect(SourcesFeature.reduce(&state, .setKind(.shows, movies, other.id)).isEmpty)
+        _ = SourcesFeature.reduce(&state, .kindSet(movies, other.id, .success(())))
+        #expect(state.kindChange == .saving(other.id, videos))
+        _ = SourcesFeature.reduce(&state, .kindSet(videos, other.id, .failure(.storageFailed(reason: "locked"))))
+        #expect(state.kindChange == .failed(other.id, videos, .storageFailed(reason: "locked")))
+        #expect(SourcesFeature.reduce(&state, .setKind(.movies, videos, other.id)) == [.setKind(.movies, videos, other.id)])
+        _ = SourcesFeature.reduce(&state, .kindSet(videos, other.id, .success(())))
+        #expect(state.kindChange == .idle)
+    }
+
+    @Test func choosingTheKindAFolderHasSavesNothing() {
+        let videos = LibraryFolder("Home Videos").require()
+        var chosen = other
+        chosen.folderKinds[videos] = .otherVideos
+        var state = SourcesFeature.State(sources: [chosen])
+        #expect(SourcesFeature.reduce(&state, .setKind(.otherVideos, videos, chosen.id)).isEmpty)
+        #expect(state.kindChange == .idle)
+        #expect(SourcesFeature.reduce(&state, .setKind(.movies, videos, chosen.id)) == [.setKind(.movies, videos, chosen.id)])
+    }
+
+    @Test func folderKindsAndSavesRunSideBySide() {
+        let videos = LibraryFolder("Home Videos").require()
+        var state = SourcesFeature.State(sources: [source, other])
+        _ = SourcesFeature.reduce(&state, .update(source.id, edit(source, .keep)))
+        #expect(SourcesFeature.reduce(&state, .setKind(.movies, videos, other.id)) == [.setKind(.movies, videos, other.id)])
+        _ = SourcesFeature.reduce(&state, .formOpened)
+        #expect(state.save == .saving(.existing(source.id)))
+        #expect(state.kindChange == .saving(other.id, videos))
+    }
+
     @Test func savingAndRemovingRunSideBySide() {
         var state = SourcesFeature.State(sources: [source])
         _ = SourcesFeature.reduce(&state, .add(.webDAV, webDAV))

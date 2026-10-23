@@ -1,4 +1,5 @@
-/// The user's media sources: adding one, renaming it or changing its settings, and removing it.
+/// The user's media sources: adding one, renaming it or changing its settings, setting what a
+/// WebDAV source's folders hold, and removing it.
 enum SourcesFeature: Feature {
     struct Dependencies: Sendable {
         let sources: any MediaSourceService
@@ -25,10 +26,27 @@ enum SourcesFeature: Feature {
         case failed(SourceID, SourceError)
     }
 
+    /// A WebDAV source's library folders, for the page that sets their kinds. It lists one source's at a time.
+    enum Folders: Equatable, Sendable {
+        case idle
+        case loading(SourceID)
+        case loaded(SourceID, [FolderSuggestion])
+        case failed(SourceID, SourceError)
+    }
+
+    /// Setting a library folder's kind. One runs at a time.
+    enum KindChange: Equatable, Sendable {
+        case idle
+        case saving(SourceID, LibraryFolder)
+        case failed(SourceID, LibraryFolder, SourceError)
+    }
+
     struct State: Equatable, Sendable {
         var sources: [MediaSource] = []
         var save = Save.idle
         var removal = Removal.idle
+        var folders = Folders.idle
+        var kindChange = KindChange.idle
     }
 
     enum Event: Sendable {
@@ -41,6 +59,12 @@ enum SourcesFeature: Feature {
         case saveFinished(SaveTarget, Result<MediaSource, SourceError>)
         case remove(SourceID)
         case removeFinished(SourceID, Result<Void, SourceError>)
+        /// The page of a source's folders opened. It lists them again each time, so their suggested
+        /// kinds follow the server.
+        case foldersOpened(SourceID)
+        case foldersListed(SourceID, Result<[FolderSuggestion], SourceError>)
+        case setKind(FolderKind, LibraryFolder, SourceID)
+        case kindSet(LibraryFolder, SourceID, Result<Void, SourceError>)
     }
 
     enum Effect: Equatable, Sendable {
@@ -49,6 +73,8 @@ enum SourcesFeature: Feature {
         case add(SourceKind, SourceLogin)
         case update(SourceID, SourceEdit)
         case remove(SourceID)
+        case listFolders(SourceID)
+        case setKind(FolderKind, LibraryFolder, SourceID)
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -58,6 +84,8 @@ enum SourcesFeature: Feature {
             return []
         case .formOpened, .add, .update, .saveFinished: return reduceSave(&state, event)
         case .remove, .removeFinished: return reduceRemoval(&state, event)
+        case .foldersOpened, .foldersListed: return reduceFolders(&state, event)
+        case .setKind, .kindSet: return reduceKindChange(&state, event)
         }
     }
 
@@ -81,7 +109,8 @@ enum SourcesFeature: Feature {
             case .failure(let error): state.save = .failed(target, error)
             }
             return []
-        case (_, .saveFinished), (_, .sourcesChanged), (_, .remove), (_, .removeFinished):
+        case (_, .saveFinished), (_, .sourcesChanged), (_, .remove), (_, .removeFinished),
+             (_, .foldersOpened), (_, .foldersListed), (_, .setKind), (_, .kindSet):
             return []
         }
     }
@@ -100,7 +129,53 @@ enum SourcesFeature: Feature {
             case .failure(let error): state.removal = .failed(id, error)
             }
             return []
-        case (_, .removeFinished), (_, .sourcesChanged), (_, .formOpened), (_, .add), (_, .update), (_, .saveFinished):
+        case (_, .removeFinished), (_, .sourcesChanged), (_, .formOpened), (_, .add), (_, .update), (_, .saveFinished),
+             (_, .foldersOpened), (_, .foldersListed), (_, .setKind), (_, .kindSet):
+            return []
+        }
+    }
+
+    private static func reduceFolders(_ state: inout State, _ event: Event) -> [Effect] {
+        switch (state.folders, event) {
+        case (.loading(let pending), .foldersOpened(let id)) where pending == id:
+            return []
+        case (.idle, .foldersOpened(let id)), (.loading, .foldersOpened(let id)), (.loaded, .foldersOpened(let id)),
+             (.failed, .foldersOpened(let id)):
+            guard state.sources.contains(where: { $0.id == id && $0.kind == .webDAV }) else { return [] }
+            state.folders = .loading(id)
+            return [.listFolders(id)]
+        case (.loading(let pending), .foldersListed(let id, let result)) where pending == id:
+            switch result {
+            case .success(let folders): state.folders = .loaded(id, folders)
+            case .failure(let error): state.folders = .failed(id, error)
+            }
+            return []
+        case (_, .foldersListed), (_, .sourcesChanged), (_, .formOpened), (_, .add), (_, .update), (_, .saveFinished),
+             (_, .remove), (_, .removeFinished), (_, .setKind), (_, .kindSet):
+            return []
+        }
+    }
+
+    private static func reduceKindChange(_ state: inout State, _ event: Event) -> [Effect] {
+        switch (state.kindChange, event) {
+        case (.saving, .setKind):
+            return []
+        case (.idle, .setKind(let kind, let folder, let id)), (.failed, .setKind(let kind, let folder, let id)):
+            guard let source = state.sources.first(where: { $0.id == id }), source.kind == .webDAV else { return [] }
+            guard source.folderKinds[folder] != kind else {
+                state.kindChange = .idle
+                return []
+            }
+            state.kindChange = .saving(id, folder)
+            return [.setKind(kind, folder, id)]
+        case (.saving(let pendingID, let pendingFolder), .kindSet(let folder, let id, let result)) where pendingID == id && pendingFolder == folder:
+            switch result {
+            case .success: state.kindChange = .idle
+            case .failure(let error): state.kindChange = .failed(id, folder, error)
+            }
+            return []
+        case (_, .kindSet), (_, .sourcesChanged), (_, .formOpened), (_, .add), (_, .update), (_, .saveFinished),
+             (_, .remove), (_, .removeFinished), (_, .foldersOpened), (_, .foldersListed):
             return []
         }
     }
@@ -133,6 +208,19 @@ enum SourcesFeature: Feature {
                 send(.removeFinished(id, .success(())))
             } catch {
                 send(.removeFinished(id, .failure(error)))
+            }
+        case .listFolders(let id):
+            do {
+                send(.foldersListed(id, .success(try await dependencies.sources.libraryFolders(id))))
+            } catch {
+                send(.foldersListed(id, .failure(error)))
+            }
+        case .setKind(let kind, let folder, let id):
+            do {
+                try await dependencies.sources.setKind(kind, of: folder, on: id)
+                send(.kindSet(folder, id, .success(())))
+            } catch {
+                send(.kindSet(folder, id, .failure(error)))
             }
         }
     }
