@@ -125,6 +125,38 @@ struct StreamItemState: Codable, Equatable, Sendable {
     }
 }
 
+extension StreamItemState {
+    /// The managed keys, in core's terms: an embedded track by the engine's number, an add-on's file
+    /// by its URL. Ids the app did not write read as nothing chosen, and no delay as zero.
+    var choices: TrackChoices {
+        get {
+            let subtitles: TrackChoices.Subtitles? = subtitleTrack.flatMap { track in
+                if track.embedded {
+                    Int(track.id).map { .builtIn(TrackChoices.Track(number: $0, language: track.language)) }
+                } else {
+                    URL(string: track.id).map { .addon(Redacted($0), language: track.language) }
+                }
+            }
+            return TrackChoices(
+                audio: audioTrack.flatMap { track in Int(track.id).map { TrackChoices.Track(number: $0, language: track.language) } },
+                subtitles: subtitles,
+                speed: playbackSpeed.flatMap(PlaybackSpeed.init(rawValue:)),
+                subtitleDelay: subtitleDelay.map { SubtitleDelay(clamping: .milliseconds($0)) } ?? .zero
+            )
+        }
+        set {
+            audioTrack = newValue.audio.map { AudioTrack(id: String($0.number), language: $0.language) }
+            subtitleTrack = switch newValue.subtitles {
+            case nil: nil
+            case .builtIn(let track): SubtitleTrack(id: String(track.number), embedded: true, language: track.language)
+            case .addon(let url, let language): SubtitleTrack(id: url.rawValue.absoluteString, embedded: false, language: language)
+            }
+            playbackSpeed = newValue.speed?.rawValue
+            subtitleDelay = newValue.subtitleDelay == .zero ? nil : Int64((newValue.subtitleDelay.duration / .milliseconds(1)).rounded())
+        }
+    }
+}
+
 /// core's `Subtitles`, one file an add-on offers.
 struct Subtitles: Decodable, Sendable {
     let id: String
