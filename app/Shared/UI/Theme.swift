@@ -21,6 +21,10 @@ enum Palette {
     static let lane = Color(cream.opacity(0.08), increasedContrast: Color(red: 0.08, green: 0.05, blue: 0.05).opacity(0.9))
     /// Dims the video behind the controls and the timing strip, from clear at the top to this.
     static let scrim = Color.black.opacity(0.85)
+    /// The border of a cue block in the timing strip other than the line select starts.
+    static let cueEdge = text.opacity(0.45)
+    /// The glow around the timing strip's playhead.
+    static let playheadGlow = text.opacity(0.9)
 
     private static let cream = Color(red: 0.937, green: 0.910, blue: 0.871)
 
@@ -122,6 +126,7 @@ enum Metrics {
     static let cueTextMinWidth: CGFloat = 90
     static let cueBorder: CGFloat = 2
     static let playheadWidth: CGFloat = 4
+    static let playheadGlowRadius: CGFloat = 8
     #else
     static let wideCardWidth: CGFloat = 280
     static let shelfSpacing: CGFloat = 16
@@ -155,12 +160,17 @@ enum Metrics {
     static let cueTextMinWidth: CGFloat = 50
     static let cueBorder: CGFloat = 1
     static let playheadWidth: CGFloat = 2
+    static let playheadGlowRadius: CGFloat = 4
     #endif
 
     /// The title column beside the stream list.
     static let streamsInfoWidth: CGFloat = 520
     /// How far up the player's scrim reaches.
     static let scrimHeight: CGFloat = 520
+    /// The dashes of a cue's outline at its file's time: drawn, then skipped.
+    static let cueOutlineDash: [CGFloat] = [8, 6]
+    /// The share of the timing lane's width over which it fades in at each end.
+    static let timingLaneFade: CGFloat = 0.08
 
     // Subtitles scale with the picture rather than the screen, so the preview in Settings is the
     // player's overlay in miniature.

@@ -4,18 +4,11 @@ import SwiftUI
 /// later. It reads the delay in words and shows the subtitles' cues sliding past a playhead fixed in
 /// the middle, each with a dashed outline where its file times it.
 ///
-/// Remote: left and right move the subtitles a fine step earlier or later, and held, a coarse step
-/// at a time until released. Select starts the line nearest the playhead now. Play/pause and Menu
-/// stay the player's, which leaves the strip on Menu. Swipes do nothing. macOS: arrows, Return,
-/// space and Esc.
+/// Remote: left and right move the subtitles a fine step earlier or later as they go down, and
+/// held, a coarse step at a time until released. Select starts the highlighted line, the one
+/// nearest the playhead, now. Play/pause and Menu stay the player's, which leaves the strip on
+/// Menu. Swipes do nothing. macOS: arrows, Return, space and Esc.
 struct SubtitleTimingStrip: View {
-    /// A left or right press, until it ends.
-    private enum Press: Equatable {
-        /// Down for less than `holdThreshold`: a tap so far.
-        case tapping(PlayerFeature.Direction)
-        case holding(PlayerFeature.Direction)
-    }
-
     private static let holdThreshold = Duration.milliseconds(500)
     private static let repeatInterval = Duration.milliseconds(250)
 
@@ -24,7 +17,8 @@ struct SubtitleTimingStrip: View {
     @Environment(\.textLayout) private var textLayout
     let session: PlayerFeature.Session
     var focus: FocusState<PlayerFocus?>.Binding
-    @State private var press: Press?
+    /// The left or right press down, until it ends.
+    @State private var press: PlayerFeature.Direction?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.headerSpacing) {
@@ -36,7 +30,7 @@ struct SubtitleTimingStrip: View {
                     .animation(Motion.appear, value: session.subtitleDelay)
                     .accessibilityIdentifier("player.timing.offset")
             }
-            CueLanes(session: session)
+            CueLanes(session: session, target: session.alignmentTarget)
             hints
         }
         .foregroundStyle(Palette.text)
@@ -86,18 +80,24 @@ struct SubtitleTimingStrip: View {
             : AnyLayout(HStackLayout(spacing: Metrics.sectionSpacing))
         return layout {
             #if os(tvOS)
-            hint(Text("\(Image(systemName: "chevron.left")) \(Image(systemName: "chevron.right"))"), "Earlier or later 0.1 s, hold for 0.5 s")
-            hint(Text("Click"), "This line starts now")
+            hint(Text("\(Image(systemName: "chevron.left")) \(Image(systemName: "chevron.right"))"), Self.stepHint)
+            hint(Text("Click"), alignHint)
             hint(Text(Image(systemName: "playpause.fill")), "Play or pause")
             hint(Text("Menu"), "Done")
             #else
-            hint(Text("\(Image(systemName: "arrow.left")) \(Image(systemName: "arrow.right"))"), "Earlier or later 0.1 s, hold for 0.5 s")
-            hint(Text("Return"), "This line starts now")
+            hint(Text("\(Image(systemName: "arrow.left")) \(Image(systemName: "arrow.right"))"), Self.stepHint)
+            hint(Text("Return"), alignHint)
             hint(Text("Space"), "Play or pause")
             hint(Text("Esc"), "Done")
             #endif
         }
         .font(.caption)
+    }
+
+    private static let stepHint = "0.1 s earlier or later · hold to move faster"
+
+    private var alignHint: String {
+        session.alignmentTarget == nil ? "No line nearby" : "This line starts now"
     }
 
     private func hint(_ key: Text, _ action: String) -> some View {
@@ -107,36 +107,23 @@ struct SubtitleTimingStrip: View {
         }
     }
 
+    /// A press moves the subtitles a fine step as it goes down, so it shows at once whether held or not.
     private func pressed(_ isDown: Bool, _ direction: PlayerFeature.Direction) {
-        if isDown {
-            if press == nil { press = .tapping(direction) }
-            return
-        }
-        switch press {
-        case .tapping(direction):
+        if isDown, press == nil {
             nudge(direction, .fine)
+            press = direction
+        } else if !isDown, press == direction {
             press = nil
-        case .holding(direction):
-            press = nil
-        case .tapping, .holding, nil:
-            break
         }
     }
 
-    /// A press held past `holdThreshold` moves the subtitles a coarse step at once and every
+    /// A press held past `holdThreshold` moves the subtitles a coarse step then and every
     /// `repeatInterval` after, until it ends.
     private func repeatWhileHeld() async {
-        switch press {
-        case .tapping(let direction):
-            guard (try? await Task.sleep(for: Self.holdThreshold)) != nil else { return }
-            press = .holding(direction)
-        case .holding(let direction):
-            repeat {
-                nudge(direction, .coarse)
-            } while (try? await Task.sleep(for: Self.repeatInterval)) != nil
-        case nil:
-            break
-        }
+        guard let press, (try? await Task.sleep(for: Self.holdThreshold)) != nil else { return }
+        repeat {
+            nudge(press, .coarse)
+        } while (try? await Task.sleep(for: Self.repeatInterval)) != nil
     }
 
     private func nudge(_ direction: PlayerFeature.Direction, _ step: SubtitleDelay.Step) {
@@ -157,7 +144,8 @@ struct SubtitleTimingStrip: View {
 }
 
 /// The strip's lanes, each named on the left. The subtitles lane shows the cues within
-/// `PlayerFeature.alignmentWindow` of the playhead, which stays in the middle while they glide past.
+/// `PlayerFeature.alignmentWindow` of the playhead, which stays in the middle while they glide past,
+/// with `target`, the line select starts, highlighted.
 private struct CueLanes: View {
     /// A position the engine reported and when it arrived.
     private struct Report {
@@ -169,6 +157,7 @@ private struct CueLanes: View {
     private static let maxGlide = 0.5
 
     let session: PlayerFeature.Session
+    let target: TimedCue?
     @State private var lastReport: Report?
 
     var body: some View {
@@ -183,15 +172,7 @@ private struct CueLanes: View {
             .frame(width: Metrics.timingLabelWidth, alignment: .leading)
             TimelineView(.animation(paused: !isMoving)) { context in
                 VStack(spacing: Metrics.timingLaneSpacing) {
-                    CueTrack(cues: cues, delay: session.subtitleDelay, playhead: playhead(at: context.date))
-                        .overlay(alignment: .leading) {
-                            if cues.isEmpty {
-                                Text("No lines nearby")
-                                    .font(.caption2)
-                                    .foregroundStyle(Palette.secondary)
-                                    .padding(.horizontal, Metrics.timingLaneSpacing)
-                            }
-                        }
+                    CueTrack(cues: cues, delay: session.subtitleDelay, target: target?.id, playhead: playhead(at: context.date))
                 }
             }
             .overlay { Playhead() }
@@ -200,6 +181,10 @@ private struct CueLanes: View {
         .padding(.leading, Metrics.timingLaneSpacing)
         .background(Palette.lane, in: .rect(cornerRadius: Metrics.cornerRadius))
         .onChange(of: session.position, initial: true) {
+            lastReport = Report(position: session.position, date: .now)
+        }
+        // Gliding starts and stops from where the engine is, not from the last report's time.
+        .onChange(of: isMoving) {
             lastReport = Report(position: session.position, date: .now)
         }
         .accessibilityHidden(true)
@@ -230,11 +215,12 @@ private struct CueLanes: View {
 }
 
 /// One lane of cues, moved so `playhead` is in the middle. Each cue is a block where it shows and,
-/// once the subtitles are moved, a dashed outline where its file times it.
+/// once the subtitles are moved, a dashed outline where its file times it. The `target` block is lit.
 private struct CueTrack: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cues: [TimedCue]
     let delay: SubtitleDelay
+    let target: TimedCue.ID?
     let playhead: Duration
 
     var body: some View {
@@ -250,7 +236,7 @@ private struct CueTrack: View {
                 ZStack(alignment: .leading) {
                     ForEach(cues) { cue in
                         let shown = cue.range.lowerBound + delay.duration ..< cue.range.upperBound + delay.duration
-                        CueBlock(cue: cue, width: width(of: cue, scale: scale), isShowing: shown.contains(playhead))
+                        CueBlock(cue: cue, width: width(of: cue, scale: scale), isTarget: cue.id == target)
                             .offset(x: (shown.lowerBound / .seconds(1)) * scale)
                     }
                 }
@@ -263,8 +249,8 @@ private struct CueTrack: View {
         .mask {
             LinearGradient(
                 stops: [
-                    .init(color: .clear, location: 0), .init(color: .black, location: 0.08),
-                    .init(color: .black, location: 0.92), .init(color: .clear, location: 1),
+                    .init(color: .clear, location: 0), .init(color: .black, location: Metrics.timingLaneFade),
+                    .init(color: .black, location: 1 - Metrics.timingLaneFade), .init(color: .clear, location: 1),
                 ],
                 startPoint: .leading, endPoint: .trailing
             )
@@ -276,16 +262,16 @@ private struct CueTrack: View {
     }
 }
 
-/// A cue where it shows, with its first words. The one on screen now gets a bright border.
+/// A cue where it shows, with its first words. The line select starts gets a bright border.
 private struct CueBlock: View {
     let cue: TimedCue
     let width: CGFloat
-    let isShowing: Bool
+    let isTarget: Bool
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Metrics.cornerRadius / 2, style: .continuous)
         shape.fill(Palette.burgundy)
-            .overlay { shape.strokeBorder(Palette.text.opacity(isShowing ? 1 : 0.45), lineWidth: Metrics.cueBorder) }
+            .overlay { shape.strokeBorder(isTarget ? Palette.text : Palette.cueEdge, lineWidth: Metrics.cueBorder) }
             .overlay(alignment: .leading) {
                 if width >= Metrics.cueTextMinWidth {
                     Text(cue.text.rawValue)
@@ -304,7 +290,7 @@ private struct CueOutline: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: Metrics.cornerRadius / 2, style: .continuous)
-            .strokeBorder(Palette.secondary, style: StrokeStyle(lineWidth: Metrics.cueBorder, dash: [8, 6]))
+            .strokeBorder(Palette.secondary, style: StrokeStyle(lineWidth: Metrics.cueBorder, dash: Metrics.cueOutlineDash))
             .frame(width: width, height: Metrics.timingLaneHeight)
     }
 }
@@ -315,7 +301,7 @@ private struct Playhead: View {
         Rectangle()
             .fill(Palette.text)
             .frame(width: Metrics.playheadWidth)
-            .shadow(color: Palette.text.opacity(0.9), radius: Metrics.playheadWidth * 2)
+            .shadow(color: Palette.playheadGlow, radius: Metrics.playheadGlowRadius)
             .padding(.vertical, -Metrics.timingLaneSpacing / 2)
     }
 }
