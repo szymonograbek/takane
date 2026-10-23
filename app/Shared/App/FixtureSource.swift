@@ -9,7 +9,7 @@ import Foundation
 /// matched by its IMDb id so its details are Cinemeta's, and Beach Day, a local id whose details
 /// are this add-on's. Each has a stream, and Sintel has its sidecar subtitles. Core sees only
 /// placeholder URLs; `playbackSource(for:)` turns them into the server's files with Basic auth.
-struct FixtureSource: CoreInProcessAddons, CorePlaybackLinks {
+struct FixtureSource: CoreInProcessAddons, CorePlaybackLinks, CorePlaybackReports {
     private struct Title {
         let id: String
         let name: String
@@ -78,6 +78,9 @@ struct FixtureSource: CoreInProcessAddons, CorePlaybackLinks {
         }
         return file.map { PlaybackSource(url: Redacted(server.appending(path: $0)), headers: headers) }
     }
+
+    /// The dev WebDAV server keeps no watched state.
+    func playback(_ event: InProcessPlayback) {}
 
     private func placeholder(_ kind: String, _ title: Title) -> String {
         descriptor.transportURL.deletingLastPathComponent().appending(path: "\(kind)/\(title.id)").absoluteString

@@ -43,20 +43,42 @@ struct JellyfinClient: Sendable {
         }
     }
 
-    private func signedIn<Value: Decodable>(_ request: URLRequest, _ type: Value.Type) async throws(SourceError) -> Value {
+    /// Decodes the answer to a request that signs in, or carries a token.
+    func signedIn<Value: Decodable>(_ request: URLRequest, _ type: Value.Type) async throws(SourceError) -> Value {
         do {
             return try await session.json(type, for: request, decoder: JSONDecoder())
         } catch {
-            switch error {
-            case .transport: throw .unreachable
-            case .status(401): throw .badCredentials
-            case .status(let status): throw .invalidResponse(reason: "status \(status)")
-            case .decoding(let reason): throw .invalidResponse(reason: reason)
-            }
+            throw Self.failure(error)
         }
     }
 
-    private func authorization(for id: SourceID, token: String?) -> String {
+    /// Sends a request that carries a token and reads no answer, such as a `204 No Content`.
+    func signedIn(_ request: URLRequest) async throws(SourceError) {
+        let url = request.url?.absoluteString ?? "?"
+        Log.network.debug("→ \(request.httpMethod ?? "GET") \(url)")
+        let response: URLResponse
+        do {
+            (_, response) = try await session.data(for: request)
+        } catch {
+            Log.network.error("✕ \(url): \(error)")
+            throw Self.failure(.transport(error.localizedDescription))
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        Log.network.debug("← \(status) \(url)")
+        guard (200..<300).contains(status) else { throw Self.failure(.status(status)) }
+    }
+
+    private static func failure(_ error: HTTPFailure) -> SourceError {
+        switch error {
+        case .transport: .unreachable
+        case .status(401): .badCredentials
+        case .status(let status): .invalidResponse(reason: "status \(status)")
+        case .decoding(let reason): .invalidResponse(reason: reason)
+        }
+    }
+
+    /// Names the app and this source's device, and once signed in carries the token.
+    func authorization(for id: SourceID, token: String?) -> String {
         #if os(tvOS)
         let device = "Apple TV"
         #else

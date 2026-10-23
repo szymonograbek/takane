@@ -40,6 +40,23 @@ protocol CorePlaybackLinks: Sendable {
     func playbackSource(for placeholder: InProcessURL) -> PlaybackSource?
 }
 
+/// Hears what the player does with in-process add-ons' streams, so an add-on can tell its server
+/// what was watched.
+protocol CorePlaybackReports: Sendable {
+    func playback(_ event: InProcessPlayback)
+}
+
+/// What the player did with an in-process add-on's stream, in the order it happened.
+enum InProcessPlayback: Equatable, Sendable {
+    /// The stream with this placeholder began, after whatever played before.
+    case began(InProcessURL)
+    /// The stream playing is at this position, playing through or after a seek.
+    case position(Duration)
+    case paused(Bool)
+    /// The stream ended or was closed, or one from elsewhere began.
+    case stopped
+}
+
 extension CorePlaybackLinks {
     /// What the player loads for a URL core holds: the URL itself with `headers`, or the file an
     /// in-process add-on's placeholder stands for, nil when it stands for none.
@@ -61,11 +78,25 @@ extension CorePlaybackLinks {
 /// A source add-on as `setSources` lists it, in core's `Descriptor` shape: transport URL
 /// `https://<id>.source.invalid/manifest.json`, and ids that are IMDb's (`tt…`) or its own local
 /// ones (`takane-<id>-…`), whose metadata only it gives. The bridge refuses any other.
-struct SourceAddonDescriptor: Encodable, Sendable {
-    struct Catalog: Encodable, Sendable {
+struct SourceAddonDescriptor: Encodable, Equatable, Sendable {
+    struct Catalog: Encodable, Equatable, Sendable {
+        /// core's `ExtraProp`.
+        struct Extra: Encodable, Equatable, Sendable {
+            let name: String
+        }
+
         let type: String
         let id: String
         let name: String
+        let extra: [Extra]
+
+        /// A searchable catalog also answers `search=…` with its matching titles, so Search lists it.
+        init(type: String, id: String, name: String, searchable: Bool = false) {
+            self.type = type
+            self.id = id
+            self.name = name
+            extra = searchable ? [Extra(name: "search")] : []
+        }
     }
 
     /// The beginning of every local id, as in core/src/sources.rs.

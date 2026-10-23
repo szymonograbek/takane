@@ -72,4 +72,19 @@ extension URLRequest {
         url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?
             .queryItems?.first { $0.name == name }?.value
     }
+
+    /// The body as sent. URLSession hands a protocol the body of a request as a stream.
+    var body: Data? {
+        guard let stream = httpBodyStream else { return httpBody }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
 }

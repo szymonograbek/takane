@@ -1,10 +1,12 @@
 import Foundation
 
 /// Reports playback to core's player model, which records progress, watched state and continue watching.
-/// Core copies progress into the library on pause, unload and every 180 s.
+/// Core copies progress into the library on pause, unload and every 180 s. In-process add-ons hear
+/// about their own streams through `reports`.
 struct CorePlaybackTracker: PlaybackTracker {
     let runtime: CoreRuntime
     let links: any CorePlaybackLinks
+    let reports: any CorePlaybackReports
 
     #if os(tvOS)
     private static let device = "tvos"
@@ -14,22 +16,27 @@ struct CorePlaybackTracker: PlaybackTracker {
 
     func begin(_ candidate: StreamCandidate) {
         send(.load(.player(selection: candidate.tracking.payload.rawValue)))
+        reports.playback(Self.placeholder(of: candidate).map(InProcessPlayback.began) ?? .stopped)
     }
 
     func progress(_ position: Duration, of duration: Duration) {
         send(.player(.timeChanged(timeMs: position.milliseconds, durationMs: duration.milliseconds, device: Self.device)))
+        reports.playback(.position(position))
     }
 
     func seek(to position: Duration, of duration: Duration) {
         send(.player(.seek(timeMs: position.milliseconds, durationMs: duration.milliseconds, device: Self.device)))
+        reports.playback(.position(position))
     }
 
     func paused(_ paused: Bool) {
         send(.player(.pausedChanged(paused: paused)))
+        reports.playback(.paused(paused))
     }
 
     func ended() {
         send(.player(.ended))
+        reports.playback(.stopped)
     }
 
     func movedToNext() {
@@ -38,6 +45,7 @@ struct CorePlaybackTracker: PlaybackTracker {
 
     func stop() {
         send(.unload)
+        reports.playback(.stopped)
     }
 
     /// Core finds the next video once the selection's meta item loads, then asks the selected
@@ -109,6 +117,15 @@ struct CorePlaybackTracker: PlaybackTracker {
 
     private func send(_ action: CoreAction) {
         runtime.dispatchLogged(action, to: .player)
+    }
+
+    /// The stream's URL as its add-on gave it, which `CoreStreamResults` keeps in the tracking token,
+    /// when an in-process add-on gave it.
+    private static func placeholder(of candidate: StreamCandidate) -> InProcessURL? {
+        guard case .object(let selection) = candidate.tracking.payload.rawValue, case .object(let stream)? = selection["stream"],
+              case .string(let text)? = stream["url"], let url = URL(string: text)
+        else { return nil }
+        return InProcessURL(url)
     }
 }
 

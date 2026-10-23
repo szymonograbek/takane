@@ -99,7 +99,7 @@ struct Services: Sendable {
             offers: watchOffers(),
             library: CoreLibraryService(runtime: core),
             preferences: CorePreferencesService(runtime: core),
-            tracker: CorePlaybackTracker(runtime: core, links: inProcess.addons),
+            tracker: CorePlaybackTracker(runtime: core, links: inProcess.addons, reports: inProcess.addons),
             engine: engine,
             videoSurface: { AnyView(engine.surface()) },
             skipSegments: { source in
@@ -119,7 +119,7 @@ struct Services: Sendable {
     /// builds) puts `FixtureSource` in their place, with its descriptor, so core lists the fixture alone.
     private static func inProcessAddons(
         _ sources: SourceLibrary
-    ) -> (addons: any CoreInProcessAddons & CorePlaybackLinks, fixture: SourceAddonDescriptor?) {
+    ) -> (addons: any CoreInProcessAddons & CorePlaybackLinks & CorePlaybackReports, fixture: SourceAddonDescriptor?) {
         #if DEBUG
         if LaunchOptions.current["STREMIO_FIXTURE_SOURCE"] == "1", let fixture = FixtureSource() {
             Log.app.info("fixture source on, in place of the user's sources")
