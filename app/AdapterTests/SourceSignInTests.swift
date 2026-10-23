@@ -46,7 +46,7 @@ struct SourceSignInTests {
         #expect(request.url?.absoluteString == "http://jellyfin.local:8096/Users/AuthenticateByName")
         #expect(request.value(forHTTPHeaderField: "Authorization")
             == #"MediaBrowser Client="Takane", Device="Mac", DeviceId="takane-abcd2345", Version="1.4.0""#)
-        let body = try #require(request.httpBodyStream.map(Self.read))
+        let body = try #require(request.body)
         #expect(try JSONDecoder().decode([String: String].self, from: body) == ["Username": "takane", "Pw": "secret"])
         #expect(!String(describing: session).contains("0123456789abcdef"))
     }
@@ -110,20 +110,6 @@ struct SourceSignInTests {
         await #expect(throws: SourceError.notWebDAV) {
             try await notAllowed.check(Self.davLogin.endpoint, Self.davLogin.username, Self.davLogin.password)
         }
-    }
-
-    /// URLSession hands a protocol the body of a request as a stream.
-    private static func read(_ stream: InputStream) -> Data {
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while stream.hasBytesAvailable {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            guard count > 0 else { break }
-            data.append(buffer, count: count)
-        }
-        return data
     }
 }
 

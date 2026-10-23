@@ -116,7 +116,7 @@ struct CoreInProcessAddonsTests {
 
     @Test func sourcesEncodeTheShapeTheBridgeParses() throws {
         let descriptor = try #require(SourceAddonDescriptor(
-            id: "ab12cd34", name: "Home Jellyfin", catalogs: [SourceAddonDescriptor.Catalog(type: "movie", id: "movies", name: "Movies")]
+            id: "ab12cd34", name: "Home Jellyfin", catalogs: [SourceAddonDescriptor.Catalog(type: "movie", id: "movies", name: "Movies", searchable: true)]
         ))
         let encoded = try JSONEncoder().encode(DispatchRequest.bridge(.setSources([descriptor])))
 
@@ -133,7 +133,7 @@ struct CoreInProcessAddonsTests {
                     "stream",
                     "subtitles"
                 ],
-                "catalogs": [{"type": "movie", "id": "movies", "name": "Movies"}]
+                "catalogs": [{"type": "movie", "id": "movies", "name": "Movies", "extra": [{"name": "search"}]}]
             }
         }]}}
         """

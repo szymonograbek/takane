@@ -62,12 +62,28 @@ enum CatalogError: Error, Equatable, Sendable {
     case addonFailed(reason: String)
 }
 
+/// What a row is called.
+enum CatalogRowName: Equatable, Sendable, CustomStringConvertible {
+    /// An add-on's catalog name from its manifest, such as "Popular", or the add-on's name when the
+    /// catalog has none. Add-ons reuse catalog names across types.
+    case catalog(Redacted<String>)
+    /// A library on the user's own server, such as "Shows", named by the user.
+    case library(Redacted<String>)
+
+    var text: Redacted<String> {
+        switch self {
+        case .catalog(let name), .library(let name): name
+        }
+    }
+
+    var description: String { text.description }
+}
+
 /// One catalog's titles. A failing add-on fails its own row, never the board or the search.
 struct CatalogRow: Identifiable, Equatable, Sendable {
     let id: CatalogID
     let addonName: Redacted<String>
-    /// The catalog's name from the manifest, such as "Popular", or the add-on's name when it has none.
-    let name: Redacted<String>
+    let name: CatalogRowName
     /// Pages loaded so far, flattened, each title once. `.loading` until the first page answers;
     /// a catalog that answered with nothing is `.loaded([])`.
     let items: Remote<[MetaPreview], CatalogError>
