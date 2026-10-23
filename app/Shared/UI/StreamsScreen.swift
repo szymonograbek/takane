@@ -37,7 +37,7 @@ struct StreamsScreen: View {
                         ContentUnavailableView {
                             Label("No Playable Streams", systemImage: "play.slash")
                         } description: {
-                            Text("Your add-ons have nothing Takane can play for this. Torrent streams need a debrid add-on.")
+                            Text("Your add-ons have nothing Takane can play for this.")
                         } actions: {
                             // Also gives the screen something to focus, so Menu goes back from it.
                             Button("Try Again") { lookUp() }
