@@ -4,7 +4,7 @@ In Settings › Sources the user adds their own Jellyfin server or WebDAV folder
 
 ## Sub-features
 
-- `list` shows each source as `<name>, <kind> · <host:port>` above the two add rows; with none, only the add rows and the note show.
+- `list` shows each source as `<name>, <kind>` above the two add rows; with none, only the add rows and the note show.
 - `add` signs in to a Jellyfin server or WebDAV folder and lists it; its libraries become Home rows.
 - `add-error` shows the failure under the form, with focus kept on Save: wrong login, an address that is not the chosen kind, no answer.
 - `rename` sets the name on Edit; stream lists label the source's files with it.
@@ -24,14 +24,14 @@ Preconditions:
 - No stored sources: `xcrun simctl keychain "$(scripts/tvos-simulator.sh)" reset` before `$T launch` (no `-STREMIO_SOURCES`).
 
 - **Open.** `$T focus welcome.continue right`, `$T select`, `$T focus gearshape right`, `$T focus settings.sources down`. `$T text settings.sources` reads `Sources, None`. `$T select`; focus lands on `sources.addJellyfin`.
-- **Add Jellyfin.** `$T select`, then `$T type sourceForm.url down http://localhost:8196`. Done on the address keyboard opens the username keyboard, and its next opens the password keyboard (see Gotchas): type `takane`, press down until `$T focused` prints `next`, select; type `takane-dev`, press down to `done`, select. `$T focus sourceForm.save down`, `$T select`. Within 5 s the list is back with focus on Add Jellyfin Server, and the first `sources.row` reads `7a9996a9a971, Jellyfin · localhost:8196` (the dev server's name is its container id).
+- **Add Jellyfin.** `$T select`, then `$T type sourceForm.url down http://localhost:8196`. Done on the address keyboard opens the username keyboard, and its next opens the password keyboard (see Gotchas): type `takane`, press down until `$T focused` prints `next`, select; type `takane-dev`, press down to `done`, select. `$T focus sourceForm.save down`, `$T select`. Within 5 s the list is back with focus on Add Jellyfin Server, and the first `sources.row` reads `7a9996a9a971, Jellyfin` (the dev server's name is its container id).
 - **Home rows.** `$T remote menu` twice, `$T focus house left`, press down: Home Videos (Beach Day) and Movies (Sintel, `poster.tt1727587`) rows follow the add-on rows. The log reads `listed 1 source add-ons in core, [3] catalogs`.
-- **Wrong password.** On Sources, `$T focus sources.addWebDAV down`, `$T select`, type `http://localhost:8197`, `takane`, `wrong`, Save. `$T text sourceForm.error` reads `The username or password is incorrect.` and `$T focused` prints `sourceForm.save`. `$T type sourceForm.password up takane-dev`, Save: the list shows `localhost, WebDAV · localhost:8197`.
+- **Wrong password.** On Sources, `$T focus sources.addWebDAV down`, `$T select`, type `http://localhost:8197`, `takane`, `wrong`, Save. `$T text sourceForm.error` reads `The username or password is incorrect.` and `$T focused` prints `sourceForm.save`. `$T type sourceForm.password up takane-dev`, Save: the list shows `localhost, WebDAV`.
 - **Wrong kind.** Add WebDAV Folder with `http://localhost:8196`: `This address answers, but not as a WebDAV folder. Check the address and its port.`
 - **Saving.** Address `http://10.255.255.1:8197`: right after Save, `sourceForm.save` holds a spinner and keeps focus, then `The server didn't answer. …`.
 - **Rename.** Select the Jellyfin row, `$T focus source.edit down`, `$T select`; focus lands on `sourceForm.name`. `$T type sourceForm.name down "Home Server"`, then `$T remote menu` to leave the address keyboard it chains to. Save goes back to the source page; `$T text source.name` reads `Name, Home Server`. Sintel's stream list (Home › Movies › Sintel › Play) has a `streams.row` labeled `Home Server, Sintel (2010).mkv …`.
 - **Remove.** Select the WebDAV row, `$T focus source.remove down`, `$T select`: "Remove localhost?" with Remove focused. `$T select` goes back to the list with only Home Server. Sintel's stream list no longer has a `localhost, …` row, and the log reads `removed source <id>` then `listed 1 source add-ons`.
-- **Persisted.** `$T relaunch`, then Settings: `Sources, 1 source`, and the list shows `Home Server, Jellyfin · localhost:8196`.
+- **Persisted.** `$T relaunch`, then Settings: `Sources, 1 source`, and the list shows `Home Server, Jellyfin`.
 - **Proof.** `$T evidence sources-<step>` after each step.
 
 ## Gotchas

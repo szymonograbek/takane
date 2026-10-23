@@ -15,7 +15,7 @@ struct SourceSettings: View {
                         NavigationLink {
                             SourceScreen(id: source.id)
                         } label: {
-                            LabeledContent(source.name.text.rawValue, value: "\(source.kind.name) · \(source.endpoint.server)")
+                            LabeledContent(source.name.text.rawValue, value: source.kind.name)
                         }
                         .accessibilityIdentifier("sources.row")
                     }
@@ -31,7 +31,7 @@ struct SourceSettings: View {
     }
 
     private static let note = "Play films and shows from your own Jellyfin server or WebDAV folder, next to your add-ons. "
-        + "Their logins stay on this device and never reach your Stremio account."
+        + "Their logins stay on this device."
 }
 
 /// One source: what it is, editing it and removing it. It goes back once the source is removed.
