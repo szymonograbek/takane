@@ -39,6 +39,7 @@ use stremio_core::types::streams::StreamsBucket;
 use url::Url;
 
 use crate::env::AppleEnv;
+use crate::open_movies;
 
 /// Where the add-ons switched off on this device are saved. Core never reads it, so the choice
 /// stays off the account.
@@ -198,6 +199,10 @@ impl Model<AppleEnv> for AppModel {
     fn update(&mut self, msg: &Msg) -> (Vec<Effect>, Vec<AppModelField>) {
         let mut changes = self.apply_addon_requests();
         changes.record(AppModelField::Ctx, Update::<AppleEnv>::update(&mut self.ctx, msg));
+        // Core resets the profile on sign-out and saves it on the `ProfileChanged` that follows.
+        if matches!(msg, Msg::Internal(Internal::Logout(_))) && self.ctx.profile.auth.is_none() {
+            self.ctx.profile = open_movies::anonymous_profile();
+        }
         self.update_models(msg, None, &mut changes);
         (changes.effects, changes.fields)
     }
@@ -240,7 +245,7 @@ impl AppModel {
             AppleEnv::get_storage::<DisabledAddons>(DISABLED_ADDONS_STORAGE_KEY),
         )?;
 
-        let profile = profile.unwrap_or_default();
+        let profile = profile.unwrap_or_else(open_movies::anonymous_profile);
         let disabled_addons = disabled_addons.unwrap_or_default();
         let uid = profile.uid();
         tracing::info!(

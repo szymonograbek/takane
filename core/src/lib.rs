@@ -10,6 +10,7 @@ mod fetch;
 mod host;
 mod logging;
 mod model;
+mod open_movies;
 mod scrobble;
 mod storage;
 
