@@ -81,10 +81,11 @@ struct PlayerSubtitleTimingTests {
 
     @Test func theLineIsPickedWhereTheCurrentDelayShowsIt() {
         let cues = [cue(1, at: .seconds(48)), cue(2, at: .seconds(58))]
-        #expect(PlayerFeature.alignedDelay(cues, at: .seconds(60), from: delay(11_000)) == delay(12_000))
-        #expect(PlayerFeature.alignedDelay(cues, at: .seconds(60), from: .zero) == delay(2_000))
-        #expect(PlayerFeature.alignedDelay(cues, at: .seconds(80), from: .zero) == nil)
-        #expect(PlayerFeature.alignedDelay([], at: .seconds(60), from: .zero) == nil)
+        #expect(PlayerFeature.alignmentTarget(cues, at: .seconds(60), from: delay(11_000)) == cues[0])
+        #expect(PlayerFeature.alignmentTarget(cues, at: .seconds(60), from: .zero) == cues[1])
+        #expect(PlayerFeature.alignmentTarget(cues, at: .seconds(80), from: .zero) == nil)
+        #expect(PlayerFeature.alignmentTarget([], at: .seconds(60), from: .zero) == nil)
+        #expect(PlayerFeature.delay(starting: cues[0], at: .milliseconds(60_040)) == delay(12_000))
     }
 
     @Test func resettingPutsTheSubtitlesBackInSync() {
@@ -101,6 +102,14 @@ struct PlayerSubtitleTimingTests {
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.builtIn(polish.id))) == [
             .select(polish.id), .setSubtitleDelay(.zero), .report(.choices(choices)),
         ])
+        #expect(state.session?.subtitleDelay == .zero)
+    }
+
+    @Test func anotherTrackPickedByNumberStartsInSync() {
+        var state = playing()
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.nudge(.forward, .coarse)))
+        let choices = TrackChoices(subtitles: .builtIn(TrackChoices.Track(number: 4, language: "pol")), speed: .normal)
+        #expect(PlayerFeature.reduce(&state, .select(polish.id)) == [.select(polish.id), .setSubtitleDelay(.zero), .report(.choices(choices))])
         #expect(state.session?.subtitleDelay == .zero)
     }
 

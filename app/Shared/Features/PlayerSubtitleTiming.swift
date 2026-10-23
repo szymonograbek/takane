@@ -17,12 +17,17 @@ extension PlayerFeature {
     /// What "this line starts now" rounds a delay to, the finest step a press makes.
     static let alignmentPrecision = SubtitleDelay.Step.fine.duration
 
-    /// The delay that starts, at `position`, the cue of `cues` whose start under `delay` lies nearest
-    /// it, rounded to `alignmentPrecision`. Nil when none starts within `alignmentWindow` of it.
-    static func alignedDelay(_ cues: [TimedCue], at position: Duration, from delay: SubtitleDelay) -> SubtitleDelay? {
+    /// The cue "this line starts now" moves: of `cues`, the one whose start under `delay` lies
+    /// nearest `position`. Nil when none starts within `alignmentWindow` of it.
+    static func alignmentTarget(_ cues: [TimedCue], at position: Duration, from delay: SubtitleDelay) -> TimedCue? {
         let nearest = cues.min { distance($0, position, delay) < distance($1, position, delay) }
         guard let nearest, distance(nearest, position, delay) <= alignmentWindow else { return nil }
-        let steps = ((position - nearest.range.lowerBound) / alignmentPrecision).rounded()
+        return nearest
+    }
+
+    /// The delay that starts `cue` at `position`, rounded to `alignmentPrecision`.
+    static func delay(starting cue: TimedCue, at position: Duration) -> SubtitleDelay {
+        let steps = ((position - cue.range.lowerBound) / alignmentPrecision).rounded()
         return SubtitleDelay(clamping: alignmentPrecision * steps)
     }
 
@@ -32,13 +37,18 @@ extension PlayerFeature {
 }
 
 extension PlayerFeature.Session {
+    /// The cue "this line starts now" would move now.
+    var alignmentTarget: TimedCue? {
+        PlayerFeature.alignmentTarget(cueTimeline, at: position, from: subtitleDelay)
+    }
+
     mutating func apply(_ event: PlayerFeature.SubtitleTimingEvent) -> [Effect] {
         switch event {
         case .nudge(let direction, let step) where subtitleChoice != .off:
             return retime(to: subtitleDelay.moved(by: step.duration * direction.sign))
         case .align where subtitleChoice != .off:
-            guard let delay = PlayerFeature.alignedDelay(cueTimeline, at: position, from: subtitleDelay) else { return [] }
-            return retime(to: delay)
+            guard let alignmentTarget else { return [] }
+            return retime(to: PlayerFeature.delay(starting: alignmentTarget, at: position))
         case .reset:
             return retime(to: .zero)
         case .nudge, .align:
