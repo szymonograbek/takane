@@ -80,6 +80,16 @@ extension PlayerFeature.Session {
         }
     }
 
+    /// Pauses or resumes, or ends a scan, which resumes.
+    mutating func togglePause() -> [Effect] {
+        guard scan == nil else { return endScan() }
+        switch phase {
+        case .playing: return [.setPaused(true)]
+        case .paused: return [.setPaused(false)]
+        case .opening, .ended: return []
+        }
+    }
+
     /// Ends a scan, if there is one, and resumes playback.
     mutating func endScan() -> [Effect] {
         guard scan != nil else { return [] }

@@ -39,6 +39,19 @@ extension PlayerFeature {
 }
 
 extension PlayerFeature.Session {
+    /// The stream's own subtitle tracks, without files added from add-ons.
+    var builtInSubtitles: [MediaTrack] {
+        tracks.filter { $0.id.kind == .subtitle && $0.externalFile == nil }
+    }
+
+    var subtitleChoice: PlayerFeature.SubtitleChoice {
+        tracks.first { $0.id.kind == .subtitle && $0.isSelected }.map(subtitleChoice(of:)) ?? .off
+    }
+
+    func addonSubtitle(_ id: AddonSubtitle.ID) -> AddonSubtitle? {
+        addonSubtitles.first { $0.addon == id.addon }?.subtitles.value?.first { $0.id == id }
+    }
+
     mutating func select(_ id: MediaTrack.ID) -> [Effect] {
         guard let track = tracks.first(where: { $0.id == id }), !track.isSelected else { return [] }
         var choices = self.choices

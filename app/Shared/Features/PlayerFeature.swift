@@ -125,12 +125,7 @@ enum PlayerFeature: Feature {
             return open(candidate, from: start, title: title, replacing: &state)
 
         case (.active(let session), .togglePause):
-            guard session.scan == nil else { return update(&state, session) { $0.endScan() } }
-            switch session.phase {
-            case .playing: return [.setPaused(true)]
-            case .paused: return [.setPaused(false)]
-            case .opening, .ended: return []
-            }
+            return update(&state, session) { $0.togglePause() }
 
         // A live channel plays where its broadcast is: nothing to seek to.
         case (.active(let session), .jump(let direction)) where !session.isLive:
@@ -351,19 +346,6 @@ extension PlayerFeature.Session {
     var isLive: Bool {
         if case .liveChannel = candidate.item { true } else { false }
     }
-
-    /// The stream's own subtitle tracks, without files added from add-ons.
-    var builtInSubtitles: [MediaTrack] {
-        tracks.filter { $0.id.kind == .subtitle && $0.externalFile == nil }
-    }
-
-    var subtitleChoice: PlayerFeature.SubtitleChoice {
-        tracks.first { $0.id.kind == .subtitle && $0.isSelected }.map(subtitleChoice(of:)) ?? .off
-    }
-
-    func addonSubtitle(_ id: AddonSubtitle.ID) -> AddonSubtitle? {
-        addonSubtitles.first { $0.addon == id.addon }?.subtitles.value?.first { $0.id == id }
-    }
 }
 
 extension PlayerFeature.State {
@@ -388,13 +370,5 @@ extension PlayerFeature.State {
 
     func tracks(_ kind: TrackKind) -> [MediaTrack] {
         session?.tracks.filter { $0.id.kind == kind } ?? []
-    }
-
-    var phaseName: String {
-        switch self {
-        case .idle: "idle"
-        case .active(let session): session.phase.rawValue
-        case .failed(_, let error): "failed: \(error)"
-        }
     }
 }
