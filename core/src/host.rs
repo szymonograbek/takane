@@ -118,3 +118,52 @@ pub fn emit(event: &[u8]) {
     let host = host().expect("host is installed before the runtime starts");
     (host.emit)(host.context, SBBytes::from_slice(event));
 }
+
+/// A host for tests. It records each fetch and answers none; a test answers with `fetch::complete`.
+#[cfg(test)]
+pub mod recording {
+    use std::ptr::null_mut;
+    use std::sync::{Mutex, Once};
+
+    use super::*;
+
+    /// A request the bridge sent to the host, with its body parsed (`null` when it has none).
+    #[derive(Clone)]
+    pub struct Fetch {
+        pub id: u64,
+        pub url: String,
+        pub body: serde_json::Value,
+    }
+
+    static FETCHES: Mutex<Vec<Fetch>> = Mutex::new(Vec::new());
+
+    extern "C" fn log(_: *mut c_void, _: SBLogLevel, _: SBBytes, _: SBBytes) {}
+
+    extern "C" fn fetch(_: *mut c_void, request_id: u64, request: SBBytes) {
+        // SAFETY: the bridge passes bytes valid for this call.
+        let request: serde_json::Value = serde_json::from_slice(unsafe { request.as_slice() }).unwrap();
+        let body = request["body"].as_str().map_or(serde_json::Value::Null, |body| serde_json::from_str(body).unwrap());
+        let url = request["url"].as_str().unwrap().to_owned();
+        FETCHES.lock().unwrap().push(Fetch { id: request_id, url, body });
+    }
+
+    extern "C" fn emit(_: *mut c_void, _: SBBytes) {}
+
+    /// Installs the recording host, once for every test in the process.
+    pub fn install() {
+        static INSTALL: Once = Once::new();
+        INSTALL.call_once(|| assert!(super::install(SBHost { context: null_mut(), log, fetch, emit })));
+    }
+
+    /// The fetches sent so far whose body has `value` in `field`. Tests share the host, so each
+    /// finds its own requests by a value only it sends, such as an auth key.
+    pub fn fetches_with(field: &str, value: &str) -> Vec<Fetch> {
+        FETCHES
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|fetch| fetch.body[field] == value)
+            .cloned()
+            .collect()
+    }
+}

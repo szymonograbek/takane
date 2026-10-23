@@ -15,6 +15,7 @@ use stremio_core::types::api::{fetch_api, APIRequest, APIResult, SuccessResponse
 use stremio_core::types::profile::AuthKey;
 
 use crate::env::AppleEnv;
+use crate::sources;
 
 /// Numbers the events this process sends, as `eventNumber`.
 static NEXT_EVENT_NUMBER: AtomicU64 = AtomicU64::new(0);
@@ -56,7 +57,8 @@ struct AppContext {
 }
 
 impl Scrobble {
-    /// The scrobble `event` asks for, or `None` for any other event and for accounts without Trakt.
+    /// The scrobble `event` asks for, or `None` for any other event, for accounts without Trakt and
+    /// for titles found only on the user's own sources, which Trakt cannot know.
     pub fn from_event(event: &Event) -> Option<Self> {
         let scrobble = match event {
             Event::PlayerPlaying { context, load_time } => Scrobble::PlayerPlaying {
@@ -75,7 +77,9 @@ impl Scrobble {
             Event::TraktPaused { context } => Scrobble::TraktPaused { player: context.clone() },
             _ => return None,
         };
-        scrobble.player().has_trakt.then_some(scrobble)
+        let player = scrobble.player();
+        let local = player.id.as_deref().is_some_and(sources::is_local);
+        (player.has_trakt && !local).then_some(scrobble)
     }
 
     fn player(&self) -> &AnalyticsContext {
@@ -232,6 +236,26 @@ mod tests {
         assert_eq!(stopped["eventName"], "playerStopped");
         let paused = event_json(Event::TraktPaused { context: player(true) }).expect("a scrobble");
         assert_eq!(paused["eventName"], "traktPaused");
+    }
+
+    #[test]
+    fn titles_found_only_on_the_users_sources_send_nothing() {
+        let local = AnalyticsContext {
+            id: Some("takane-ab12cd34-0ae5".to_owned()),
+            r#type: Some("movie".to_owned()),
+            video_id: Some("takane-ab12cd34-0ae5".to_owned()),
+            ..player(true)
+        };
+        let events = [
+            Event::PlayerPlaying { context: local.clone(), load_time: 1200 },
+            Event::PlayerStopped { context: local.clone() },
+            Event::PlayerEnded { context: local.clone(), is_binge_enabled: true, is_playing_next_video: false },
+            Event::TraktPlaying { context: local.clone() },
+            Event::TraktPaused { context: local },
+        ];
+        for event in events {
+            assert_eq!(Scrobble::from_event(&event), None, "{event:?}");
+        }
     }
 
     #[test]

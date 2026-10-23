@@ -40,6 +40,7 @@ use url::Url;
 
 use crate::env::AppleEnv;
 use crate::open_movies;
+use crate::sources::SourceAddons;
 
 /// Where the add-ons switched off on this device are saved. Core never reads it, so the choice
 /// stays off the account.
@@ -49,7 +50,8 @@ const DISABLED_ADDONS_STORAGE_KEY: &str = "disabled_addons";
 /// `AppModelField`, which names `ctx` and each model as the app does (`"meta_details"`).
 macro_rules! models {
     ($($(#[$attribute:meta])* $field:ident: $model:ty => $variant:ident,)*) => {
-        /// The core models besides `ctx`. Each sees only the add-ons enabled on this device.
+        /// The core models besides `ctx`. Each sees the add-ons enabled on this device, then the
+        /// user's sources.
         #[derive(Clone, Default)]
         struct Models {
             $($(#[$attribute])* $field: $model,)*
@@ -96,12 +98,14 @@ models! {
     calendar: Calendar => Calendar,
 }
 
-/// The core models the app runs, and the add-ons switched off on this device.
+/// The core models the app runs, the add-ons switched off on this device and the user's sources.
 #[derive(Clone)]
 pub struct AppModel {
     ctx: Ctx,
     models: Models,
     disabled_addons: DisabledAddons,
+    /// Never saved and never in `ctx`: the app sends them again on each launch.
+    source_addons: SourceAddons,
     /// Requests the next update applies.
     addon_requests: Arc<Mutex<Vec<AddonRequest>>>,
 }
@@ -109,9 +113,11 @@ pub struct AppModel {
 /// A change to the installed add-ons core has no action for, as the app sends it: `{"<name>": <args>}`.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::enum_variant_names, reason = "the variants name the requests the app sends")]
 pub enum AddonRequest {
     SetAddonEnabled(SetAddonEnabled),
     SetAddonOrder(SetAddonOrder),
+    SetSources(SetSources),
 }
 
 /// Switching one add-on on or off on this device.
@@ -147,6 +153,13 @@ impl SetAddonOrder {
         addons.sort_by_key(|addon| self.transport_urls.iter().position(|url| *url == addon.transport_url));
         addons.iter().map(|addon| &addon.transport_url).ne(before.iter())
     }
+}
+
+/// The add-ons of every source the user configured, replacing the ones sent before. A descriptor
+/// that is not a source add-on fails the whole request when it is parsed.
+#[derive(Deserialize, Debug)]
+pub struct SetSources {
+    descriptors: SourceAddons,
 }
 
 /// Transport URLs of the add-ons switched off on this device. Core never sees them: `ctx` keeps
@@ -277,6 +290,7 @@ impl AppModel {
             ctx,
             models: Models { continue_watching_preview, ..Default::default() },
             disabled_addons,
+            source_addons: SourceAddons::default(),
             addon_requests: Default::default(),
         };
         Ok((model, continue_watching_effects))
@@ -295,9 +309,9 @@ impl AppModel {
         RuntimeAction { field: Some(AppModelField::Ctx), action: Action::Unload }
     }
 
-    /// Applies the waiting requests. A change is saved, a new order is also synced to the account
-    /// as core syncs an install, and the models select again with the add-ons now enabled and in
-    /// order, as they do when the profile's add-ons change.
+    /// Applies the waiting requests. A switch is saved, a new order is also synced to the account
+    /// as core syncs an install, and the models select again with the add-ons now enabled, in
+    /// order and with the new sources, as they do when the profile's add-ons change.
     fn apply_addon_requests(&mut self) -> Changes {
         let requests = std::mem::take(
             &mut *self.addon_requests.lock().unwrap_or_else(PoisonError::into_inner),
@@ -305,6 +319,7 @@ impl AppModel {
         let mut changes = Changes::default();
         let mut switched = false;
         let mut reordered = false;
+        let mut sources_changed = false;
         for request in requests {
             match request {
                 AddonRequest::SetAddonEnabled(request) => switched |= self.disabled_addons.apply(request),
@@ -312,6 +327,10 @@ impl AppModel {
                     tracing::warn!(?request, "add-on order refused: the account's add-ons are locked");
                 }
                 AddonRequest::SetAddonOrder(request) => reordered |= request.apply(&mut self.ctx.profile.addons),
+                AddonRequest::SetSources(SetSources { descriptors }) => {
+                    sources_changed |= descriptors != self.source_addons;
+                    self.source_addons = descriptors;
+                }
             }
         }
         if switched {
@@ -328,13 +347,16 @@ impl AppModel {
         }
         if switched || reordered {
             changes.fields.push(AppModelField::Ctx);
+        }
+        if switched || reordered || sources_changed {
             self.update_models(&Msg::Internal(Internal::ProfileChanged), None, &mut changes);
         }
         changes
     }
 
-    /// Runs `msg` through the models, all or the one `only` names, while `ctx` holds only the
-    /// add-ons enabled on this device. The full list is back before anything else reads `ctx`.
+    /// Runs `msg` through the models, all or the one `only` names, while `ctx` holds the add-ons
+    /// enabled on this device, then the user's sources. The installed list is back before anything
+    /// else reads `ctx`, so `ctx` never saves or syncs a source.
     fn update_models(&mut self, msg: &Msg, only: Option<&AppModelField>, changes: &mut Changes) {
         let enabled = self
             .ctx
@@ -342,6 +364,7 @@ impl AppModel {
             .addons
             .iter()
             .filter(|addon| !self.disabled_addons.0.contains(&addon.transport_url))
+            .chain(self.source_addons.iter())
             .cloned()
             .collect();
         let installed = std::mem::replace(&mut self.ctx.profile.addons, enabled);
@@ -498,8 +521,10 @@ impl<'a> UpcomingShow<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::host::recording;
     use crate::{executor, storage};
     use stremio_core::runtime::Runtime;
+    use stremio_core::types::api::APIRequest;
     use stremio_watched_bitfield::WatchedBitField;
 
     const ONE: &str = "https://one.example/manifest.json";
@@ -533,6 +558,7 @@ mod tests {
             ),
             models: Models::default(),
             disabled_addons: DisabledAddons::default(),
+            source_addons: SourceAddons::default(),
             addon_requests: Default::default(),
         }
     }
@@ -547,8 +573,7 @@ mod tests {
     }
 
     /// The add-ons the board lists catalogs of, which are the ones core asks for them.
-    fn board_addons(runtime: &Runtime<AppleEnv, AppModel>) -> Vec<String> {
-        let model = runtime.model().unwrap();
+    fn board_addons(model: &AppModel) -> Vec<String> {
         let mut addons: Vec<String> = model
             .models
             .board
@@ -561,8 +586,8 @@ mod tests {
         addons
     }
 
-    fn ctx_state(runtime: &Runtime<AppleEnv, AppModel>) -> serde_json::Value {
-        serde_json::from_slice(&runtime.model().unwrap().state_json(&AppModelField::Ctx).unwrap()).unwrap()
+    fn ctx_state(model: &AppModel) -> serde_json::Value {
+        serde_json::from_slice(&model.state_json(&AppModelField::Ctx).unwrap()).unwrap()
     }
 
     fn installed_addons(ctx: &serde_json::Value) -> Vec<&str> {
@@ -593,20 +618,20 @@ mod tests {
         }))
         .unwrap();
         runtime.dispatch(RuntimeAction { field: Some(AppModelField::Board), action: load_board });
-        assert_eq!(board_addons(&runtime), [ONE, TWO]);
+        assert_eq!(board_addons(&runtime.model().unwrap()), [ONE, TWO]);
 
         let disable = set_enabled(&runtime.model().unwrap(), ONE, false);
         runtime.dispatch(disable);
-        assert_eq!(board_addons(&runtime), [TWO]);
-        let ctx = ctx_state(&runtime);
+        assert_eq!(board_addons(&runtime.model().unwrap()), [TWO]);
+        let ctx = ctx_state(&runtime.model().unwrap());
         assert_eq!(installed_addons(&ctx), [ONE, TWO]);
         assert_eq!(ctx["disabledAddons"], serde_json::json!([ONE]));
         assert_eq!(saved(DISABLED_ADDONS_STORAGE_KEY), serde_json::json!([ONE]));
 
         let enable = set_enabled(&runtime.model().unwrap(), ONE, true);
         runtime.dispatch(enable);
-        assert_eq!(board_addons(&runtime), [ONE, TWO]);
-        assert_eq!(ctx_state(&runtime)["disabledAddons"], serde_json::json!([]));
+        assert_eq!(board_addons(&runtime.model().unwrap()), [ONE, TWO]);
+        assert_eq!(ctx_state(&runtime.model().unwrap())["disabledAddons"], serde_json::json!([]));
         assert_eq!(saved(DISABLED_ADDONS_STORAGE_KEY), serde_json::json!([]));
     }
 
@@ -625,8 +650,8 @@ mod tests {
         let reorder = set_order(&runtime.model().unwrap(), &[TWO, ONE]);
         runtime.dispatch(reorder);
 
-        assert_eq!(installed_addons(&ctx_state(&runtime)), [TWO, ONE]);
-        assert_eq!(board_addons(&runtime), [TWO, ONE]);
+        assert_eq!(installed_addons(&ctx_state(&runtime.model().unwrap())), [TWO, ONE]);
+        assert_eq!(board_addons(&runtime.model().unwrap()), [TWO, ONE]);
         assert_eq!(installed_addons(&serde_json::json!({"profile": saved(PROFILE_STORAGE_KEY)})), [TWO, ONE]);
     }
 
@@ -642,6 +667,73 @@ mod tests {
             assert_eq!(fields, [], "{order:?}");
             assert_eq!(installed_addons(&serde_json::from_slice(&model.state_json(&AppModelField::Ctx).unwrap()).unwrap()), [ONE, TWO]);
         }
+    }
+
+    const SOURCE: &str = "https://ab12cd34.source.invalid/manifest.json";
+
+    fn set_sources(model: &AppModel, transport_urls: &[&str]) -> RuntimeAction<AppleEnv, AppModel> {
+        let descriptors = transport_urls.iter().map(|url| addon(url)).collect::<Vec<_>>();
+        model.queue(AddonRequest::SetSources(SetSources { descriptors: descriptors.try_into().unwrap() }))
+    }
+
+    /// The one request to `endpoint` the account `auth_key` sent.
+    fn api_fetch(auth_key: &str, endpoint: &str) -> recording::Fetch {
+        let mut fetches: Vec<_> = recording::fetches_with("authKey", auth_key)
+            .into_iter()
+            .filter(|fetch| fetch.url == format!("https://api.strem.io/api/{endpoint}"))
+            .collect();
+        assert_eq!(fetches.len(), 1, "{endpoint}");
+        fetches.remove(0)
+    }
+
+    /// Runs the model without a runtime, feeding it core's messages by hand: the effects are not
+    /// run, so nothing is saved to the storage the tests share, but each request still reaches the host.
+    #[test]
+    fn sources_reach_the_models_but_never_the_account() {
+        recording::install();
+        let mut model = model_with(vec![addon(ONE)]);
+        let auth_key = AuthKey("sources-account".to_owned());
+        model.ctx.profile.auth = Some(
+            serde_json::from_value(serde_json::json!({
+                "key": auth_key,
+                "user": {
+                    "_id": "user",
+                    "email": "a@b.c",
+                    "lastModified": "2026-10-01T00:00:00Z",
+                    "dateRegistered": "2026-10-01T00:00:00Z",
+                    "premium_expire": null,
+                    "gdpr_consent": {"tos": true, "privacy": true, "marketing": false, "from": null},
+                },
+            }))
+            .unwrap(),
+        );
+        let load_board = serde_json::from_value(serde_json::json!({
+            "action": "Load",
+            "args": {"model": "CatalogsWithExtra", "args": {"type": null, "extra": []}},
+        }))
+        .unwrap();
+        model.update_field(&Msg::Action(load_board), &AppModelField::Board);
+
+        let RuntimeAction { field, action } = set_sources(&model, &[SOURCE]);
+        model.update_field(&Msg::Action(action), &field.unwrap());
+        assert_eq!(board_addons(&model), [ONE, SOURCE]);
+        assert_eq!(installed_addons(&ctx_state(&model)), [ONE]);
+
+        model.update(&Msg::Action(Action::Ctx(ActionCtx::PushAddonsToAPI)));
+        let pushed = api_fetch("sources-account", "addonCollectionSet");
+        assert_eq!(installed_addons(&serde_json::json!({"profile": pushed.body})), [ONE]);
+
+        model.update(&Msg::Action(Action::Ctx(ActionCtx::PullAddonsFromAPI)));
+        api_fetch("sources-account", "addonCollectionGet");
+        let pulled = APIRequest::AddonCollectionGet { auth_key, update: true };
+        model.update(&Msg::Internal(Internal::AddonsAPIResult(pulled, Ok(vec![addon(TWO)]))));
+        model.update(&Msg::Internal(Internal::ProfileChanged));
+        assert_eq!(board_addons(&model), [TWO, SOURCE]);
+        assert_eq!(installed_addons(&ctx_state(&model)), [TWO]);
+
+        let RuntimeAction { field, action } = set_sources(&model, &[]);
+        model.update_field(&Msg::Action(action), &field.unwrap());
+        assert_eq!(board_addons(&model), [TWO]);
     }
 
     #[test]
