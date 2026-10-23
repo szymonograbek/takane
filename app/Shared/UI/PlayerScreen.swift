@@ -319,7 +319,7 @@ private struct PlaybackFailure: View {
             Label("Can't Play This Stream", systemImage: "exclamationmark.triangle")
         } description: {
             switch error {
-            case .unsupported(let kind): Text("\(kind) streams can't be played here. Choose another stream.")
+            case .unsupported: Text("Takane can't play this kind of stream. Choose another stream.")
             case .failed(let reason): Text(reason)
             }
         } actions: {

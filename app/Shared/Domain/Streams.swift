@@ -10,7 +10,7 @@ struct PlaybackSource: Hashable, Sendable {
 
 enum Playability: Hashable, Sendable {
     case playable(PlaybackSource)
-    /// Torrent, archive, YouTube, external link and similar; `kind` names it for display.
+    /// Torrent, archive, YouTube, external link and similar; `kind` names it for logs.
     case unsupported(kind: String)
 }
 
