@@ -331,18 +331,20 @@ extension PlayerFeature {
         case .stop:
             engine.stop()
             tracker.stop()
-        case .report(.progress(let position, let duration)):
-            tracker.progress(position, of: duration)
-        case .report(.seek(let position, let duration)):
-            tracker.seek(to: position, of: duration)
-        case .report(.paused(let paused)):
-            tracker.paused(paused)
-        case .report(.ended):
-            tracker.ended()
-        case .report(.choices(let choices)):
-            tracker.remember(choices)
-        case .report(.movedToNext):
-            tracker.movedToNext()
+        case .report(let report):
+            deliver(report, to: tracker)
+        }
+    }
+
+    @MainActor
+    private static func deliver(_ report: Report, to tracker: any PlaybackTracker) {
+        switch report {
+        case .progress(let position, let duration): tracker.progress(position, of: duration)
+        case .seek(let position, let duration): tracker.seek(to: position, of: duration)
+        case .paused(let paused): tracker.paused(paused)
+        case .ended: tracker.ended()
+        case .choices(let choices): tracker.remember(choices)
+        case .movedToNext: tracker.movedToNext()
         }
     }
 }
