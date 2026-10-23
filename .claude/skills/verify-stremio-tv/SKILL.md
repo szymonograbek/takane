@@ -23,7 +23,7 @@ $T launch
 
 `launch` builds the tvOS simulator app (`scripts/build-app.sh tvos-sim`), boots or creates the "Stremio Apple TV" simulator (`scripts/tvos-simulator.sh`), installs, and opens the app through agent-device session `stremio-tv-verify`. It passes `-STREMIO_STORAGE_DIRECTORY <container>/tmp/verify-<run-id>`, so core starts on an empty profile (default add-ons only), and `-STREMIO_MUTE 1`, so playback is silent. Ready means Welcome shows and `doctor` passes. `launch` waits for Welcome, runs `doctor` itself and exits non-zero when not ready.
 
-Further `-STREMIO_KEY value` pairs after `launch` (or `launch --account`) reach the app as launch options (`LaunchOptions`). `$T launch -STREMIO_FIXTURE_SOURCE 1` lists the debug-only fixture source add-on: a Fixture row on Home with Sintel and Beach Day, streamed from the dev WebDAV server with Basic auth. Start that server first with `scripts/dev-sources.sh up`. `$T launch -STREMIO_SOURCES '[{"kind":"jellyfin","url":"http://localhost:8196","username":"takane","password":"takane-dev"},{"kind":"webdav","url":"http://localhost:8197","username":"takane","password":"takane-dev"}]'` adds both dev servers as sources (`kind` is `jellyfin` or `webdav`) through the app's own sign-in; they stay in the simulator's Keychain across runs and `cleanup`, and the option skips any already stored.
+Further `-STREMIO_KEY value` pairs after `launch` (or `launch --account`) reach the app as launch options (`LaunchOptions`). `$T launch -STREMIO_FIXTURE_SOURCE 1` lists the debug-only fixture source add-on: a Fixture row on Home with Sintel and Beach Day, streamed from the dev WebDAV server with Basic auth. Start that server first with `scripts/dev-sources.sh up`. `$T launch -STREMIO_SOURCES '[{"kind":"jellyfin","url":"http://localhost:8196","username":"takane","password":"takane-dev"},{"kind":"webdav","url":"http://localhost:8197","username":"takane","password":"takane-dev"}]'` adds both dev servers as sources (`kind` is `jellyfin` or `webdav`) through the app's own sign-in; they stay in the simulator's Keychain across runs and `cleanup`, and the option skips any already stored. Settings › Sources adds, renames and removes sources through the UI instead (`features/sources.md`); `xcrun simctl keychain "$(scripts/tvos-simulator.sh)" reset` clears them.
 
 `$T relaunch` quits the app and opens it again on the run's profile, as after a reboot: Home with the same continue watching, stream and subtitle choices, and the sources from the Keychain. Use it to prove something survives a relaunch. The app log starts over, so capture evidence before relaunching.
 
@@ -91,7 +91,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `player.skip` | Skip Intro, Recap, Credits or Preview: shows while the controls are hidden during a segment with skip data (Stremio Premium, IntroDB or SkipDB) |
 | `player.option` | each row in the open subtitles, audio or speed panel, including an add-on's row on the subtitles page that opens its files |
 | `player.upNext.play`, `player.upNext.dismiss` | the up next card's Play Now (Choose Stream when the next episode has no matching stream) and Cancel; the card shows near an episode's end while the controls are hidden, with Play Now focused |
-| `settings.account`, `settings.addons`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows |
+| `settings.account`, `settings.addons`, `settings.sources`, `settings.playback`, `settings.subtitles`, `settings.about` | Settings rows; Sources reads `Sources, None`, `Sources, 1 source` or `Sources, <n> sources` |
 | `settings.trakt` | Trakt on Settings › Account when signed in; its value reads Connected or Not Connected |
 | `trakt.qr`, `trakt.retry`, `trakt.disconnect` | Settings › Account › Trakt: the QR code that connects Trakt (shown while not connected, the app polls the account every 3 s until it leaves the screen), Try Again after waiting failed, and Disconnect when connected (confirms first) |
 | `about.shareLogs` | Share Logs on Settings › About |
@@ -101,41 +101,6 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `subtitles.size`, `subtitles.font`, `subtitles.bold`, `subtitles.fileStyling`, `subtitles.textColor`, `subtitles.outlineColor`, `subtitles.backgroundColor`, `subtitles.opacity`, `subtitles.position`, `subtitles.reset` | Settings › Subtitles style rows; each but the Bold and Use File Styling toggles and Reset opens a list of choices |
 | `subtitles.preview` | the live preview on Settings › Subtitles and on each style list, where it shows the focused choice |
 | `addons.install`, `addons.manifestURL`, `addons.submit`, `addons.status`, `addons.row` | Settings › Add-ons; `addons.submit` is the Install button under the field, `addons.status` exists only while it has a message |
-
-Feature recipes with exact steps: `features/README.md`.
-
-## Evidence
-
-`$T evidence <name>` writes to `build/verify/<run-id>/`: `<name>.png` (simulator screenshot, 3840×2160), `<name>.ax.jsonl` (raw accessibility tree, one JSON node per line), and `app.log` (Swift, Rust and AetherEngine logs; debug builds mask nothing, so treat it as holding credentials). Capture before and after each user action that matters.
-
-Proof standards:
-
-- Drive the UI path in `features/`, not the smoke mode, when claiming a UI control works.
-- Pair each action with the resulting state: the screen and the element text after it.
-- Verify side effects, not only the screen: core persists to `<run storage>/profile.json` (installed add-ons) and `library_recent.json` (progress). Read them before cleanup (`source build/verify/current.env; ls "$storage"`).
-- Playback proof is the `player.status` line advancing over time plus the screenshot showing video, not the row press alone.
-- Network goes to the real add-ons and debrid. There are no mocks.
-
-Smoke journey evidence: `smoke-result.json` (pass flag, streams, video size, decoder, audio output, render size, continue-watching offset) next to the app log. macOS: `~/Library/Logs/com.ograbek.takane/`, plus `smoke-frame.png`. tvOS: the app container's `Library/Caches/Logs/`, plus `smoke-screen.png`. `scripts/smoke.sh` prints the paths.
-
-## Cleanup
-
-```bash
-$T cleanup
-```
-
-Copies the final app log into the run directory, closes the agent-device session, terminates the app it launched, deletes the run's profile directory and `build/verify/current.env`. It never deletes `build/verify/<run-id>/` and leaves the simulator booted (it is reused across runs). Run it after every run, including failed ones. The smoke script uses its own throwaway profile and cleans up after itself.
-
-## Helpers
-
-- `scripts/tv.sh` (this skill): every command above; `tv.sh` with no arguments prints usage.
-- `scripts/build-app.sh [macos|tvos-sim|tvos-device]` (repo): build; logs in `build/xcodebuild-<platform>.log`.
-- `scripts/smoke.sh [--tvos] [type/id]` (repo): scripted journey; exit 0 = pass.
-- `scripts/tvos-simulator.sh` (repo): prints the simulator UDID, creating and booting it.
-
-## Limits
-
-- macOS UI is not driven by this skill. agent-device's macOS backend uses XCTest automation, which asks for a one-time system permission. Use `scripts/smoke.sh` on macOS until that permission is granted and a recipe is proven.
-- agent-device's tvOS remote has no play/pause button. Select on `player.playPause` or the focused progress bar pauses and resumes; on the bare video it only shows the controls.
-- agent-device's normal `snapshot`/`is`/`get` fail once the stream list is on screen ("node escaped its cumulative clip"). `tv.sh` reads raw snapshots for that reason; do the same in ad-hoc commands (`agent-device snapshot -i --raw --session stremio-tv-verify`).
-- The simulator plays on the software route (`libavcodec … (SW)`). Hardware decoding, HDR, Dolby Vision and passthrough need a real Apple TV.
+| `sources.row`, `sources.addJellyfin`, `sources.addWebDAV` | Settings › Sources: each source (label `<name>, <Jellyfin or WebDAV>`, in the order added), then Add Jellyfin Server and Add WebDAV Folder. With no source only the two add rows show |
+| `source.name`, `source.kind`, `source.server`, `source.username`, `source.edit`, `source.remove` | a source's page: its values (label `Name, <name>`), Edit, and Remove, which confirms ("Remove <name>?") before removing and going back |
+| `sourceForm.name`, `sourceForm.url`, `sourceForm.username`, `sourceForm.password`, `sourceForm.save`, `sourceForm.error` | the add and edit form; Name only when editing, an empty password keeps the stored one when editing. Save shows a spinner while the server is asked and keeps focus; `sourceForm.error` exists only after a failed save |

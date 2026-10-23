@@ -96,6 +96,9 @@ enum Metrics {
     static let playerPanelPadding: CGFloat = 30
     /// The choices a `ChoiceMenu` opens.
     static let choiceMenuWidth: CGFloat = 560
+    /// A form's column of fields, and the space between them.
+    static let formWidth: CGFloat = 1000
+    static let formSpacing: CGFloat = 30
     static let welcomeLogoSize: CGFloat = 300
     /// A QR code a phone scans from across the room.
     static let qrCodeSize: CGFloat = 440
@@ -124,6 +127,8 @@ enum Metrics {
     static let playerPanelMaxHeight: CGFloat = 360
     static let playerPanelPadding: CGFloat = 12
     static let choiceMenuWidth: CGFloat = 260
+    static let formWidth: CGFloat = 480
+    static let formSpacing: CGFloat = 12
     static let welcomeLogoSize: CGFloat = 160
     static let qrCodeSize: CGFloat = 220
     static let progressHeight: CGFloat = 5

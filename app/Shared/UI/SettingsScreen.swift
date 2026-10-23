@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Five categories, laid out like the system's Settings: an emblem on the left, the list on the right.
+/// Six categories, laid out like the system's Settings: an emblem on the left, the list on the right.
 struct SettingsScreen: View {
     @Environment(AppContext.self) private var app
 
@@ -21,6 +21,12 @@ struct SettingsScreen: View {
                     LabeledContent("Add-ons", value: "\(app.addons.state.installed.count) installed")
                 }
                 .accessibilityIdentifier("settings.addons")
+                NavigationLink {
+                    SourceSettings()
+                } label: {
+                    LabeledContent("Sources", value: Self.count(app.sources.state.sources))
+                }
+                .accessibilityIdentifier("settings.sources")
                 NavigationLink("Playback") { PlaybackSettings() }
                     .accessibilityIdentifier("settings.playback")
                 NavigationLink {
@@ -32,6 +38,16 @@ struct SettingsScreen: View {
                 NavigationLink("About") { AboutSettings() }
                     .accessibilityIdentifier("settings.about")
             }
+        }
+    }
+}
+
+private extension SettingsScreen {
+    static func count(_ sources: [MediaSource]) -> String {
+        switch sources.count {
+        case 0: "None"
+        case 1: "1 source"
+        case let count: "\(count) sources"
         }
     }
 }

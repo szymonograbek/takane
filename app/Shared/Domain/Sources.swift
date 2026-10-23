@@ -63,6 +63,25 @@ struct SourceUsername: Hashable, Sendable, CustomStringConvertible, CustomDebugS
     var debugDescription: String { description }
 }
 
+/// What the user calls a source: a non-empty name, as typed but trimmed.
+struct SourceName: Hashable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+    let text: Redacted<String>
+
+    init?(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        self.text = Redacted(trimmed)
+    }
+
+    /// The server's host, for a source whose server gives no name.
+    init(hostOf endpoint: SourceEndpoint) {
+        text = Redacted(endpoint.url.rawValue.host() ?? endpoint.description)
+    }
+
+    var description: String { text.description }
+    var debugDescription: String { description }
+}
+
 /// What signs in to a source's server.
 struct SourceLogin: Equatable, Sendable {
     let endpoint: SourceEndpoint
@@ -77,12 +96,20 @@ enum PasswordChange: Equatable, Sendable {
     case replace(Password)
 }
 
+/// What editing a source sets.
+struct SourceEdit: Equatable, Sendable {
+    let name: SourceName
+    let endpoint: SourceEndpoint
+    let username: SourceUsername
+    let password: PasswordChange
+}
+
 /// A media server the user added. It holds no secret, so it can be state, listed and logged.
 struct MediaSource: Identifiable, Equatable, Sendable {
     let id: SourceID
     let kind: SourceKind
-    /// The server's name, or the folder's for WebDAV.
-    let name: Redacted<String>
+    /// The server's name, or the folder's for WebDAV, until the user renames it.
+    let name: SourceName
     let endpoint: SourceEndpoint
     let username: SourceUsername
 }
@@ -111,10 +138,9 @@ protocol MediaSourceService: Sendable {
     /// Signs in, then keeps the source. Nothing is kept when signing in fails.
     func add(_ kind: SourceKind, _ login: SourceLogin) async throws(SourceError) -> MediaSource
 
-    /// Signs in with the new settings, then replaces the source's. The old ones stay when signing in fails.
-    func update(
-        _ id: SourceID, endpoint: SourceEndpoint, username: SourceUsername, password: PasswordChange
-    ) async throws(SourceError) -> MediaSource
+    /// Signs in with the new settings, then replaces the source's, its name included. The old ones
+    /// stay when signing in fails.
+    func update(_ id: SourceID, _ edit: SourceEdit) async throws(SourceError) -> MediaSource
 
     /// Removing a source that is not there succeeds.
     func remove(_ id: SourceID) async throws(SourceError)

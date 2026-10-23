@@ -6,7 +6,7 @@ import Testing
 /// (`app/AdapterTests/Jellyfin`, recorded with curl from `scripts/dev-sources.sh up`).
 struct JellyfinAddonTests {
     private static let source = MediaSource(
-        id: SourceID("abcd2345").require(), kind: .jellyfin, name: Redacted("Living Room"),
+        id: SourceID("abcd2345").require(), kind: .jellyfin, name: SourceName("Living Room").require(),
         endpoint: SourceEndpoint("http://jellyfin.local:8096").require(), username: SourceUsername("takane").require()
     )
     private static let session = JellyfinSession(userID: "u1", token: "0123456789abcdef0123456789abcdef")
@@ -311,7 +311,7 @@ struct JellyfinAddonLiveTests {
     private static func addon() async throws -> JellyfinAddon {
         let client = JellyfinClient(session: .shared, version: "live-test")
         let (name, session) = try await client.signIn(login, for: id)
-        let source = MediaSource(id: id, kind: .jellyfin, name: Redacted(name), endpoint: login.endpoint, username: login.username)
+        let source = MediaSource(id: id, kind: .jellyfin, name: SourceName(name).require(), endpoint: login.endpoint, username: login.username)
         return JellyfinAddon(source: source, session: session, client: client) {}
     }
 

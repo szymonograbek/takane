@@ -12,13 +12,19 @@ struct SourcesFeatureTests {
         password: Password("secret").require()
     )
     private let source = MediaSource(
-        id: SourceID("ab23cd45").require(), kind: .jellyfin, name: Redacted("Living Room"),
+        id: SourceID("ab23cd45").require(), kind: .jellyfin, name: SourceName("Living Room").require(),
         endpoint: SourceEndpoint("http://jellyfin.local:8096").require(), username: SourceUsername("takane").require()
     )
     private let other = MediaSource(
-        id: SourceID("zz77yy66").require(), kind: .webDAV, name: Redacted("media"),
+        id: SourceID("zz77yy66").require(), kind: .webDAV, name: SourceName("media").require(),
         endpoint: SourceEndpoint("https://dav.example/media").require(), username: SourceUsername("takane").require()
     )
+
+    private func edit(_ source: MediaSource, _ password: PasswordChange, name: String? = nil) -> SourceEdit {
+        SourceEdit(
+            name: name.flatMap(SourceName.init) ?? source.name, endpoint: source.endpoint, username: source.username, password: password
+        )
+    }
 
     @Test func listsTheSourcesItIsGiven() {
         var state = SourcesFeature.State()
@@ -30,7 +36,7 @@ struct SourcesFeatureTests {
         var state = SourcesFeature.State(sources: [source])
         #expect(SourcesFeature.reduce(&state, .add(.jellyfin, jellyfin)) == [.add(.jellyfin, jellyfin)])
         #expect(SourcesFeature.reduce(&state, .add(.webDAV, webDAV)).isEmpty)
-        #expect(SourcesFeature.reduce(&state, .update(source.id, source.endpoint, source.username, .keep)).isEmpty)
+        #expect(SourcesFeature.reduce(&state, .update(source.id, edit(source, .keep))).isEmpty)
         #expect(state.save == .saving(.new(.jellyfin, jellyfin.endpoint)))
     }
 
@@ -43,7 +49,7 @@ struct SourcesFeatureTests {
 
     @Test func dropsAnswersForAnotherSave() {
         var state = SourcesFeature.State(sources: [source])
-        _ = SourcesFeature.reduce(&state, .update(source.id, source.endpoint, source.username, .keep))
+        _ = SourcesFeature.reduce(&state, .update(source.id, edit(source, .keep)))
         _ = SourcesFeature.reduce(&state, .saveFinished(.new(.jellyfin, jellyfin.endpoint), .failure(.badCredentials)))
         _ = SourcesFeature.reduce(&state, .saveFinished(.existing(other.id), .success(other)))
         #expect(state.save == .saving(.existing(source.id)))
@@ -60,14 +66,30 @@ struct SourcesFeatureTests {
     @Test func updatesOnlyAListedSource() {
         var state = SourcesFeature.State(sources: [source])
         let password = PasswordChange.replace(Password("new").require())
-        #expect(SourcesFeature.reduce(&state, .update(other.id, other.endpoint, other.username, password)).isEmpty)
+        #expect(SourcesFeature.reduce(&state, .update(other.id, edit(other, password))).isEmpty)
         #expect(state.save == .idle)
         #expect(
-            SourcesFeature.reduce(&state, .update(source.id, source.endpoint, source.username, password))
-                == [.update(source.id, source.endpoint, source.username, password)]
+            SourcesFeature.reduce(&state, .update(source.id, edit(source, password)))
+                == [.update(source.id, edit(source, password))]
         )
         _ = SourcesFeature.reduce(&state, .saveFinished(.existing(source.id), .failure(.badCredentials)))
         #expect(state.save == .failed(.existing(source.id), .badCredentials))
+    }
+
+    @Test func renamesASource() {
+        var state = SourcesFeature.State(sources: [source])
+        let rename = edit(source, .keep, name: "Home Server")
+        #expect(SourcesFeature.reduce(&state, .update(source.id, rename)) == [.update(source.id, rename)])
+        let renamed = MediaSource(id: source.id, kind: source.kind, name: rename.name, endpoint: source.endpoint, username: source.username)
+        _ = SourcesFeature.reduce(&state, .saveFinished(.existing(source.id), .success(renamed)))
+        #expect(state.save == .saved(renamed))
+    }
+
+    @Test func aRenameWaitsForTheSaveInFlight() {
+        var state = SourcesFeature.State(sources: [source])
+        _ = SourcesFeature.reduce(&state, .add(.webDAV, webDAV))
+        #expect(SourcesFeature.reduce(&state, .update(source.id, edit(source, .keep, name: "Home Server"))).isEmpty)
+        #expect(state.save == .saving(.new(.webDAV, webDAV.endpoint)))
     }
 
     @Test func openingTheFormStartsCleanAfterASave() {
@@ -139,6 +161,12 @@ struct SourceValueTests {
         #expect(SourceID("abcd23456") == nil)
         let made = SourceID.random()
         #expect(SourceID(made.rawValue) == made)
+    }
+
+    @Test func namesAreTrimmedAndNotEmpty() {
+        #expect(SourceName("  Home Server ")?.text.rawValue == "Home Server")
+        #expect(SourceName(" ") == nil)
+        #expect(SourceName(hostOf: SourceEndpoint("http://nas.local:8096/media").require()).text.rawValue == "nas.local")
     }
 
     @Test func usernamesAreTrimmedAndNotEmpty() {

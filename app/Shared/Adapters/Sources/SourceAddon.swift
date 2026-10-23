@@ -63,7 +63,7 @@ final class SourceAddon<Server: SourceServer>: ListedSourceAddon {
 
     /// The add-on as core lists it, with the catalogs of the last listing read: none before the first.
     var descriptor: SourceAddonDescriptor? {
-        SourceAddonDescriptor(id: source.id.rawValue, name: source.name.rawValue, catalogs: Self.catalogs(of: state.withLock { $0.latest }))
+        SourceAddonDescriptor(id: source.id.rawValue, name: source.name.text.rawValue, catalogs: Self.catalogs(of: state.withLock { $0.latest }))
     }
 
     func respond(to url: InProcessURL) async -> CoreFetchReply {

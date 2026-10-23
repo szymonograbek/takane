@@ -109,9 +109,10 @@ struct KeychainSourceStore: Sendable {
         guard let account = attributes[kSecAttrAccount as String] as? String, let id = SourceID(account),
               let data = attributes[kSecAttrGeneric as String] as? Data,
               let listing = try? JSONDecoder().decode(StoredListing.self, from: data),
-              let endpoint = SourceEndpoint(listing.endpoint.absoluteString), let username = SourceUsername(listing.username)
+              let name = SourceName(listing.name), let endpoint = SourceEndpoint(listing.endpoint.absoluteString),
+              let username = SourceUsername(listing.username)
         else { return nil }
-        return MediaSource(id: id, kind: listing.kind.kind, name: Redacted(listing.name), endpoint: endpoint, username: username)
+        return MediaSource(id: id, kind: listing.kind.kind, name: name, endpoint: endpoint, username: username)
     }
 
     private static func failure(_ status: OSStatus, _ action: String) -> SourceError {
@@ -142,7 +143,7 @@ private struct StoredListing: Codable {
         case .jellyfin: .jellyfin
         case .webDAV: .webDAV
         }
-        name = source.name.rawValue
+        name = source.name.text.rawValue
         endpoint = source.endpoint.url.rawValue
         username = source.username.name.rawValue
     }
