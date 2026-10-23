@@ -114,6 +114,28 @@ struct MediaSource: Identifiable, Equatable, Sendable {
     let username: SourceUsername
 }
 
+/// A folder on a source, named as only the source's adapter reads it: a Jellyfin library or folder,
+/// or a folder's path under a WebDAV folder.
+struct SourceFolderID: Hashable, Sendable, CustomStringConvertible {
+    let rawValue: String
+
+    init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    /// Redacted, since a path's key can be checked against guessed folder names.
+    var description: String { Redacted(rawValue).description }
+}
+
+/// What a source's folder holds, as browsing shows it.
+enum SourceEntry: Hashable, Sendable {
+    case folder(SourceFolderID, name: Redacted<String>)
+    /// A movie, show or video, known by its IMDb id when the source knows it, else by the source's own id.
+    case title(MetaPreview)
+    /// A file of one of a show's episodes.
+    case episode(show: MetaPreview, season: Int, episode: Int, name: Redacted<String>)
+}
+
 enum SourceError: Error, Equatable, Sendable {
     /// The server did not answer.
     case unreachable
@@ -126,6 +148,8 @@ enum SourceError: Error, Equatable, Sendable {
     case invalidResponse(reason: String)
     /// The source was removed.
     case notFound
+    /// The folder is no longer on the server.
+    case folderGone
     /// This device could not keep the source's sign-in.
     case storageFailed(reason: String)
 }
@@ -144,4 +168,8 @@ protocol MediaSourceService: Sendable {
 
     /// Removing a source that is not there succeeds.
     func remove(_ id: SourceID) async throws(SourceError)
+
+    /// What a folder of the source holds: its folders, then its titles and episode files. Nil is the
+    /// source's root: a Jellyfin server's libraries, or the top of a WebDAV folder.
+    func browse(_ id: SourceID, folder: SourceFolderID?) async throws(SourceError) -> [SourceEntry]
 }

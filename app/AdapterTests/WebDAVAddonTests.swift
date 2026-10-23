@@ -237,7 +237,7 @@ struct WebDAVListingTests {
 }
 
 /// The add-on under test, and the servers it lists.
-private enum Subject {
+enum Subject {
     static let root = "https://abcd2345.source.invalid"
     static let local = "takane-abcd2345-"
     static let basic = "Basic dGFrYW5lOnNlY3JldA=="

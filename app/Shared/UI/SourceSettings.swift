@@ -311,5 +311,6 @@ extension SourceError {
         case .notFound: "This source was removed."
         case .storageFailed(let reason): "This device couldn't keep the login (\(reason))."
         }
+        case .folderGone: "This folder is no longer on the server."
     }
 }

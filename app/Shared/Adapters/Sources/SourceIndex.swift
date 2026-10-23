@@ -38,6 +38,52 @@ struct SourceIndex: Equatable, Sendable {
     let items: [PlayableID: [SourceItemID]]
     /// The titles found only on this source, by their local id.
     let localTitles: [MediaID: SourceTitle]
+    /// The libraries and folders the titles are in, for browsing.
+    let folders: SourceFolders
+}
+
+/// A source's folders as its server arranges them, each holding its subfolders, then its titles
+/// and episode files.
+struct SourceFolders: Equatable, Sendable {
+    /// A library or folder as a listing names it. A nil `parent` is the source's root.
+    struct Folder: Equatable, Sendable {
+        let id: SourceFolderID
+        let name: Redacted<String>
+        let parent: SourceFolderID?
+    }
+
+    private let entries: [SourceFolderID?: [SourceEntry]]
+
+    /// Places each of `items` in its folder, in their order and once each. Folders holding no item,
+    /// even below them, are left out, since they lead nowhere. Folders sort by name.
+    init(folders: [Folder], items: [(entry: SourceEntry, folder: SourceFolderID?)]) {
+        let parents = Dictionary(folders.compactMap { folder in folder.parent.map { (folder.id, $0) } }) { first, _ in first }
+        var holding: Set<SourceFolderID> = []
+        for item in items {
+            var folder = item.folder
+            while let id = folder, holding.insert(id).inserted {
+                folder = parents[id]
+            }
+        }
+        var entries: [SourceFolderID?: [SourceEntry]] = [nil: []]
+        var seen: Set<SourceFolderID> = []
+        let kept = folders
+            .filter { holding.contains($0.id) && seen.insert($0.id).inserted }
+            .sorted { $0.name.rawValue.localizedStandardCompare($1.name.rawValue) == .orderedAscending }
+        for folder in kept {
+            entries[folder.parent, default: []].append(.folder(folder.id, name: folder.name))
+        }
+        var placed: [SourceFolderID?: Set<SourceEntry>] = [:]
+        for item in items where placed[item.folder, default: []].insert(item.entry).inserted {
+            entries[item.folder, default: []].append(item.entry)
+        }
+        self.entries = entries
+    }
+
+    /// Nil when the source has no such folder.
+    func entries(in folder: SourceFolderID?) -> [SourceEntry]? {
+        entries[folder]
+    }
 }
 
 /// A movie, show or video on a source, as its catalog lists it and, for a local id, its details.
@@ -72,6 +118,17 @@ struct SourceTitle: Equatable, Sendable {
     let year: Int?
     /// A show's episodes in order. Empty for a movie.
     let episodes: [SourceEpisode]
+}
+
+extension SourceTitle {
+    /// As browsing shows it, opening its details.
+    var preview: MetaPreview {
+        MetaPreview(
+            media: id, type: kind == .series ? .series : .movie, name: name, poster: poster?.rawValue,
+            posterShape: isLandscape ? .landscape : .poster, background: background?.rawValue, logo: nil,
+            releaseInfo: year.map { Redacted(String($0)) }, description: overview
+        )
+    }
 }
 
 /// An episode of a show, which plays as `<show id>:<season>:<episode>`.

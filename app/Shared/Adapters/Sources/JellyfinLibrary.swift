@@ -33,7 +33,7 @@ extension JellyfinClient {
     /// which repeat films listed elsewhere, are left out.
     private static let videoLibraries: Set<String?> = ["movies", "tvshows", "homevideos", "mixed", nil]
 
-    /// Lists every video library and its titles: one request for the libraries, one per library.
+    /// Lists every video library with its titles and folders: one request for the libraries, one per library.
     func index(of server: JellyfinServer) async throws(SourceError) -> SourceIndex {
         let views = try await get(Listing<View>.self, "Users/\(server.session.userID)/Views", [], on: server).items
         var libraries: [(View, [Item])] = []
@@ -42,8 +42,8 @@ extension JellyfinClient {
                 URLQueryItem(name: "userId", value: server.session.userID),
                 URLQueryItem(name: "ParentId", value: view.id),
                 URLQueryItem(name: "Recursive", value: "true"),
-                URLQueryItem(name: "IncludeItemTypes", value: "Movie,Series,Episode,Video"),
-                URLQueryItem(name: "Fields", value: "ProviderIds,Overview,ProductionYear,PremiereDate,PrimaryImageAspectRatio"),
+                URLQueryItem(name: "IncludeItemTypes", value: "Movie,Series,Episode,Video,Folder"),
+                URLQueryItem(name: "Fields", value: "ProviderIds,Overview,ProductionYear,PremiereDate,PrimaryImageAspectRatio,ParentId"),
                 URLQueryItem(name: "SortBy", value: "DateCreated,SortName"),
                 URLQueryItem(name: "SortOrder", value: "Descending"),
                 URLQueryItem(name: "EnableUserData", value: "false"),
@@ -111,15 +111,24 @@ extension JellyfinClient {
 }
 
 /// Turns Jellyfin's listings into an index: a title is known by its IMDb id when the server has
-/// one, else by a local id; an episode plays under its show's id.
+/// one, else by a local id; an episode plays under its show's id. A library's folders are the
+/// folders inside the ones it reads from disk, which browsing skips.
 private struct IndexBuilder {
     let server: JellyfinServer
 
     func index(_ libraries: [(View, [Item])]) -> SourceIndex {
         var items: [PlayableID: [SourceItemID]] = [:]
         var localTitles: [MediaID: SourceTitle] = [:]
+        var folders: [SourceFolders.Folder] = []
+        var placed: [(entry: SourceEntry, folder: SourceFolderID?)] = []
         let built = libraries.compactMap { view, listed -> SourceIndex.Library? in
             guard let id = SourceItemID(view.id) else { return nil }
+            let library = SourceFolderID(id.rawValue)
+            folders.append(SourceFolders.Folder(id: library, name: Redacted(view.name), parent: nil))
+            let place = Placement(library: library, listed: listed)
+            for folder in listed where folder.type == "Folder" && !place.isRoot(folder.id) {
+                folders.append(SourceFolders.Folder(id: SourceFolderID(folder.id), name: Redacted(folder.name), parent: place.folder(of: folder)))
+            }
             let shows = Dictionary(listed.filter { $0.type == "Series" }.map { ($0.id, $0) }) { first, _ in first }
             var episodes: [String: [SourceEpisode]] = [:]
             for episode in listed where episode.type == "Episode" {
@@ -140,11 +149,38 @@ private struct IndexBuilder {
                 if !title.id.rawValue.hasPrefix("tt") {
                     localTitles[title.id] = title
                 }
+                placed.append((.title(title.preview), place.folder(of: item)))
                 return title
             }
             return SourceIndex.Library(id: id, name: Redacted(view.name), type: view.collectionType == "tvshows" ? .series : .movie, titles: titles)
         }
-        return SourceIndex(libraries: built, items: items, localTitles: localTitles)
+        return SourceIndex(libraries: built, items: items, localTitles: localTitles, folders: SourceFolders(folders: folders, items: placed))
+    }
+
+    /// Where an item of a library is browsed: in its folder, or in the library itself when its folder
+    /// is one the library reads from disk.
+    private struct Placement {
+        let library: SourceFolderID
+        /// The library's folders on disk: the folders whose parent the listing does not hold.
+        private let roots: Set<String>
+        private let folders: Set<String>
+
+        init(library: SourceFolderID, listed: [Item]) {
+            self.library = library
+            let listedFolders = listed.filter { $0.type == "Folder" }
+            let folders = Set(listedFolders.map(\.id))
+            self.folders = folders
+            roots = Set(listedFolders.filter { !($0.parentID.map(folders.contains) ?? false) }.map(\.id))
+        }
+
+        func isRoot(_ id: String) -> Bool {
+            roots.contains(id)
+        }
+
+        func folder(of item: Item) -> SourceFolderID {
+            guard let parent = item.parentID, folders.contains(parent), !roots.contains(parent) else { return library }
+            return SourceFolderID(parent)
+        }
     }
 
     private func title(_ item: Item, _ kind: SourceTitle.Kind, episodes: [SourceEpisode]) -> SourceTitle? {
@@ -218,6 +254,7 @@ private struct Item: Decodable {
     let imageTags: [String: String]?
     let backdropImageTags: [String]?
     let primaryImageAspectRatio: Double?
+    let parentID: String?
 
     /// What a catalog lists it as. Nil for an episode, which its show lists.
     var kind: SourceTitle.Kind? {
@@ -233,6 +270,7 @@ private struct Item: Decodable {
         case productionYear = "ProductionYear", premiereDate = "PremiereDate", seriesID = "SeriesId"
         case parentIndexNumber = "ParentIndexNumber", indexNumber = "IndexNumber", imageTags = "ImageTags"
         case backdropImageTags = "BackdropImageTags", primaryImageAspectRatio = "PrimaryImageAspectRatio"
+        case parentID = "ParentId"
     }
 }
 

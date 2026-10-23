@@ -11,12 +11,12 @@ struct JellyfinAddonTests {
     )
     private static let session = JellyfinSession(userID: "u1", token: "0123456789abcdef0123456789abcdef")
     private static let root = "https://abcd2345.source.invalid"
-    private static let local = "takane-abcd2345-"
+    static let local = "takane-abcd2345-"
 
     private static let sintel = "9952106a602633409354098d0e941df4"
     private static let pioneerOneS01E02 = "4bd88543bcfccf5104257962ade069eb"
     private static let pioneerOne = "041a7293b9e76a36eb168fdc578d8e51"
-    private static let beachDay = "0ae549595ae7368e7ee4c03bfe70839c"
+    static let beachDay = "0ae549595ae7368e7ee4c03bfe70839c"
     private static let libraries = [
         "f137a2dd21bbc1b99aa5c0f6bf02a805": "jellyfin-items-movies",
         "a656b907eb3a73532e40e44b968d0225": "jellyfin-items-shows",
@@ -24,7 +24,7 @@ struct JellyfinAddonTests {
     ]
 
     /// The dev server, its listings changed by `edit` (fixture name, body) when given.
-    private static func server(
+    static func server(
         edit: @escaping @Sendable (String, String) -> String = { $1 }
     ) -> @Sendable (URLRequest) -> HTTPStub.Response {
         { request in
@@ -45,7 +45,7 @@ struct JellyfinAddonTests {
         return (try? String(contentsOf: url, encoding: .utf8)).require()
     }
 
-    private static func addon(
+    static func addon(
         _ stub: HTTPStub, lifetime: Duration = JellyfinAddon.indexLifetime, catalogsChanged: @escaping @Sendable () -> Void = {}
     ) -> JellyfinAddon {
         JellyfinAddon(
