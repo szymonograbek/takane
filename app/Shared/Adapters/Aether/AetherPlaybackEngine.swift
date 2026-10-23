@@ -49,6 +49,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
             Log.player.info("muted")
         }
         observe()
+        observeChapters()
         Log.player.info("AetherEngine \(AetherEngine.version) ready")
     }
 
@@ -306,6 +307,16 @@ final class AetherPlaybackEngine: PlaybackEngine {
     }
 }
 
+private extension AetherPlaybackEngine {
+    /// The engine's container chapters start where its `seek(to:)` lands, which is the position's
+    /// axis, so they need no `sourceClock`.
+    func observeChapters() {
+        player.$mediaChapters
+            .sink { [weak self] chapters in self?.send(.chapters(chapters.map(Chapter.init)), on: \.chapters) }
+            .store(in: &observations)
+    }
+}
+
 /// The last event the current load sent on each channel, so each goes out once per change. A new
 /// load starts empty, so its first values go out even when they equal the previous source's.
 private struct Reported {
@@ -318,6 +329,7 @@ private struct Reported {
     var tracks: PlaybackEvent?
     var subtitles: PlaybackEvent?
     var cueTimeline: PlaybackEvent?
+    var chapters: PlaybackEvent?
 
     var video: VideoSize? {
         if case .videoSize(let size)? = videoSize { size } else { nil }
