@@ -28,6 +28,16 @@ struct CoreCatalogWireTests {
         #expect(try JSONDecoder().decode(JSONValue.self, from: encoded) == JSONDecoder().decode(JSONValue.self, from: Data(expected.utf8)))
     }
 
+    @Test func addonOrderEncodesTheShapeTheBridgeParses() throws {
+        let first = try #require(URL(string: "https://two.example/manifest.json"))
+        let second = try #require(URL(string: "https://example.com/manifest.json"))
+        let encoded = try JSONEncoder().encode(DispatchRequest.bridge(.setAddonOrder(transportURLs: [first, second])))
+
+        // The literal core/src/lib.rs parses as a bridge request.
+        let expected = #"{"setAddonOrder":{"transportUrls":["https://two.example/manifest.json","https://example.com/manifest.json"]}}"#
+        #expect(try JSONDecoder().decode(JSONValue.self, from: encoded) == JSONDecoder().decode(JSONValue.self, from: Data(expected.utf8)))
+    }
+
     @Test func ctxCarriesSearchHistoryDisabledAddonsAndCatalogExtras() throws {
         let json = #"""
         {

@@ -1,5 +1,5 @@
-/// The installed add-ons, installing new ones by manifest URL, removing them and switching them on
-/// or off on this device.
+/// The installed add-ons, installing new ones by manifest URL, removing, ordering and switching them
+/// on or off on this device.
 enum AddonsFeature: Feature {
     struct Dependencies: Sendable {
         let addons: any AddonService
@@ -12,12 +12,19 @@ enum AddonsFeature: Feature {
         case failed(ManifestURL, AddonError)
     }
 
-    /// A change to an installed add-on. One runs at a time.
+    /// A change to the installed add-ons. One runs at a time.
     enum Change: Equatable, Sendable {
         case idle
         case removing(ManifestURL)
         case switching(ManifestURL, isEnabled: Bool)
+        /// Moving one add-on, which lists them all in `order`.
+        case ordering(ManifestURL, order: [ManifestURL])
         case failed(ManifestURL, AddonError)
+    }
+
+    /// Where an add-on moves in the list.
+    enum Move: Sendable {
+        case toTop, oneUp, oneDown
     }
 
     struct State: Equatable, Sendable {
@@ -38,6 +45,8 @@ enum AddonsFeature: Feature {
         /// Switches the add-on on or off on this device only.
         case setEnabled(ManifestURL, Bool)
         case setEnabledFinished(ManifestURL, Bool, Result<Void, AddonError>)
+        case move(ManifestURL, Move)
+        case setOrderFinished([ManifestURL], Result<Void, AddonError>)
     }
 
     enum Effect: Equatable, Sendable {
@@ -46,18 +55,21 @@ enum AddonsFeature: Feature {
         case install(ManifestURL)
         case uninstall(ManifestURL)
         case setEnabled(ManifestURL, Bool)
+        case setOrder([ManifestURL])
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
         switch event {
-        case .uninstall, .uninstallFinished, .setEnabled, .setEnabledFinished: reduceChange(&state, event)
+        case .uninstall, .uninstallFinished, .setEnabled, .setEnabledFinished, .move, .setOrderFinished: reduceChange(&state, event)
         case .installedChanged, .installOpened, .install, .installFinished: reduceInstall(&state, event)
         }
     }
 
     private static func reduceChange(_ state: inout State, _ event: Event) -> [Effect] {
         switch (state.change, event) {
-        case (.removing, .uninstall), (.removing, .setEnabled), (.switching, .uninstall), (.switching, .setEnabled):
+        case (.removing, .uninstall), (.removing, .setEnabled), (.removing, .move),
+             (.switching, .uninstall), (.switching, .setEnabled), (.switching, .move),
+             (.ordering, .uninstall), (.ordering, .setEnabled), (.ordering, .move):
             return []
         case (.idle, .uninstall(let manifest)), (.failed, .uninstall(let manifest)):
             guard state.installed.contains(where: { $0.manifestURL == manifest && $0.isRemovable }) else { return [] }
@@ -67,6 +79,10 @@ enum AddonsFeature: Feature {
             guard state.installed.contains(where: { $0.manifestURL == manifest && $0.isEnabled != isEnabled }) else { return [] }
             state.change = .switching(manifest, isEnabled: isEnabled)
             return [.setEnabled(manifest, isEnabled)]
+        case (.idle, .move(let manifest, let move)), (.failed, .move(let manifest, let move)):
+            guard let order = state.installed.map(\.manifestURL).moving(manifest, move) else { return [] }
+            state.change = .ordering(manifest, order: order)
+            return [.setOrder(order)]
         case (.removing(let pending), .uninstallFinished(let manifest, let result)) where pending == manifest:
             state.change = Change(finished: manifest, result)
             return []
@@ -74,7 +90,10 @@ enum AddonsFeature: Feature {
             where pending == manifest && pendingIsEnabled == isEnabled:
             state.change = Change(finished: manifest, result)
             return []
-        case (_, .uninstallFinished), (_, .setEnabledFinished),
+        case (.ordering(let manifest, let pending), .setOrderFinished(let order, let result)) where pending == order:
+            state.change = Change(finished: manifest, result)
+            return []
+        case (_, .uninstallFinished), (_, .setEnabledFinished), (_, .setOrderFinished),
              (_, .installedChanged), (_, .installOpened), (_, .install), (_, .installFinished):
             return []
         }
@@ -99,7 +118,8 @@ enum AddonsFeature: Feature {
             case .failure(let error): state.install = .failed(manifest, error)
             }
             return []
-        case (_, .installFinished), (_, .uninstall), (_, .uninstallFinished), (_, .setEnabled), (_, .setEnabledFinished):
+        case (_, .installFinished), (_, .uninstall), (_, .uninstallFinished), (_, .setEnabled), (_, .setEnabledFinished),
+             (_, .move), (_, .setOrderFinished):
             return []
         }
     }
@@ -132,7 +152,30 @@ enum AddonsFeature: Feature {
             } catch {
                 send(.setEnabledFinished(manifest, isEnabled, .failure(error)))
             }
+        case .setOrder(let order):
+            do {
+                try await dependencies.addons.setOrder(order)
+                send(.setOrderFinished(order, .success(())))
+            } catch {
+                send(.setOrderFinished(order, .failure(error)))
+            }
         }
+    }
+}
+
+extension [ManifestURL] {
+    /// This order with `manifest` moved, or nil when it is not listed or `move` leaves it in place.
+    func moving(_ manifest: ManifestURL, _ move: AddonsFeature.Move) -> [ManifestURL]? {
+        guard let index = firstIndex(of: manifest) else { return nil }
+        let target = switch move {
+        case .toTop: startIndex
+        case .oneUp: index - 1
+        case .oneDown: index + 1
+        }
+        guard target != index, indices.contains(target) else { return nil }
+        var order = self
+        order.insert(order.remove(at: index), at: target)
+        return order
     }
 }
 

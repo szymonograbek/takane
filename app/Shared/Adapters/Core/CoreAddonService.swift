@@ -80,6 +80,20 @@ struct CoreAddonService: AddonService {
         }
     }
 
+    func setOrder(_ order: [ManifestURL]) async throws(AddonError) {
+        let urls = order.map(\.url.rawValue)
+        Log.core.info("ordering \(order.count) add-ons")
+        do {
+            try await runtime.request(
+                .bridge(.setAddonOrder(transportURLs: urls)), observing: .ctx, as: CtxState.self, timeout: .seconds(10)
+            ) { ctx -> Probe<Void, AddonError> in
+                ctx.profile.addons.map(\.transportUrl) == urls ? .done(()) : .pending
+            }
+        } catch {
+            throw Self.addonError(error, stage: "add-on order")
+        }
+    }
+
     private func installedAddon(_ manifest: ManifestURL) throws(AddonError) -> InstalledAddon? {
         do {
             let ctx = try runtime.state(.ctx, as: CtxState.self)

@@ -20,9 +20,9 @@ enum AddonError: Error, Equatable, Sendable {
     case rejected(reason: String)
 }
 
-/// Installs add-ons, reports which are installed and switches them on or off on this device.
+/// Installs add-ons, reports which are installed, orders them and switches them on or off on this device.
 protocol AddonService: Sendable {
-    /// The installed add-ons now, then after every change.
+    /// The installed add-ons now, in the account's order, then after every change.
     func installed() -> AsyncStream<[InstalledAddon]>
 
     /// Fetches the manifest and installs it. Installing an installed add-on returns it unchanged.
@@ -34,4 +34,8 @@ protocol AddonService: Sendable {
     /// Switches the add-on on or off on this device only. It stays installed, so the account and
     /// other devices keep it as it was.
     func setEnabled(_ manifest: ManifestURL, _ isEnabled: Bool) async throws(AddonError)
+
+    /// Lists the installed add-ons in `order`, which names each of them once, on the account and so
+    /// on every device. Add-ons are asked in this order, which orders streams, subtitles and catalogs.
+    func setOrder(_ order: [ManifestURL]) async throws(AddonError)
 }
