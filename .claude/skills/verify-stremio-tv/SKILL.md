@@ -58,7 +58,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | Id | Element |
 |---|---|
 | `welcome.signIn`, `welcome.continue` | Welcome buttons. `launch` clears the onboarding flag, so every run starts here |
-| `signIn.code` | the link code on Sign In with Stremio |
+| `signIn.code` | the link code on Sign In |
 | `signIn.password`, `signIn.email`, `signIn.passwordField`, `signIn.submit`, `signIn.error` | email sign-in |
 | `home.screen` | Home's scroll view |
 | `hero.play`, `hero.details` | hero buttons (Play only for movies and live channels) |
@@ -92,7 +92,7 @@ Stable handles (SwiftUI `accessibilityIdentifier`, in `app/Shared/UI`). Tab bar 
 | `trakt.qr`, `trakt.retry`, `trakt.disconnect` | Settings › Account › Trakt: the QR code that connects Trakt (shown while not connected, the app polls the account every 3 s until it leaves the screen), Try Again after waiting failed, and Disconnect when connected (confirms first) |
 | `about.shareLogs` | Share Logs on Settings › About |
 | `shareLogs.screen`, `shareLogs.window`, `shareLogs.url`, `shareLogs.key`, `shareLogs.showKey`, `shareLogs.retry` | Share Logs: the screen, its time range button (`Last Hour` by default; opens Last 15 Minutes, Last Hour, Last 6 Hours, Last 24 Hours, Last 7 Days), the address to fetch the logs from, the log key (release builds only; its text is redaction glyphs until shown), the Show Log Key / Hide Log Key button beside it, and Try Again when sharing failed |
-| `playback.audioLanguage`, `playback.secondAudioLanguage`, `playback.seekStep`, `playback.skipSegmentSource`, `playback.upNextNotice`, `playback.autoplayNext`, `playback.hideSpoilers` | Settings › Playback rows; Second Language shows only when an audio language is set; Skip Interval opens a list of 5, 10, 15 and 30 seconds; Skip Data opens a list of IntroDB and SkipDB, with Stremio Premium first for a Premium account; Up Next Card opens a list of Off and 10, 20, 35 and 60 seconds before the end; Autoplay Next Episode and Hide Spoilers are toggles |
+| `playback.audioLanguage`, `playback.secondAudioLanguage`, `playback.seekStep`, `playback.skipSegmentSource`, `playback.upNextNotice`, `playback.autoplayNext`, `playback.hideSpoilers` | Settings › Playback rows; Second Language shows only when an audio language is set; Skip Interval opens a list of 5, 10, 15 and 30 seconds; Skip Data opens a list of IntroDB and SkipDB, with Premium Account first for a Stremio Premium account; Up Next Card opens a list of Off and 10, 20, 35 and 60 seconds before the end; Autoplay Next Episode and Hide Spoilers are toggles |
 | `subtitles.language`, `subtitles.secondLanguage` | Settings › Subtitles language rows; Second Language shows only when a language is set |
 | `subtitles.size`, `subtitles.font`, `subtitles.bold`, `subtitles.fileStyling`, `subtitles.textColor`, `subtitles.outlineColor`, `subtitles.backgroundColor`, `subtitles.opacity`, `subtitles.position`, `subtitles.reset` | Settings › Subtitles style rows; each but the Bold and Use File Styling toggles and Reset opens a list of choices |
 | `subtitles.preview` | the live preview on Settings › Subtitles and on each style list, where it shows the focused choice |
