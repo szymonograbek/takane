@@ -9,6 +9,8 @@ struct PlayerControls: View {
     var focus: FocusState<PlayerFocus?>.Binding
     @Binding var panel: PlayerPanel?
     let interacted: () -> Void
+    /// Closes the panel and the controls and opens the subtitle timing strip.
+    let openTiming: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -52,7 +54,7 @@ struct PlayerControls: View {
                 if let panel {
                     // Rises from the row's top edge. Laid out there, not offset, so the focus engine
                     // sees the rows where they are drawn.
-                    OptionsPanel(sections: sections(for: panel), focus: focus, choose: choose, open: open)
+                    OptionsPanel(sections: sections(for: panel), focus: focus, choose: choose, open: open, openTiming: openTiming)
                         .padding(.bottom, 24)
                         .frame(height: 0, alignment: .bottom)
                         .transition(Motion.surface(from: .bottomTrailing, reduceMotion: reduceMotion))
@@ -63,8 +65,8 @@ struct PlayerControls: View {
         }
         .padding(Metrics.screenPadding)
         .background(alignment: .bottom) {
-            LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
-                .frame(height: 520)
+            LinearGradient(colors: [.clear, Palette.scrim], startPoint: .top, endPoint: .bottom)
+                .frame(height: Metrics.scrimHeight)
         }
     }
 
@@ -131,11 +133,12 @@ struct PlayerControls: View {
                 + session.builtInSubtitles.map { track in
                     .choice(track.label, isSelected: choice == .builtIn(track.id), .chooseSubtitles(.builtIn(track.id)))
                 }
-            guard !session.addonSubtitles.isEmpty else { return [PanelSection(title: nil, rows: builtIn)] }
-            return [
-                PanelSection(title: "Built-in", rows: builtIn),
+            let timing = choice == .off ? [] : [PanelSection(title: nil, rows: timingRows)]
+            guard !session.addonSubtitles.isEmpty || !timing.isEmpty else { return [PanelSection(title: nil, rows: builtIn)] }
+            let addons = session.addonSubtitles.isEmpty ? [] : [
                 PanelSection(title: "Add-ons", rows: session.addonSubtitles.map { addonRow($0, choice: choice) }),
             ]
+            return timing + [PanelSection(title: "Built-in", rows: builtIn)] + addons
         case .addonSubtitles(let addon):
             let files = session.addonSubtitles.first { $0.addon == addon }?.subtitles.value ?? []
             return languageGroups(files).map { group in
@@ -152,6 +155,12 @@ struct PlayerControls: View {
         case .speed:
             return [PanelSection(title: nil, rows: PlaybackSpeed.allCases.map { .choice($0.label, isSelected: $0 == session.speed, .setSpeed($0)) })]
         }
+    }
+
+    /// Timing, reading the delay, and Reset Timing while the subtitles are moved.
+    private var timingRows: [PanelRow] {
+        let delay = session.subtitleDelay
+        return [.timing(value: delay.label)] + (delay == .zero ? [] : [.choice("Reset Timing", isSelected: false, .subtitleTiming(.reset))])
     }
 
     /// An add-on's files open on their own page; until it has some, the row says why not.

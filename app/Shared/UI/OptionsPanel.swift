@@ -50,18 +50,20 @@ enum PanelRow {
     case link(String, isSelected: Bool, opens: PlayerPanel)
     /// Says why there is nothing to choose, such as an add-on still answering.
     case note(String, detail: String)
+    /// Opens the subtitle timing strip; `value` is the delay in words.
+    case timing(value: String)
 
     var isSelected: Bool {
         switch self {
         case .choice(_, let isSelected, _), .link(_, let isSelected, _): isSelected
-        case .note: false
+        case .note, .timing: false
         }
     }
 
     /// How focus names this row, the `index`th on its page; nil when it takes no focus.
     func focus(at index: Int) -> PlayerFocus? {
         switch self {
-        case .choice: .option(index)
+        case .choice, .timing: .option(index)
         case .link(_, _, let page): .link(page)
         case .note: nil
         }
@@ -74,6 +76,7 @@ struct OptionsPanel: View {
     var focus: FocusState<PlayerFocus?>.Binding
     let choose: (PlayerFeature.Event) -> Void
     let open: (PlayerPanel) -> Void
+    let openTiming: () -> Void
 
     var body: some View {
         GlassList(width: Metrics.playerPanelWidth, maxHeight: Metrics.playerPanelMaxHeight, alignment: .bottom) {
@@ -111,6 +114,15 @@ struct OptionsPanel: View {
             }
             .focused(focus, equals: .link(page))
             .accessibilityIdentifier("player.option")
+        case .timing(let value):
+            Button(action: openTiming) {
+                HStack {
+                    CheckedLabel(title: "Timing", isChecked: false)
+                    Text(value).foregroundStyle(.secondary).monospacedDigit()
+                }
+            }
+            .focused(focus, equals: .option(index))
+            .accessibilityIdentifier("player.subtitles.timing")
         case .note(let label, let detail):
             LabeledContent(label, value: detail)
                 .padding(.horizontal, Metrics.rowPadding)
