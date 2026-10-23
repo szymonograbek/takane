@@ -20,6 +20,8 @@ extension PlayerFeature {
         case hold(Direction)
         /// Time for a scan to move on.
         case tick
+        /// Plays from the start of a chapter, ending a scan.
+        case chapter(Chapter.ID)
     }
 
     /// Fast forward or rewind: the engine stays paused while the scan's playhead moves `rate`
@@ -65,6 +67,9 @@ extension PlayerFeature.Session {
     /// direction speeds it up, and one against it slows it down until playback resumes.
     mutating func apply(_ event: PlayerFeature.TimelineEvent) -> [Effect] {
         switch (event, scan) {
+        case (.chapter(let id), _):
+            guard let chapter = chapters.first(where: { $0.id == id }) else { return [] }
+            return endScan() + [.seekTo(chapter.start)]
         case (.step(let direction, let instant), nil):
             return step(direction, at: instant)
         case (.hold(let direction), nil):

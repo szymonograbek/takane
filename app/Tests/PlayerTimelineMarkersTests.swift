@@ -68,4 +68,13 @@ struct PlayerTimelineMarkersTests {
         #expect(state.session?.currentChapter == nil)
         #expect(state.session?.timelineMarkers.chapterStarts == [])
     }
+
+    @Test func choosingAChapterPlaysFromItsStart() {
+        var state = playing()
+        #expect(PlayerFeature.reduce(&state, .timeline(.chapter(chapters[2].id))) == [.seekTo(.seconds(1_800))])
+        _ = PlayerFeature.reduce(&state, .timeline(.hold(.forward)))
+        #expect(PlayerFeature.reduce(&state, .timeline(.chapter(chapters[1].id))) == [.setPaused(false), .seekTo(.seconds(600))])
+        #expect(state.session?.scan == nil)
+        #expect(PlayerFeature.reduce(&state, .timeline(.chapter(Chapter.ID(number: 9)))).isEmpty)
+    }
 }
