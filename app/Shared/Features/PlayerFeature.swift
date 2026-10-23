@@ -46,6 +46,8 @@ enum PlayerFeature: Feature {
         var subtitleDelay = SubtitleDelay.zero
         /// The selected subtitle track's cues, for timing them.
         var cueTimeline: [TimedCue] = []
+        /// Nil while the subtitle timing strip is closed.
+        var heardSpeech: HeardSpeech?
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
         /// Where to find `segments`, from the preferences.
@@ -116,13 +118,16 @@ enum PlayerFeature: Feature {
         case addSubtitles(AddonSubtitle)
         case setSpeed(PlaybackSpeed)
         case setSubtitleDelay(SubtitleDelay)
+        /// Sends `.subtitleTiming(.heard)` with the speech in the range after `speechSampleInterval`.
+        case sampleSpeech(Range<Duration>)
         case findSegments(PlayableID, duration: Duration, from: SkipSegmentSource)
         case stop
         case report(Report)
     }
 
     static func key(_ effect: Effect) -> AnyHashable? {
-        effect == .scanTick ? "scanTick" : nil
+        if case .sampleSpeech = effect { return "sampleSpeech" }
+        return effect == .scanTick ? "scanTick" : nil
     }
 
     static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
@@ -321,6 +326,9 @@ extension PlayerFeature {
             engine.setSpeed(speed)
         case .setSubtitleDelay(let delay):
             engine.setSubtitleDelay(delay)
+        case .sampleSpeech(let range):
+            guard (try? await Task.sleep(for: speechSampleInterval)) != nil else { return }
+            send(.subtitleTiming(.heard(engine.speechActivity(in: range))))
         case .findSegments(let item, let duration, let source):
             do {
                 let found = try await dependencies.skipSegments(source).segments(for: item, duration: duration)

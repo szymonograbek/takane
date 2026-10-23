@@ -180,4 +180,61 @@ struct PlayerSubtitleTimingTests {
         #expect(PlayerFeature.reduce(&state, .engine(.cueTimeline(cues))).isEmpty)
         #expect(state.session?.cueTimeline == cues)
     }
+
+    /// Sixteen lines two seconds long, irregularly spaced from 0:05, and the speech heard of them
+    /// over the first two minutes when the subtitles need `needed` to match it.
+    private func dialogue(needing needed: Duration) -> (cues: [TimedCue], speech: SpeechActivity) {
+        let gaps = [3, 7, 4, 9, 5, 2, 8, 6, 3, 10, 4, 7, 5, 9, 3]
+        let starts = gaps.reduce(into: [5]) { starts, gap in starts.append((starts.last ?? 0) + 2 + gap) }
+        let cues = starts.enumerated().map { cue($0.offset, at: .seconds($0.element)) }
+        let frames = (0..<1_200).map { frame -> SpeechActivity.Frame in
+            let time = SpeechActivity.frameDuration * frame - needed
+            return cues.contains { $0.range.contains(time) } ? .speech : .quiet
+        }
+        return (cues, SpeechActivity(firstFrame: 0, frames: frames))
+    }
+
+    @Test func theOpenStripSamplesTheSpeechAroundThePlayhead() {
+        var state = playing()
+        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(70))))
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.listen)) == [.sampleSpeech(.seconds(-110) ..< .seconds(85))])
+        #expect(state.session?.heardSpeech == PlayerFeature.HeardSpeech())
+        let heard = dialogue(needing: .seconds(2)).speech
+        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(71))))
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(heard))) == [.sampleSpeech(.seconds(-109) ..< .seconds(86))])
+        #expect(state.session?.heardSpeech?.lane == heard.slice(.seconds(60) ..< .seconds(82)))
+    }
+
+    @Test func aClosedStripKeepsNoSpeech() {
+        var state = playing()
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.listen))
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.stopListening)).isEmpty)
+        #expect(state.session?.heardSpeech == nil)
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(dialogue(needing: .zero).speech))).isEmpty)
+        #expect(state.session?.heardSpeech == nil)
+    }
+
+    @Test func upAppliesTheDelayTheSpeechSuggests() {
+        var state = playing()
+        let (cues, speech) = dialogue(needing: .milliseconds(1_400))
+        _ = PlayerFeature.reduce(&state, .engine(.cueTimeline(cues)))
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.listen))
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.heard(speech)))
+        #expect(state.session?.offeredDelay == delay(1_400))
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.applySuggestion)) == [.setSubtitleDelay(delay(1_400)), remembered(delay(1_400))])
+        #expect(state.session?.offeredDelay == nil)
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.applySuggestion)).isEmpty)
+    }
+
+    @Test func aSuggestionCloseToTheDelayIsNotOffered() {
+        var state = playing()
+        let (cues, speech) = dialogue(needing: .milliseconds(1_400))
+        _ = PlayerFeature.reduce(&state, .engine(.cueTimeline(cues)))
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.listen))
+        for _ in 0..<3 { _ = PlayerFeature.reduce(&state, .subtitleTiming(.nudge(.forward, .coarse))) }
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.heard(speech)))
+        #expect(state.session?.heardSpeech?.suggestion == delay(1_400))
+        #expect(state.session?.offeredDelay == nil)
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.applySuggestion)).isEmpty)
+    }
 }
