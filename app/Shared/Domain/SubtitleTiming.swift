@@ -58,11 +58,11 @@ struct SpeechActivity: Hashable, Sendable {
     static let frameDuration = Duration.milliseconds(100)
     static let empty = SpeechActivity(firstFrame: 0, frames: [])
 
-    /// The number of the first frame, counted in `frameDuration`s from the stream's time zero.
+    /// The number of the first frame, counted in `frameDuration`s from position zero.
     let firstFrame: Int
     let frames: [Frame]
 
-    /// The stretch covered, in the stream's own time.
+    /// The stretch covered, timed like the playback position.
     var range: Range<Duration> {
         Self.frameDuration * firstFrame ..< Self.frameDuration * (firstFrame + frames.count)
     }

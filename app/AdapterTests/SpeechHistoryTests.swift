@@ -62,6 +62,18 @@ struct SpeechHistoryTests {
         #expect(heard.hasSuffix("."))
     }
 
+    @Test func speechHeardOnTheSourceClockLinesUpWithThePosition() {
+        var history = SpeechHistory()
+        Self.play(Self.tone(nil, seconds: 1) + Self.tone(1_000, seconds: 1) + Self.tone(nil, seconds: 1), from: 100, into: &history)
+        var clock = SourceClock()
+        _ = clock.read(position: 5, source: 15)
+        _ = clock.read(position: 5.25, source: 15.25)
+        let activity = history.activity(in: .seconds(89) ..< .seconds(93), on: clock)
+        #expect(activity.firstFrame == 890)
+        #expect(activity.frames == history.activity(in: .seconds(99) ..< .seconds(103)).frames)
+        #expect(activity.frames[20] == .speech)
+    }
+
     @Test func oneSteadySoundHoldsNoSpeech() {
         var history = SpeechHistory()
         Self.play(Self.tone(1_000, seconds: 5), from: 0, into: &history)

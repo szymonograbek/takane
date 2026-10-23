@@ -132,7 +132,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
     }
 
     func speechActivity(in range: Range<Duration>) -> SpeechActivity {
-        speech.activity(in: range)
+        speech.activity(in: range, on: sourceClock)
     }
 
     func stop() {

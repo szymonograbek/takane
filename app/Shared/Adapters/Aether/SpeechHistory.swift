@@ -37,7 +37,7 @@ struct SpeechHistory {
     /// The frame being summed.
     private var partial: Partial?
 
-    /// Adds mono `samples` at `sampleRate`, the first at `start` seconds of the stream's time.
+    /// Adds mono `samples` at `sampleRate`, the first at `start` seconds of the source clock.
     /// Not `continuing` the last ones, they start afresh.
     mutating func hear(_ samples: [Float], from start: Double, continuing: Bool) {
         if !continuing {
@@ -63,7 +63,17 @@ struct SpeechHistory {
         }
     }
 
-    /// The speech in `range`, from what was heard of it.
+    /// The speech in `range` of positions, from what was heard on the source clock `clock` reads.
+    /// Speech is kept a frame at a time, so the clock's offset rounds to whole frames, at most half
+    /// a frame off.
+    func activity(in range: Range<Duration>, on clock: SourceClock) -> SpeechActivity {
+        let lead = Int((clock.offset / (SpeechActivity.frameDuration / .seconds(1))).rounded())
+        let shift = SpeechActivity.frameDuration * lead
+        let heard = activity(in: range.lowerBound + shift ..< range.upperBound + shift)
+        return SpeechActivity(firstFrame: heard.firstFrame - lead, frames: heard.frames)
+    }
+
+    /// The speech in `range` of the source clock, from what was heard of it.
     func activity(in range: Range<Duration>) -> SpeechActivity {
         let first = SpeechActivity.frame(containing: range.lowerBound)
         let end = max(SpeechActivity.frame(containing: range.upperBound - .nanoseconds(1)) + 1, first)
