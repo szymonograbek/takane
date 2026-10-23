@@ -153,6 +153,8 @@ targets:
       - path: app/Shared/Adapters/Core/CoreDispatchRequest.swift
       - path: app/Shared/Adapters/Core/CoreResources.swift
       - path: app/Shared/Adapters/Core/CoreUpcomingEpisodes.swift
+      # Without the engine, which the app builds only for its own platforms.
+      - path: app/Shared/Adapters/Aether/SourceClock.swift
       - path: app/Tests/Fixtures.swift
       - path: app/AdapterTests
     buildToolPlugins:

@@ -40,7 +40,7 @@ struct TimedCue: Identifiable, Hashable, Sendable {
     }
 
     let id: ID
-    /// When it shows, in the stream's own time, before any `SubtitleDelay`.
+    /// When it shows, timed like the playback position, before any `SubtitleDelay`.
     let range: Range<Duration>
     /// Its first line, a line of the title's dialogue. Empty for a bitmap subtitle.
     let text: Redacted<String>

@@ -43,12 +43,21 @@ extension SubtitleCue {
 }
 
 extension TimedCue {
-    /// An engine cue, `start` to `end` in source seconds; `text` is nil for a bitmap.
-    init(number: Int, start: Double, end: Double, text: String?) {
+    /// A cue the engine leaves open lasts at least this long, in seconds: it shows until the next
+    /// replaces it. The engine's own threshold, `subtitleOpenEndedWindowSeconds`, is not public.
+    private static let openEnded = 3_600.0
+    /// How long an open cue is drawn while no cue follows it yet, in seconds.
+    private static let unclosedLength = 10.0
+
+    /// An engine cue, `start` to `end` in source seconds, moved onto the position's axis by
+    /// `clock`; `text` is nil for a bitmap. An open cue ends at the next of `starts`, every cue's
+    /// start in order, and at most `unclosedLength` after its own.
+    init(number: Int, start: Double, end: Double, text: String?, starts: [Double], clock: SourceClock) {
         let line = text?.split(separator: "\n", omittingEmptySubsequences: true).first ?? ""
+        let closed = end - start < Self.openEnded ? end : min(starts.first { $0 > start } ?? .infinity, start + Self.unclosedLength)
         self.init(
             id: ID(number: number),
-            range: .seconds(start) ..< .seconds(max(start, end)),
+            range: clock.position(ofSource: start) ..< clock.position(ofSource: max(start, closed)),
             text: Redacted(line.trimmingCharacters(in: .whitespaces))
         )
     }

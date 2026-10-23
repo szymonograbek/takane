@@ -169,7 +169,8 @@ enum PlaybackEvent: Equatable, Sendable {
     case speed(PlaybackSpeed)
     /// The subtitles to show now, replacing the previous ones. Empty when none is visible.
     case subtitles([SubtitleCue])
-    /// Every cue the selected subtitle track holds so far, after any change to them. Empty without one.
+    /// Every cue the selected subtitle track holds so far, timed like `position`, after any change
+    /// to them. Empty without one.
     case cueTimeline([TimedCue])
 }
 

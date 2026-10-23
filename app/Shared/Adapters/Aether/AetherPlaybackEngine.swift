@@ -26,6 +26,8 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private var seeking: SeekEvent?
     /// The subtitle delay in seconds, which moves the cues shown against the clock.
     private let subtitleDelay = CurrentValueSubject<Double, Never>(0)
+    /// How far the clock the cues are stamped on runs ahead of the position reported.
+    private var sourceClock = SourceClock()
     private var observations: Set<AnyCancellable> = []
 
     /// `muted` plays every stream silently, for automated runs.
@@ -57,6 +59,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
         reported = Reported()
         externalFiles = [:]
         subtitleDelay.send(0)
+        sourceClock = SourceClock()
         let url = source.url.rawValue
         let startPosition = start > .zero ? start / .seconds(1) : nil
         let options = LoadOptions(
@@ -186,11 +189,12 @@ final class AetherPlaybackEngine: PlaybackEngine {
                 send(.tracks(tracks), on: \.tracks)
             }
             .store(in: &observations)
-        player.$subtitleCues
-            .sink { [weak self] cues in
-                let timeline = cues.map { TimedCue(number: $0.id, start: $0.startTime, end: $0.endTime, text: $0.text) }
-                self?.send(.cueTimeline(timeline), on: \.cueTimeline)
-            }
+        // Published before they change: read once the engine has set both clocks for the tick.
+        player.clock.$currentTime.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.clockTicked() }
+            .store(in: &observations)
+        player.$subtitleCues.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.sendCueTimeline() }
             .store(in: &observations)
         // Cues arrive ahead of time, stamped with source PTS; `sourceTime` is the PTS on screen.
         Publishers.CombineLatest3(player.$subtitleCues, player.clock.$sourceTime, subtitleDelay)
@@ -229,6 +233,24 @@ final class AetherPlaybackEngine: PlaybackEngine {
             Log.player.error("playback failed (\(player.errorInfo?.kind.rawValue ?? "unclassified")): \(message)")
             continuation.yield(.failed(reason: message))
         }
+    }
+
+    /// Learns how far the source clock runs ahead of the position, away from seeks, which can leave
+    /// the source clock on the old frame.
+    private func clockTicked() {
+        guard seeking == nil, sourceClock.read(position: player.clock.currentTime, source: player.clock.sourceTime) else { return }
+        Log.player.info("source clock ahead of the position by \(sourceClock.offset)s")
+        sendCueTimeline()
+    }
+
+    /// The selected track's cues, timed like the position. Sent only when they differ from the last.
+    private func sendCueTimeline() {
+        let cues = player.subtitleCues
+        let starts = cues.map(\.startTime).sorted()
+        let timeline = cues.map { cue in
+            TimedCue(number: cue.id, start: cue.startTime, end: cue.endTime, text: cue.text, starts: starts, clock: sourceClock)
+        }
+        send(.cueTimeline(timeline), on: \.cueTimeline)
     }
 
     private func positionChanged(_ seconds: Double) {
