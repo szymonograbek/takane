@@ -38,7 +38,7 @@ struct CoreCatalogWireTests {
         #expect(try JSONDecoder().decode(JSONValue.self, from: encoded) == JSONDecoder().decode(JSONValue.self, from: Data(expected.utf8)))
     }
 
-    @Test func ctxCarriesSearchHistoryDisabledAddonsAndCatalogExtras() throws {
+    @Test func ctxCarriesSearchHistoryDisabledAddonsSourcesAndCatalogExtras() throws {
         let json = #"""
         {
             "profile": {
@@ -59,7 +59,11 @@ struct CoreCatalogWireTests {
                 }]
             },
             "searchHistory": ["breaking bad", "twin peaks"],
-            "disabledAddons": ["https://off.example/manifest.json"]
+            "disabledAddons": ["https://off.example/manifest.json"],
+            "sourceAddons": [{
+                "transportUrl": "https://ab12cd34.source.invalid/manifest.json",
+                "manifest": {"id": "app.takane.source.ab12cd34", "name": "Home", "version": "1.0.0", "catalogs": []}
+            }]
         }
         """#
         let state = try JSONDecoder().decode(CtxState.self, from: Data(json.utf8))
@@ -67,7 +71,9 @@ struct CoreCatalogWireTests {
 
         #expect(state.searchHistory == ["breaking bad", "twin peaks"])
         #expect(state.disabledAddons == [try #require(URL(string: "https://off.example/manifest.json"))])
-        #expect(state.enabledAddons.map(\.transportUrl.absoluteString) == ["https://v3-cinemeta.strem.io/manifest.json"])
+        #expect(state.answeringAddons.map(\.transportUrl.absoluteString) == [
+            "https://v3-cinemeta.strem.io/manifest.json", "https://ab12cd34.source.invalid/manifest.json",
+        ])
         #expect(catalogs.map { $0.extra.map(\.name) } == [["genre", "skip"], ["search", "skip"]])
         #expect(catalogs.map { $0.extra.map(\.isRequired) } == [[false, false], [true, false]])
         #expect(catalogs[0].extra[0].options == ["Action", "Drama"])

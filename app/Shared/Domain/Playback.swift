@@ -190,8 +190,9 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func seek(to position: Duration)
     func select(_ track: MediaTrack.ID)
     func turnOffSubtitles()
-    /// Adds a subtitle file as a track and selects it. A file that fails to load is logged.
-    func addSubtitles(_ file: Redacted<URL>, title: String, language: String)
+    /// Adds a subtitle file, fetched from `source`, as a track and selects it. The track's
+    /// `externalFile` is `file`. A file that fails to load is logged.
+    func addSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String)
     func setSpeed(_ speed: PlaybackSpeed)
     func stop()
     /// Output health by name (route, decoders, audio delivery, frame counters), for logs and the smoke test.

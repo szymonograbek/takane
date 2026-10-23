@@ -262,6 +262,7 @@ struct PlayerControlsTests {
     private let synced = AddonSubtitle(
         id: AddonSubtitle.ID(addon: Fixture.manifest, key: Redacted("synced-1")),
         url: Redacted(URL(string: "https://subs.example/synced-1.srt").require()),
+        source: PlaybackSource(url: Redacted(URL(string: "https://subs.example/synced-1.srt").require()), headers: [:]),
         language: "pol",
         label: Redacted("Synced")
     )

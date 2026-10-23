@@ -345,7 +345,7 @@ impl AppModel {
                 changes.record(AppModelField::Ctx, Update::<AppleEnv>::update(&mut self.ctx, &msg));
             }
         }
-        if switched || reordered {
+        if switched || reordered || sources_changed {
             changes.fields.push(AppModelField::Ctx);
         }
         if switched || reordered || sources_changed {
@@ -380,7 +380,7 @@ impl AppModel {
     pub fn state_json(&self, field: &AppModelField) -> serde_json::Result<Vec<u8>> {
         let models = &self.models;
         match field {
-            AppModelField::Ctx => serde_json::to_vec(&CtxState::new(&self.ctx, &self.disabled_addons)),
+            AppModelField::Ctx => serde_json::to_vec(&CtxState::new(&self.ctx, &self.disabled_addons, &self.source_addons)),
             AppModelField::ContinueWatchingPreview => serde_json::to_vec(&models.continue_watching_preview),
             AppModelField::AddonDetails => serde_json::to_vec(&models.addon_details),
             AppModelField::Board => serde_json::to_vec(&models.board),
@@ -395,8 +395,9 @@ impl AppModel {
     }
 }
 
-/// Core's `Ctx` plus the queries searched, which core keeps out of its serialized state, and the
-/// add-ons switched off on this device, which core does not know about.
+/// Core's `Ctx` plus the queries searched, which core keeps out of its serialized state, and what
+/// core does not know about: the add-ons switched off on this device and the user's sources, which
+/// the other models list after the enabled add-ons.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CtxState<'a> {
@@ -404,11 +405,12 @@ struct CtxState<'a> {
     ctx: &'a Ctx,
     search_history: Vec<&'a str>,
     disabled_addons: &'a DisabledAddons,
+    source_addons: &'a SourceAddons,
 }
 
 impl<'a> CtxState<'a> {
-    fn new(ctx: &'a Ctx, disabled_addons: &'a DisabledAddons) -> Self {
-        CtxState { ctx, search_history: recent_searches(&ctx.search_history), disabled_addons }
+    fn new(ctx: &'a Ctx, disabled_addons: &'a DisabledAddons, source_addons: &'a SourceAddons) -> Self {
+        CtxState { ctx, search_history: recent_searches(&ctx.search_history), disabled_addons, source_addons }
     }
 }
 
@@ -718,6 +720,7 @@ mod tests {
         model.update_field(&Msg::Action(action), &field.unwrap());
         assert_eq!(board_addons(&model), [ONE, SOURCE]);
         assert_eq!(installed_addons(&ctx_state(&model)), [ONE]);
+        assert_eq!(ctx_state(&model)["sourceAddons"][0]["transportUrl"], SOURCE);
 
         model.update(&Msg::Action(Action::Ctx(ActionCtx::PushAddonsToAPI)));
         let pushed = api_fetch("sources-account", "addonCollectionSet");

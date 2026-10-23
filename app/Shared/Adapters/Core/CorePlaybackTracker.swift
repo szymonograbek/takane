@@ -4,6 +4,7 @@ import Foundation
 /// Core copies progress into the library on pause, unload and every 180 s.
 struct CorePlaybackTracker: PlaybackTracker {
     let runtime: CoreRuntime
+    let links: any CorePlaybackLinks
 
     #if os(tvOS)
     private static let device = "tvos"
@@ -43,7 +44,8 @@ struct CorePlaybackTracker: PlaybackTracker {
     /// stream's add-on for its streams and picks the one in the same binge group.
     func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?> {
         let (results, continuation) = AsyncStream.makeStream(of: UpNext?.self, bufferingPolicy: .bufferingNewest(1))
-        let answers = runtime.observe(.player, as: PlayerState.self) { Self.answer(for: candidate, in: $0) }
+        let links = links
+        let answers = runtime.observe(.player, as: PlayerState.self) { Self.answer(for: candidate, in: $0, links: links) }
         let task = Task {
             var isSelected = false
             for await answer in answers {
@@ -78,8 +80,9 @@ struct CorePlaybackTracker: PlaybackTracker {
     /// video of the title it carries over the speed, and the tracks when the streams share a binge group.
     func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices> {
         let (results, continuation) = AsyncStream.makeStream(of: TrackChoices.self, bufferingPolicy: .bufferingNewest(1))
+        let links = links
         let selections = runtime.observe(.player, as: PlayerState.self) { player -> RememberedSelection in
-            player.plays(candidate, from: source) ? .current(player.streamState?.choices) : .other
+            player.plays(candidate, from: source, links: links) ? .current(player.streamState?.choices) : .other
         }
         let task = Task {
             var isSelected = false
@@ -116,9 +119,9 @@ private extension CorePlaybackTracker {
         case selected(UpNext?)
     }
 
-    static func answer(for candidate: StreamCandidate, in player: PlayerState) -> Answer {
+    static func answer(for candidate: StreamCandidate, in player: PlayerState, links: any CorePlaybackLinks) -> Answer {
         guard let selected = player.selected, let source = candidate.source,
-              selected.stream.source == .url(source.url.rawValue), selected.streamRequest?.path.id == candidate.item.rawValue
+              links.playability(of: selected.stream) == .playable(source), selected.streamRequest?.path.id == candidate.item.rawValue
         else { return .otherSelection }
         guard let video = player.nextVideo, let id = PlayableID(video.id) else { return .selected(nil) }
         let show = player.metaItem?.content?.readyContent
@@ -128,17 +131,17 @@ private extension CorePlaybackTracker {
             title: Redacted(video.title),
             thumbnail: video.thumbnail.flatMap(URL.init(string:)),
             backdrop: show?.background.flatMap(URL.init(string:)),
-            stream: nextCandidate(for: id, in: player)
+            stream: nextCandidate(for: id, in: player, links: links)
         ))
     }
 
     /// Core's next stream as a candidate that plays here, tracked against the same meta item.
-    static func nextCandidate(for video: PlayableID, in player: PlayerState) -> StreamCandidate? {
+    static func nextCandidate(for video: PlayableID, in player: PlayerState, links: any CorePlaybackLinks) -> StreamCandidate? {
         guard let stream = player.nextStream, let streams = player.nextStreams,
               let addon = ManifestURL(streams.request.base),
               let index = streams.content?.readyContent?.firstIndex(where: { $0.raw == stream.raw })
         else { return nil }
-        let candidate = CoreStreamResults.candidate(
+        let candidate = CoreStreamResults(links: links).candidate(
             stream, id: StreamCandidate.ID(addon: addon, index: index), item: video,
             streamRequest: streams.request, metaRequest: player.selected?.metaRequest
         )

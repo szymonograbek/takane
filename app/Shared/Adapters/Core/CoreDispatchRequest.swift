@@ -9,6 +9,9 @@ enum BridgeRequest: Sendable {
     /// Lists the installed add-ons in this order on the account and syncs it, as core syncs an
     /// install. Core has no action for it.
     case setAddonOrder(transportURLs: [URL])
+    /// Lists these source add-ons after the enabled add-ons in every model but `ctx`, replacing the
+    /// ones set before. The bridge never saves them, so each launch sets them again.
+    case setSources([SourceAddonDescriptor])
 }
 
 /// The JSON document `sb_dispatch` accepts: a core action for one model, or for all with no
@@ -40,13 +43,16 @@ extension DispatchRequest: Encodable {
 }
 
 extension BridgeRequest: Encodable {
-    private enum CodingKeys: String, CodingKey { case setAddonEnabled, setAddonOrder }
+    private enum CodingKeys: String, CodingKey { case setAddonEnabled, setAddonOrder, setSources }
     private struct SetAddonEnabledArgs: Encodable {
         let transportUrl: URL
         let enabled: Bool
     }
     private struct SetAddonOrderArgs: Encodable {
         let transportUrls: [URL]
+    }
+    private struct SetSourcesArgs: Encodable {
+        let descriptors: [SourceAddonDescriptor]
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -56,6 +62,8 @@ extension BridgeRequest: Encodable {
             try container.encode(SetAddonEnabledArgs(transportUrl: url, enabled: isEnabled), forKey: .setAddonEnabled)
         case .setAddonOrder(let urls):
             try container.encode(SetAddonOrderArgs(transportUrls: urls), forKey: .setAddonOrder)
+        case .setSources(let descriptors):
+            try container.encode(SetSourcesArgs(descriptors: descriptors), forKey: .setSources)
         }
     }
 }
