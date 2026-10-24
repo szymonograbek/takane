@@ -5,7 +5,7 @@ A signed-in user connects Trakt on Settings › Account › Trakt by scanning a 
 ## Sub-features
 
 - `trakt-status` reads Connected or Not Connected on the Account row and the Trakt screen.
-- `trakt-scrobble` sends each play, pause and stop to Stremio's API, which passes it to Trakt.
+- `trakt-scrobble` sends each play, pause, stop and natural end to Stremio's API, which passes it to Trakt. Titles found only on the user's sources (and Local Files) are never sent.
 - `trakt-connect` shows the QR code and waits for the account to be linked. Not driven here: it needs a phone.
 
 ## How to get to it (user POV)
@@ -21,7 +21,7 @@ Preconditions:
 - `$T launch --account` succeeded and Home shows.
 
 - **Status.** `$T focus house up 4`, `$T focus gearshape right 6`, `$T select`, `$T focus settings.account down 6`, `$T select`, `$T focus settings.trakt down 6`. `$T text settings.trakt` prints `Trakt, Connected`. `$T select`: `$T focused` prints `Status, Connected`, and `trakt.disconnect` is below it. Leave with `$T remote menu` twice.
-- **Scrobble.** Play anything as in [Playback](./playback.md) for about 20 s, pause on `player.playPause`, play again, then leave the player. The app log has `scrobble sent event="…"` for `playerPlaying`, `traktPlaying`, `traktPaused`, `playerStopped`, and nothing with `scrobble failed`. `$T trakt-check` prints the title paused at its percentage.
+- **Scrobble.** Play an add-on's stream (not a source's or the fixture's) as in [Playback](./playback.md) for about 20 s, pause on `player.playPause`, play again, then leave the player. The app log has `scrobble sent event="…"` for `playerPlaying`, `traktPlaying`, `traktPaused`, `playerStopped`, and nothing with `scrobble failed`. `$T trakt-check` prints the title paused at its percentage.
 
 ## Gotchas
 

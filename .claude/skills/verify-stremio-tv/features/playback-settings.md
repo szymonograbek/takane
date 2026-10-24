@@ -1,6 +1,6 @@
 # Playback settings
 
-Settings › Playback sets the audio languages streams start with (a first and, once one is set, a second), the skip interval of the back and forward buttons and arrows, when the Up Next card shows and whether the next episode autoplays, and whether unwatched episodes hide spoilers. Settings › Subtitles sets the subtitle languages (a first and, once one is set, a second) and the subtitle style, beside a live preview drawn by the player's overlay. Choices are saved in core's profile settings, so they sync with a signed-in account.
+Settings › Playback sets the audio languages streams start with (a first and, once one is set, a second), the skip interval of the back and forward buttons and arrows, when the Up Next card shows and whether the next episode autoplays, and whether unwatched episodes hide spoilers. Settings › Subtitles sets the subtitle languages (a first and, once one is set, a second) and the subtitle style, beside a live preview drawn by the player's overlay. Choices are saved in core's profile settings, so they sync with a signed-in account; Skip Data is the exception, kept on this device.
 
 ## Sub-features
 
@@ -42,6 +42,7 @@ Preconditions:
 
 - `xcrun simctl ui <udid> content_size` is unsupported on the tvOS runtime. For Large Text, open the simulator's Settings app (`agent-device open com.apple.TVSettings`), go to Accessibility › Display & Text Size › Text Size and press right to the end of the slider (4.00); press left back to 0.00 afterwards.
 
+- Skip Data is stored on the device, not the profile, so a fresh profile shows the last run's choice (IntroDB until one was picked); `cleanup` does not reset it.
 - Details load once per visit, so an episode watched while its details are open stays blurred until Details opens again.
 - Languages are ISO 639-2 codes as Stremio stores them (`eng`, `pol`, `fre`, `ger`).
 - A skip interval another Stremio app set that is not 5, 10, 15 or 30 s reads as 10 Seconds and is kept until another is chosen.

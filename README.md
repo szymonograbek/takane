@@ -2,7 +2,7 @@
 
 # Takane
 
-Takane is a Stremio client for Apple TV. It follows Apple's tvOS design, plays with Dolby Vision and Dolby Atmos where your setup supports them, and runs on your own Stremio account and add-ons.
+Takane is a video player for Apple TV. It plays your own media from a Jellyfin server or a WebDAV folder, and streams from Stremio add-ons, with or without a Stremio account. It follows Apple's tvOS design and plays with Dolby Vision and Dolby Atmos where your setup supports them.
 
 ![Home](assets/screenshots/home.jpg)
 
@@ -12,9 +12,9 @@ Takane is not on the App Store. You install it yourself, a process called sidelo
 
 1. Download `Takane.ipa` from the latest [GitHub release](https://github.com/szymonograbek/takane/releases/latest).
 2. Sign and install it on your Apple TV with a sideloading tool that supports tvOS, or with Xcode on a Mac. The tool signs the app with your Apple ID.
-3. Open Takane and sign in with your Stremio account, or continue without one.
+3. Open Takane and sign in with your Stremio account, or continue without one. Without an account, Free Movies plays right away.
 
-With a free Apple ID, the signature expires after 7 days and you sideload again. A paid Apple Developer account extends it to a year. Your library and settings live in your Stremio account, so reinstalling loses nothing.
+With a free Apple ID, the signature expires after 7 days and you sideload again. A paid Apple Developer account extends it to a year. Your library and settings live in your Stremio account, so reinstalling loses none of them. Sources, the Skip Data choice and add-ons you switched off live on the Apple TV, so set them again after reinstalling.
 
 Takane needs tvOS 18 or later.
 
@@ -27,23 +27,25 @@ Apple TV is the platform Takane is built for.
 
 ## What you can do
 
-Takane shows what your add-ons provide. Catalogs, titles, artwork and streams all come from the add-ons installed on your Stremio account, so your setup looks the same here as in any other Stremio app.
+Takane shows your own media and what your add-ons provide. Catalogs, titles, artwork and streams come from your sources and from the add-ons installed on your Stremio account, so your add-on setup looks the same here as in any other Stremio app. Signed out, the built-in Free Movies offers Creative Commons and public domain films.
 
 **Sign in your way.** Scan a QR code with your phone, or type your email and password. You can also continue without an account.
 
-**Home.** A featured title, Continue Watching with how much time is left, and a row for every catalog your add-ons offer.
+**Sources.** Add your Jellyfin server or a WebDAV folder (a NAS, Nextcloud or rclone) in Settings › Sources. Their libraries lead Home, their titles show in Search and their files in the stream list. Takane reports your progress and watched state back to Jellyfin. Takane names a WebDAV folder's videos from their folder names, Kodi `.nfo` files or file names, and you can tell it which folders hold movies, shows or other videos.
+
+**Home.** A featured title, Continue Watching with how much time is left, your sources' newest titles with See All, and a row for every catalog your add-ons offer.
 
 **Search.** Search every add-on at once. Before you type, Search shows your recent searches and genres for movies and series.
 
 ![Search](assets/screenshots/search.jpg)
 
-**Details.** Description, genres, IMDb rating and episodes by season. Resume where you stopped, mark titles and episodes as watched, or add them to your library. Hide Spoilers blurs the stills and descriptions of episodes you have not watched.
+**Details.** Description, genres, IMDb rating and episodes by season. Resume where you stopped, mark titles and episodes as watched, add them to your library, or like or love them. Hide Spoilers blurs the stills and descriptions of episodes you have not watched.
 
 ![Details](assets/screenshots/details.jpg)
 
-**Streams.** Play lists the playable streams from all of your add-ons.
+**Streams.** Play lists the playable streams from your sources and all of your add-ons.
 
-**Library.** Everything you saved, filtered by type and sorted by recently watched, name or unwatched first.
+**Library.** Everything you saved, filtered by type and sorted by recently watched, name or unwatched first. Pick a source to see all its titles, or browse its folders the way the server arranges them.
 
 **Calendar.** Upcoming episodes of the shows in your library, grouped by day.
 
@@ -51,14 +53,17 @@ Takane shows what your add-ons provide. Catalogs, titles, artwork and streams al
 
 **Player.** The player works like Apple's own. Press the remote to show the controls, skip back and forward, scrub the timeline, and pick subtitles, audio and speed. Takane remembers your track choices for each title.
 
+- **Chapters and skip segments** show on the progress bar. The Info, Episodes and Chapters tabs open below it while the video plays.
 - **Skip Intro** for episodes with known intro, recap and credits times.
 - **Up Next** offers the next episode before the current one ends and can play it automatically.
 - **Subtitles** from the stream itself or from subtitle add-ons, in the style you choose: size, font, colors, outline, background and position. Takane can keep a file's own styling instead.
+- **Second subtitles** show a second language above the first.
+- **Subtitle timing** moves subtitles earlier or later with the remote while the video plays. It shows where people speak and suggests the delay that lines them up.
 - **Audio** in your preferred language, with a second language as a fallback.
 
 ![Player](assets/screenshots/player.jpg)
 
-**Settings.** Manage your account, install and remove add-ons, and set playback and subtitle preferences. Settings sync to your Stremio account, so they follow you to other Stremio apps.
+**Settings.** Manage your account and connect Trakt, install, reorder, switch off and remove add-ons, add sources, and set playback and subtitle preferences. Playback and subtitle settings sync to your Stremio account, so they follow you to other Stremio apps.
 
 ![Subtitle settings](assets/screenshots/subtitles.jpg)
 
@@ -79,13 +84,15 @@ Takane plays through [AetherEngine](https://github.com/superuser404notfound/Aeth
 | Subtitles | SRT, ASS/SSA, WebVTT and MP4 text; PGS, DVB and DVD image subtitles |
 | Display | Follows your Apple TV's Match Dynamic Range and Match Frame Rate settings |
 
-Takane plays HTTP streams, such as those from debrid add-ons. It does not play torrents, because it does not include Stremio's streaming server.
+Takane plays HTTP streams, such as those from your sources and debrid add-ons. It does not play torrents, because it does not include Stremio's streaming server.
 
 ## Privacy
 
 Takane has no server of its own and collects no analytics. It talks only to:
 
-- Stremio, to sign in and sync your library, progress and settings.
+- Stremio, to sign in and sync your library, progress and settings, and, if you connect Trakt, to pass what you watch on to Trakt. Titles from your sources are not passed on.
+- The Jellyfin servers and WebDAV folders you add. Their logins stay in this Apple TV's Keychain. Jellyfin receives your playback progress.
+- Cinemeta, Stremio's catalog, receives the name and year of WebDAV videos that carry no IMDb id, to find their artwork and details.
 - The add-ons you installed, for catalogs, titles, streams and subtitles.
 - [IntroDB](https://introdb.app), by default, or [SkipDB](https://skipdb.tv) if you pick it in Settings › Playback. Either receives the IMDb id of what you play (and the season and episode) to find intro and credits times.
 - Signed out, in builds made with a Streaming Availability key (released IPAs have none): [Streaming Availability](https://www.movieofthenight.com/about/api), through RapidAPI, receives the IMDb id of the title whose streams you open and your device's region, to list the services that offer it.
