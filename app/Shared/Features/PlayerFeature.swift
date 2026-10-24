@@ -29,6 +29,8 @@ enum PlayerFeature: Feature {
 
     struct Session: Equatable, Sendable {
         let candidate: StreamCandidate
+        /// The engine's load of `candidate`, nil until it starts. Events of any other load are dropped.
+        var load: PlaybackLoad?
         /// What the viewer chose, such as "Twin Peaks · S1 E3", for the controls.
         var title = Redacted("")
         var phase = Phase.opening
@@ -97,7 +99,9 @@ enum PlayerFeature: Feature {
         case subtitleTiming(SubtitleTimingEvent)
         case skip(SkipSegment)
         case stop
-        case engine(PlaybackEvent)
+        /// The engine started loading the candidate's stream as `PlaybackLoad`.
+        case loadStarted(StreamCandidate, PlaybackLoad)
+        case engine(PlaybackLoad, PlaybackEvent)
         case segmentsFound(PlayableID, Result<[SkipSegment], SkipSegmentError>)
         case subtitlesFound(StreamCandidate, [SubtitleSource])
         case preferencesRead(StreamCandidate, Preferences)
@@ -120,7 +124,8 @@ enum PlayerFeature: Feature {
         /// Feeds engine events back as `.engine`. Start it once, when the store is created.
         case listen
         /// Reads the preferences and starts playback, then follows the add-ons' subtitles and what was
-        /// remembered for it until another candidate replaces it.
+        /// remembered for it until another candidate replaces it. A newer `.begin` cancels it, so a
+        /// candidate replaced before its stream loads never loads.
         case begin(StreamCandidate, PlaybackSource, from: Duration)
         /// Feeds what the tracker knows about the candidate's title back as `.titleFound` until another
         /// candidate replaces it.
@@ -148,6 +153,7 @@ enum PlayerFeature: Feature {
 
     static func key(_ effect: Effect) -> AnyHashable? {
         if case .sampleSpeech = effect { return "sampleSpeech" }
+        if case .begin = effect { return "begin" }
         return effect == .scanTick ? "scanTick" : nil
     }
 
@@ -207,18 +213,15 @@ enum PlayerFeature: Feature {
         case (.active(let session), .upNext(let event)):
             return reduce(event, in: session, replacing: &state)
 
+        case (.active(let session), .loadStarted(let candidate, let load)) where candidate == session.candidate:
+            return update(&state, session) { $0.load = load; return [] }
+
         case (.active, .stop), (.failed, .stop):
             state = .idle
             return [.stop]
 
-        case (.active(var session), .engine(let event)):
-            let effects = session.apply(event)
-            switch event {
-            case .failed(let reason): state = .failed(session.candidate, .failed(reason: reason))
-            case .stopped where session.phase != .opening: state = .idle
-            default: state = .active(session)
-            }
-            return event == .ended ? effects + autoplayNext(after: session, replacing: &state) : effects
+        case (.active(let session), .engine(let load, let event)) where load == session.load:
+            return receive(event, in: session, replacing: &state)
 
         case (.idle, .togglePause), (.idle, .jump), (.idle, .stop), (.idle, .engine), (.idle, .subtitleTiming),
              (.failed, .togglePause), (.failed, .jump), (.failed, .engine), (.failed, .subtitleTiming),
@@ -228,7 +231,8 @@ enum PlayerFeature: Feature {
              (.idle, .preferencesRead), (.failed, .preferencesRead), (.idle, .remembered), (.failed, .remembered),
              (.idle, .upNext), (.failed, .upNext), (.idle, .titleFound), (.failed, .titleFound), (.active, .titleFound),
              (.active, .jump), (.active, .timeline),
-             (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .preferencesRead), (.active, .skip), (.active, .remembered):
+             (.active, .segmentsFound), (.active, .subtitlesFound), (.active, .preferencesRead), (.active, .skip), (.active, .remembered),
+             (.idle, .loadStarted), (.failed, .loadStarted), (.active, .loadStarted), (.active, .engine):
             return []
         }
     }
@@ -262,17 +266,11 @@ extension PlayerFeature {
         let tracker = dependencies.tracker
         switch effect {
         case .listen:
-            for await event in engine.events {
-                send(.engine(event))
+            for await (load, event) in engine.events {
+                send(.engine(load, event))
             }
         case .begin(let candidate, let source, let start):
-            // The first value is the current one, so this does not wait on the network.
-            var updates = dependencies.preferences.preferences().makeAsyncIterator()
-            let preferences = await updates.next()
-            if let preferences { send(.preferencesRead(candidate, preferences)) }
-            tracker.begin(candidate)
-            engine.load(source, from: start, languages: preferences?.languages ?? .streamDefaults)
-            await follow(candidate, playing: source, dependencies, send)
+            await begin(candidate, playing: source, from: start, dependencies, send)
         case .watchTitle(let candidate):
             for await title in tracker.title(of: candidate) {
                 send(.titleFound(candidate, title))
@@ -319,6 +317,27 @@ extension PlayerFeature {
         case .report(let report):
             deliver(report, to: tracker)
         }
+    }
+
+    /// Reads the preferences, loads `source` and reports the load, then follows the candidate.
+    @MainActor
+    private static func begin(
+        _ candidate: StreamCandidate,
+        playing source: PlaybackSource,
+        from start: Duration,
+        _ dependencies: Dependencies,
+        _ send: @escaping @MainActor (Event) -> Void
+    ) async {
+        // The first value is the current one, so this does not wait on the network.
+        var updates = dependencies.preferences.preferences().makeAsyncIterator()
+        let preferences = await updates.next()
+        // A newer candidate replaced this one while it waited.
+        guard !Task.isCancelled else { return }
+        if let preferences { send(.preferencesRead(candidate, preferences)) }
+        dependencies.tracker.begin(candidate)
+        let load = dependencies.engine.load(source, from: start, languages: preferences?.languages ?? .streamDefaults)
+        send(.loadStarted(candidate, load))
+        await follow(candidate, playing: source, dependencies, send)
     }
 
     @MainActor

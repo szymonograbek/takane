@@ -25,7 +25,8 @@ struct PlayerSecondSubtitlesTests {
     private func playing(_ tracks: [MediaTrack]) -> PlayerFeature.State {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        _ = PlayerFeature.reduce(&state, .engine(.tracks(tracks)))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks(tracks)))
         return state
     }
 
@@ -45,7 +46,7 @@ struct PlayerSecondSubtitlesTests {
             id: MediaTrack.ID(kind: .subtitle, number: 9), title: nil, language: "spa", codec: "subrip",
             channelCount: nil, isForced: false, externalFile: spanish.url, isSelected: false
         )
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, added]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, added]))).isEmpty)
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.off, for: .second)) == [.turnOffSecondSubtitles])
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.addon(spanish.id), for: .second)) == [.selectSecond(added.id)])
     }
@@ -64,7 +65,7 @@ struct PlayerSecondSubtitlesTests {
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.builtIn(polish.id))) == [
             .select(polish.id), .report(.choices(TrackChoices(subtitles: .builtIn(TrackChoices.Track(number: 4, language: "pol")), speed: .normal))),
         ])
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english.unselected, polish.selected]))) == [.turnOffSecondSubtitles])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english.unselected, polish.selected]))) == [.turnOffSecondSubtitles])
         #expect(state.session?.secondSubtitleChoice == .off)
     }
 
@@ -81,6 +82,7 @@ struct PlayerSecondSubtitlesTests {
         var state = playing([english, polish])
         _ = PlayerFeature.reduce(&state, .chooseSubtitles(.builtIn(polish.id), for: .second))
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
         #expect(state.session?.secondSubtitleChoice == .off)
     }
 }

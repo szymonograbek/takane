@@ -6,6 +6,8 @@ enum Fixture {
     static let movie = PlayableID("tt0111161").require()
     static let episode = PlayableID("tt0944947:1:1").require()
     static let channel = PlayableID.liveChannel(MediaID("fox-sports").require())
+    /// The engine's load of the stream in the tests' sessions.
+    static let load = PlaybackLoad()
     static let source = PlaybackSource(url: Redacted(URL(filePath: "/movie.mkv")), headers: ["Authorization": "token"])
     /// Release redaction under a fixed log key, so tests can assert the codes it writes.
     static let releaseKey = LogKey(text: "K0FM-Q2XD-91NB").require()

@@ -16,9 +16,10 @@ struct PlayerTimelineMarkersTests {
     private func playing() -> PlayerFeature.State {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        _ = PlayerFeature.reduce(&state, .engine(.loaded))
-        _ = PlayerFeature.reduce(&state, .engine(.duration(.seconds(2_400))))
-        _ = PlayerFeature.reduce(&state, .engine(.chapters(chapters)))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .loaded))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .duration(.seconds(2_400))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .chapters(chapters)))
         return state
     }
 
@@ -38,22 +39,23 @@ struct PlayerTimelineMarkersTests {
     @Test func nothingIsMarkedUntilTheDurationIsKnown() {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        _ = PlayerFeature.reduce(&state, .engine(.chapters(chapters)))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .chapters(chapters)))
         #expect(state.session?.timelineMarkers == PlayerFeature.TimelineMarkers.none)
     }
 
     @Test func theCurrentChapterIsTheLastToHaveStarted() {
         var state = playing()
         #expect(state.session?.currentChapter == chapters[0])
-        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(600))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(600))))
         #expect(state.session?.currentChapter == chapters[1])
-        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(1_799))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(1_799))))
         #expect(state.session?.currentChapter == chapters[1])
     }
 
     @Test func aScanNamesTheChapterItHasReached() {
         var state = playing()
-        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(1_790))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(1_790))))
         _ = PlayerFeature.reduce(&state, .timeline(.hold(.forward)))
         for _ in 0..<20 {
             _ = PlayerFeature.reduce(&state, .timeline(.tick))
@@ -64,7 +66,7 @@ struct PlayerTimelineMarkersTests {
 
     @Test func aStreamWithoutChaptersHasNoCurrentChapter() {
         var state = playing()
-        _ = PlayerFeature.reduce(&state, .engine(.chapters([])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .chapters([])))
         #expect(state.session?.currentChapter == nil)
         #expect(state.session?.timelineMarkers.chapterStarts == [])
     }

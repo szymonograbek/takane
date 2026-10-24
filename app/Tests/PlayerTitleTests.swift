@@ -18,6 +18,7 @@ struct PlayerTitleTests {
     private func opened(_ candidate: StreamCandidate) -> PlayerFeature.State {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(candidate))
+        _ = PlayerFeature.reduce(&state, .loadStarted(candidate, Fixture.load))
         return state
     }
 
@@ -42,7 +43,7 @@ struct PlayerTitleTests {
         var state = opened(Fixture.candidate())
         _ = PlayerFeature.reduce(&state, .titleFound(Fixture.candidate(), title([])))
         #expect(state.session?.tabs == [.info])
-        _ = PlayerFeature.reduce(&state, .engine(.chapters([Chapter(id: Chapter.ID(number: 0), title: Redacted("Chapter 1"), start: .zero)])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .chapters([Chapter(id: Chapter.ID(number: 0), title: Redacted("Chapter 1"), start: .zero)])))
         #expect(state.session?.tabs == [.info, .chapters])
     }
 
