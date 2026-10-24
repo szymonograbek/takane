@@ -23,7 +23,8 @@ extension PlayerFeature {
     struct HeardSpeech: Equatable, Sendable {
         /// The speech within `speechLaneReach` of the playhead, for its lane.
         var lane = SpeechActivity.empty
-        /// The delay that lines the cues up with the speech, when the evidence is clear.
+        /// The delay that lines the cues up with the speech, from the last sample whose evidence
+        /// was clear. A sample at the edge of clear does not take it away, so the offer stays put.
         var suggestion: SubtitleDelay?
     }
 
@@ -36,8 +37,9 @@ extension PlayerFeature {
     /// heard a few seconds ahead.
     static let speechEvidenceBefore = Duration.seconds(180)
     static let speechEvidenceAfter = Duration.seconds(15)
-    /// How far apart a suggestion and the delay must be for the strip to offer it.
-    static let suggestionThreshold = Duration.milliseconds(200)
+    /// How far apart a suggestion and the delay must be for the strip to offer it. Finer than this,
+    /// the speech heard cannot tell, and nudging is quicker than reading an offer.
+    static let suggestionThreshold = Duration.milliseconds(500)
 
     /// How far from the playhead "this line starts now" looks for the line.
     static let alignmentWindow = Duration.seconds(10)
@@ -86,7 +88,8 @@ extension PlayerFeature.Session {
             return []
         case .heard(let speech) where heardSpeech != nil:
             let lane = position - PlayerFeature.speechLaneReach ..< position + PlayerFeature.speechLaneReach
-            heardSpeech = PlayerFeature.HeardSpeech(lane: speech.slice(lane), suggestion: PlayerFeature.suggestedDelay(speech: speech, cues: cueTimeline))
+            let suggestion = PlayerFeature.suggestedDelay(speech: speech, cues: cueTimeline) ?? heardSpeech?.suggestion
+            heardSpeech = PlayerFeature.HeardSpeech(lane: speech.slice(lane), suggestion: suggestion)
             return [.sampleSpeech(speechEvidence)]
         case .applySuggestion where subtitleChoice != .off:
             guard let offeredDelay else { return [] }

@@ -1,140 +1,147 @@
-import Accelerate
+import AVFoundation
 import Foundation
+import SoundAnalysis
+import Synchronization
 
-/// How loud the voice band (300 Hz to 3.4 kHz) was in each `SpeechActivity` frame of the audio
-/// heard, for the last `capacity` frames, read back as speech and quiet.
+/// Where people spoke in the audio heard, as Apple's sound classifier hears it, for the last
+/// `capacity` frames of `SpeechActivity`.
 ///
-/// A frame is speech when it stands `rise` above the quietest frame within `reach` of it: voices
-/// rise and fall with each syllable, while hum, wind and score hold steady. Loud music and effects
-/// still read as speech now and then. A suggestion weighs minutes of frames against the cues, so
-/// they blur it less than they would decide it.
+/// The classifier names what a stretch of audio sounds like (speech, music, laughter…), so voices
+/// stand out from a film's score and room sound, which a loudness test reads as speech. It hears
+/// overlapping windows; a frame is speech when the windows over it are, on average, sure enough.
 struct SpeechHistory {
-    /// A frame's sum of squared samples so far, and how many.
-    private struct Partial {
-        let frame: Int
-        let energy: Float
-        let samples: Int
-    }
-
-    static let sampleRate = 48_000.0
     /// Ten minutes.
     static let capacity = 6_000
-    /// Quieter than this, in decibels below full scale, is never speech.
-    static let silence: Float = -55
-    /// How far either side of a frame its quietest neighbor is looked for, in frames.
-    static let reach = 10
-    /// How many decibels above that neighbor a frame must be to be speech.
-    static let rise: Float = 8
-    /// Gaps of speech this short, in frames, are breaths within it.
-    static let breath = 2
+    /// How sure, from 0 to 1, the classifier must be on average over a frame for it to be speech.
+    static let threshold = 0.5
+    /// How much later than the classifier hears words a subtitle file shows their line. Lines start
+    /// and stay up after the words, so in-sync files trail the speech heard by this much (0.6 to
+    /// 0.9 s on Breaking Bad and Sintel against their own embedded tracks). Speech is reported this
+    /// much later, where in-sync lines sit.
+    static let subtitleLag = Duration.milliseconds(700)
 
-    private static let samplesPerFrame = Int(sampleRate * (SpeechActivity.frameDuration / .seconds(1)))
-
-    /// Loudness in decibels below full scale, by frame number.
-    private var levels: [Int: Float] = [:]
+    /// The summed speech confidence of the windows over each frame, and how many.
+    private var heard: [Int: (confidence: Double, windows: Int)] = [:]
     private var newest = 0
-    private var band = SpeechHistory.voiceBand()
-    /// The frame being summed.
-    private var partial: Partial?
 
-    /// Adds mono `samples` at `sampleRate`, the first at `start` seconds of the source clock.
-    /// Not `continuing` the last ones, they start afresh.
-    mutating func hear(_ samples: [Float], from start: Double, continuing: Bool) {
-        if !continuing {
-            finish()
-            band = Self.voiceBand()
-            partial = nil
+    /// Adds a window of the source clock the classifier was `confidence` sure had speech.
+    mutating func record(_ window: Range<Double>, confidence: Double) {
+        let frame = SpeechActivity.frameDuration / .seconds(1)
+        let first = Int((window.lowerBound / frame).rounded())
+        let end = max(Int((window.upperBound / frame).rounded()), first + 1)
+        for index in first ..< end {
+            let sum = heard[index] ?? (0, 0)
+            heard[index] = (sum.confidence + confidence, sum.windows + 1)
         }
-        guard let filtered = band?.apply(input: samples) else { return }
-        let first = Int((start * Self.sampleRate).rounded(.down))
-        var offset = 0
-        while offset < filtered.count {
-            let sample = first + offset
-            let frame = Int((Double(sample) / Double(Self.samplesPerFrame)).rounded(.down))
-            let count = min((frame + 1) * Self.samplesPerFrame - sample, filtered.count - offset)
-            let energy = vDSP.sumOfSquares(filtered[offset ..< offset + count])
-            if let partial, partial.frame == frame {
-                self.partial = Partial(frame: frame, energy: partial.energy + energy, samples: partial.samples + count)
-            } else {
-                finish()
-                partial = Partial(frame: frame, energy: energy, samples: count)
-            }
-            offset += count
+        newest = max(newest, end - 1)
+        if heard.count > Self.capacity * 11 / 10 {
+            heard = heard.filter { abs($0.key - newest) < Self.capacity }
         }
     }
 
     /// The speech in `range` of positions, from what was heard on the source clock `clock` reads.
-    /// Speech is kept a frame at a time, so the clock's offset rounds to whole frames, at most half
-    /// a frame off.
+    /// Speech is kept a frame at a time, so the clock's offset and the lag round to whole frames.
     func activity(in range: Range<Duration>, on clock: SourceClock) -> SpeechActivity {
-        let lead = Int((clock.offset / (SpeechActivity.frameDuration / .seconds(1))).rounded())
+        let frame = SpeechActivity.frameDuration / .seconds(1)
+        let lead = Int(((clock.offset - Self.subtitleLag / .seconds(1)) / frame).rounded())
         let shift = SpeechActivity.frameDuration * lead
-        let heard = activity(in: range.lowerBound + shift ..< range.upperBound + shift)
-        return SpeechActivity(firstFrame: heard.firstFrame - lead, frames: heard.frames)
-    }
-
-    /// The speech in `range` of the source clock, from what was heard of it.
-    func activity(in range: Range<Duration>) -> SpeechActivity {
-        let first = SpeechActivity.frame(containing: range.lowerBound)
-        let end = max(SpeechActivity.frame(containing: range.upperBound - .nanoseconds(1)) + 1, first)
-        let heard = (first ..< end).map { levels[$0] }
-        let frames = heard.indices.map { index -> SpeechActivity.Frame in
-            guard let level = heard[index] else { return .unheard }
-            var floor = level
-            for neighbor in heard[max(index - Self.reach, 0) ... min(index + Self.reach, heard.count - 1)] {
-                if let neighbor, neighbor < floor { floor = neighbor }
-            }
-            return level > max(floor + Self.rise, Self.silence) ? .speech : .quiet
+        let lower = range.lowerBound + shift
+        let first = SpeechActivity.frame(containing: lower)
+        let end = max(SpeechActivity.frame(containing: range.upperBound + shift - .nanoseconds(1)) + 1, first)
+        let frames = (first ..< end).map { index -> SpeechActivity.Frame in
+            guard let sum = heard[index] else { return .unheard }
+            return sum.confidence / Double(sum.windows) >= Self.threshold ? .speech : .quiet
         }
-        return SpeechActivity(firstFrame: first, frames: Self.closingBreaths(frames))
+        return SpeechActivity(firstFrame: first - lead, frames: frames)
+    }
+}
+
+/// Runs Apple's sound classifier over the audio heard, off the main actor, into a `SpeechHistory`
+/// that the main actor reads.
+actor SpeechListener {
+    /// The classifier's shortest window, half a second, heard every frame.
+    private static let window = 0.5
+    private static let sampleRate = 48_000.0
+
+    /// What the classifier heard, shared with its results observer and with readers.
+    nonisolated let history = SpeechStore()
+    private let format = AVAudioFormat(standardFormatWithSampleRate: SpeechListener.sampleRate, channels: 1)
+    /// The analysis of the audio heard since the last discontinuity.
+    private var analysis: Analysis?
+
+    private struct Analysis {
+        let analyzer: SNAudioStreamAnalyzer
+        /// Kept here because the analyzer does not keep it.
+        let observer: SpeechObserver
+        /// How many samples it has had.
+        var samples: AVAudioFramePosition = 0
     }
 
-    /// Ends the frame being summed, keeping it when enough of it was heard.
-    private mutating func finish() {
-        guard let partial, partial.samples >= Self.samplesPerFrame / 2 else { return }
-        levels[partial.frame] = 10 * log10(partial.energy / Float(partial.samples) + 1e-10)
-        newest = partial.frame
-        if levels.count > Self.capacity * 11 / 10 {
-            levels = levels.filter { abs($0.key - newest) < Self.capacity }
+    /// Hears mono `samples`, the first at `start` seconds of the source clock. Not `continuing` the
+    /// last ones, they start a new analysis.
+    func hear(_ samples: [Float], from start: Double, continuing: Bool) {
+        guard let format, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+              let channel = buffer.floatChannelData?[0] else { return }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        for (index, sample) in samples.enumerated() { channel[index] = sample }
+        if !continuing || analysis == nil {
+            analysis?.analyzer.completeAnalysis()
+            analysis = startAnalysis(at: start, format: format)
         }
+        guard let current = analysis else { return }
+        current.analyzer.analyze(buffer, atAudioFramePosition: current.samples)
+        analysis?.samples += AVAudioFramePosition(samples.count)
     }
 
-    /// `frames` with quiet gaps of up to `breath` frames between speech filled in.
-    private static func closingBreaths(_ frames: [SpeechActivity.Frame]) -> [SpeechActivity.Frame] {
-        var closed = frames
-        var lastSpeech: Int?
-        for (index, frame) in frames.enumerated() {
-            switch frame {
-            case .speech:
-                if let lastSpeech, index - lastSpeech - 1 <= breath {
-                    for gap in lastSpeech + 1 ..< index { closed[gap] = .speech }
-                }
-                lastSpeech = index
-            case .unheard:
-                lastSpeech = nil
-            case .quiet:
-                break
-            }
+    private func startAnalysis(at start: Double, format: AVAudioFormat) -> Analysis? {
+        let analyzer = SNAudioStreamAnalyzer(format: format)
+        let observer = SpeechObserver(history: history, start: start)
+        do {
+            let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
+            request.windowDuration = CMTime(seconds: Self.window, preferredTimescale: CMTimeScale(Self.sampleRate))
+            request.overlapFactor = 1 - (SpeechActivity.frameDuration / .seconds(1)) / Self.window
+            try analyzer.add(request, withObserver: observer)
+        } catch {
+            Log.player.error("speech classifier unavailable: \(error)")
+            return nil
         }
-        return closed
+        return Analysis(analyzer: analyzer, observer: observer)
+    }
+}
+
+/// A `SpeechHistory` behind a lock: the classifier writes it from its own thread and the main actor
+/// reads it.
+final class SpeechStore: Sendable {
+    private let history = Mutex(SpeechHistory())
+
+    func record(_ window: Range<Double>, confidence: Double) {
+        history.withLock { $0.record(window, confidence: confidence) }
     }
 
-    /// A 300 Hz high-pass then a 3.4 kHz low-pass, each a Butterworth biquad.
-    private static func voiceBand() -> vDSP.Biquad<Float>? {
-        vDSP.Biquad(
-            coefficients: biquad(highPass: true, at: 300) + biquad(highPass: false, at: 3_400),
-            channelCount: 1, sectionCount: 2, ofType: Float.self
-        )
+    func activity(in range: Range<Duration>, on clock: SourceClock) -> SpeechActivity {
+        history.withLock { $0.activity(in: range, on: clock) }
+    }
+}
+
+/// Records each window the classifier hears into a `SpeechStore`, timed on the source clock from
+/// the analysis' `start`.
+private final class SpeechObserver: NSObject, SNResultsObserving, Sendable {
+    let history: SpeechStore
+    let start: Double
+
+    init(history: SpeechStore, start: Double) {
+        self.history = history
+        self.start = start
     }
 
-    /// One section's b0, b1, b2, a1 and a2, from the Audio EQ Cookbook.
-    private static func biquad(highPass: Bool, at frequency: Double) -> [Double] {
-        let omega = 2 * Double.pi * frequency / sampleRate
-        let alpha = sin(omega) / (2 * 0.5.squareRoot())
-        let cosine = cos(omega)
-        let scale = 1 + alpha
-        let middle = highPass ? -(1 + cosine) : 1 - cosine
-        let outer = abs(middle) / 2
-        return [outer / scale, middle / scale, outer / scale, -2 * cosine / scale, (1 - alpha) / scale]
+    func request(_ request: any SNRequest, didProduce result: any SNResult) {
+        guard let result = result as? SNClassificationResult else { return }
+        let from = start + result.timeRange.start.seconds
+        let confidence = result.classification(forIdentifier: "speech")?.confidence ?? 0
+        history.record(from ..< from + result.timeRange.duration.seconds, confidence: confidence)
+    }
+
+    func request(_ request: any SNRequest, didFailWithError error: any Error) {
+        Log.player.error("speech classifier failed: \(error)")
     }
 }

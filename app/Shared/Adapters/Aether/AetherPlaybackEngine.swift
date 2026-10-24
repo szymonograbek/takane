@@ -29,8 +29,8 @@ final class AetherPlaybackEngine: PlaybackEngine {
     /// How far the clock the cues are stamped on runs ahead of the position reported.
     private var sourceClock = SourceClock()
     private var observations: Set<AnyCancellable> = []
-    /// Where people spoke in the audio heard since the current load.
-    private var speech = SpeechHistory()
+    /// Hears where people spoke in the audio since the current load.
+    private var speech = SpeechListener()
     /// Hears the playing session's audio into `speech`.
     private var listening: Task<Void, Never>?
 
@@ -132,7 +132,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
     }
 
     func speechActivity(in range: Range<Duration>) -> SpeechActivity {
-        speech.activity(in: range, on: sourceClock)
+        speech.history.activity(in: range, on: sourceClock)
     }
 
     func stop() {
@@ -315,11 +315,12 @@ private extension AetherPlaybackEngine {
             Log.player.info("no audio to hear speech in")
             return
         }
+        let speech = speech
         listening = Task { [weak self] in
             for await tap in taps {
                 guard let channel = tap.buffer.floatChannelData?[0] else { continue }
                 let samples = Array(UnsafeBufferPointer(start: channel, count: Int(tap.buffer.frameLength)))
-                self?.speech.hear(samples, from: tap.sourceTime, continuing: !tap.discontinuity)
+                await speech.hear(samples, from: tap.sourceTime, continuing: !tap.discontinuity)
             }
             // A load or a stop cancelled it and cleared `listening` itself.
             guard !Task.isCancelled else { return }
@@ -331,7 +332,7 @@ private extension AetherPlaybackEngine {
     func stopListening() {
         listening?.cancel()
         listening = nil
-        speech = SpeechHistory()
+        speech = SpeechListener()
     }
 }
 

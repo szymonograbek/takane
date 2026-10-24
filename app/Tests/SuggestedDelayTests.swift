@@ -55,7 +55,7 @@ struct SuggestedDelayTests {
         delay.map { Int64(($0.duration / .milliseconds(1)).rounded()) }
     }
 
-    @Test(arguments: [-7300, -2300, -100, 0, 100, 1400, 4000, 9500] as [Int64])
+    @Test(arguments: [-25400, -7300, -2300, -100, 0, 100, 1400, 4000, 9500, 28000] as [Int64])
     func findsTheDelayTheSpeechNeeds(_ offset: Int64) {
         let cues = Self.dialogue(.seconds(180))
         let speech = Self.speech(of: cues, over: .seconds(180), delay: .milliseconds(offset))
@@ -104,7 +104,7 @@ struct SuggestedDelayTests {
 
     @Test func offersNothingBeyondItsReach() {
         let cues = Self.dialogue(.seconds(180))
-        let speech = Self.speech(of: cues, over: .seconds(180), delay: .seconds(14))
+        let speech = Self.speech(of: cues, over: .seconds(180), delay: .seconds(34))
         #expect(PlayerFeature.suggestedDelay(speech: speech, cues: cues) == nil)
     }
 

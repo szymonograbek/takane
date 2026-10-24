@@ -226,6 +226,16 @@ struct PlayerSubtitleTimingTests {
         #expect(PlayerFeature.reduce(&state, .subtitleTiming(.applySuggestion)).isEmpty)
     }
 
+    @Test func anInconclusiveSampleKeepsTheOffer() {
+        var state = playing()
+        let (cues, speech) = dialogue(needing: .milliseconds(1_400))
+        _ = PlayerFeature.reduce(&state, .engine(.cueTimeline(cues)))
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.listen))
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.heard(speech)))
+        _ = PlayerFeature.reduce(&state, .subtitleTiming(.heard(.empty)))
+        #expect(state.session?.offeredDelay == delay(1_400))
+    }
+
     @Test func aSuggestionCloseToTheDelayIsNotOffered() {
         var state = playing()
         let (cues, speech) = dialogue(needing: .milliseconds(1_400))

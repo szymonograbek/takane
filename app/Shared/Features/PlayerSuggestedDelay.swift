@@ -4,8 +4,9 @@ import Foundation
 extension PlayerFeature {
     /// What a suggestion needs before it is trusted.
     enum SuggestionEvidence {
-        /// Furthest a suggestion moves the subtitles from their file's times, either way.
-        static let reach = alignmentWindow
+        /// Furthest a suggestion moves the subtitles from their file's times, either way: as far as
+        /// a delay goes. A file from another release can be off by a recap's length.
+        static let reach = SubtitleDelay.limit
         /// How far past `reach` delays are tried, so a better fit just beyond it is seen and no
         /// lesser one inside it is offered instead.
         static let lookBeyond = Duration.seconds(4)
