@@ -47,7 +47,7 @@ private final class FakeTracker: PlaybackTracker {
     func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices> {
         AsyncStream { $0.finish() }
     }
-    func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?> { AsyncStream { $0.finish() } }
+    func title(of candidate: StreamCandidate) -> AsyncStream<PlayingTitle?> { AsyncStream { $0.finish() } }
 }
 
 @MainActor

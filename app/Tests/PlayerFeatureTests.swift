@@ -14,7 +14,7 @@ struct PlayerFeatureTests {
     @Test func openingAPlayableCandidateBeginsPlayback() {
         var state = PlayerFeature.State.idle
         let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .zero), .watchUpNext(Fixture.candidate())])
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .zero), .watchTitle(Fixture.candidate())])
         #expect(state.statusLine == "0:00:00 / 0:00:00 · opening")
     }
 
@@ -369,7 +369,7 @@ struct PlayerControlsTests {
     @Test func playbackStartsFromTheRequestedPosition() {
         var state = PlayerFeature.State.idle
         let effects = PlayerFeature.reduce(&state, .open(Fixture.candidate(), from: .seconds(600)))
-        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .seconds(600)), .watchUpNext(Fixture.candidate())])
+        #expect(effects == [.begin(Fixture.candidate(), Fixture.source, from: .seconds(600)), .watchTitle(Fixture.candidate())])
     }
 }
 

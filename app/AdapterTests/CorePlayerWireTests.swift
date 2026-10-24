@@ -22,7 +22,8 @@ struct CorePlayerWireTests {
             "nextVideo": null,
             "nextStreams": null,
             "nextStream": null,
-            "streamState": null
+            "streamState": null,
+            "watchedVideos": []
             \(introOutro.map { #", "introOutro": \#($0)"# } ?? "")
         }
         """.utf8))
@@ -88,5 +89,39 @@ struct CorePlayerWireTests {
         #expect(try player(playing: "tt0944947:1:1", introOutro: nil).skipSegments(for: Fixture.episode, within: stream) == nil)
         let otherEpisode = try player(playing: "tt0944947:1:2", introOutro: #"{"intro": null, "outro": 2880000}"#)
         #expect(otherEpisode.skipSegments(for: Fixture.episode, within: stream) == nil)
+    }
+
+    @Test func theMetaItemListsTheTitlesVideosAndWhichWereWatched() throws {
+        let state = try JSONDecoder().decode(PlayerState.self, from: Data("""
+        {
+            "selected": null,
+            "subtitles": [],
+            "metaItem": {
+                "request": {
+                    "base": "https://addon.example/manifest.json",
+                    "path": {"resource": "meta", "type": "series", "id": "tt0944947", "extra": []}
+                },
+                "content": {"type": "Ready", "content": {
+                    "id": "tt0944947", "type": "series", "name": "Game of Thrones", "description": "Nine families fight.",
+                    "background": null,
+                    "videos": [
+                        {"id": "tt0944947:1:1", "title": "Winter Is Coming", "season": 1, "episode": 1},
+                        {"id": "tt0944947:1:2", "title": "The Kingsroad", "season": 1, "episode": 2}
+                    ]
+                }}
+            },
+            "nextVideo": null,
+            "nextStreams": null,
+            "nextStream": null,
+            "streamState": null,
+            "watchedVideos": ["tt0944947:1:1"]
+        }
+        """.utf8))
+
+        let show = try #require(state.metaItem?.content?.readyContent)
+        #expect(show.description == "Nine families fight.")
+        let videos = show.videos.compactMap { $0.video(watched: state.watchedVideos) }
+        #expect(videos.map(\.playable.rawValue) == ["tt0944947:1:1", "tt0944947:1:2"])
+        #expect(videos.map(\.isWatched) == [true, false])
     }
 }

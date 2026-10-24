@@ -11,10 +11,12 @@ struct PlayerState: Decodable, Sendable {
         let subtitlesPath: ResourcePath?
     }
 
-    /// The fields of core's `MetaItem` the up next offer shows.
+    /// The fields of core's `MetaItem` the player shows.
     struct Show: Decodable, Sendable {
         let name: String
+        let description: String?
         let background: String?
+        let videos: [MetaDetailsState.Video]
     }
 
     let selected: Selected?
@@ -28,6 +30,9 @@ struct PlayerState: Decodable, Sendable {
     let nextStream: Stream?
     /// What was saved for the selected video, or carried over from an earlier one of the same title.
     let streamState: StreamItemState?
+    /// Ids of `metaItem`'s videos the user has watched. The bridge adds it, since core leaves its
+    /// watched bitfield out of the state.
+    let watchedVideos: Set<String>
     /// Stremio's skip times for the selected episode, which core asks for by itself for Stremio
     /// Premium accounts.
     let introOutro: IntroOutro?

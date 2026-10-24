@@ -75,6 +75,20 @@ struct MetaDetailsState: Decodable, Sendable {
     }
 }
 
+extension MetaDetailsState.Video {
+    /// The video as the app knows it, when its id is a `PlayableID`. `watched` holds the ids of the
+    /// title's videos the viewer watched.
+    func video(watched: Set<String>) -> Video? {
+        PlayableID(id).map { playable in
+            Video(
+                playable: playable, name: Redacted(title), season: season, episode: episode,
+                released: released.flatMap(Date.init(core:)), thumbnail: thumbnail.flatMap(URL.init(string:)),
+                overview: overview.map(Redacted.init), isWatched: watched.contains(id)
+            )
+        }
+    }
+}
+
 extension TitleRating {
     /// core's `Rating`. Its third status, "watched", is neither a like nor a love.
     init?(core name: String) {

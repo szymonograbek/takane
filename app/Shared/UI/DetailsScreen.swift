@@ -54,10 +54,10 @@ private struct DetailsContent: View {
                 case .loaded(let details) where !details.seasons.isEmpty:
                     ForEach(details.seasons, id: \.self) { season in
                         Shelf(title: season == 0 ? "Specials" : "Season \(season)") {
-                            let episodes = details.episodes(in: season)
+                            let episodes = details.videos.episodes(in: season)
                             let isSeasonWatched = episodes.allSatisfy(\.isWatched)
                             ForEach(episodes) { video in
-                                EpisodeCard(video: video, show: details.preview, isSeasonWatched: isSeasonWatched) {
+                                EpisodeLink(video: video, show: details.preview, isSeasonWatched: isSeasonWatched) {
                                     store.send(.setWatched($0, $1))
                                 }
                             }
@@ -257,45 +257,26 @@ private struct FullDescription: View {
     }
 }
 
-/// An episode's still, number, name and overview, ticked once watched. With spoilers hidden, an
-/// unwatched episode blurs its still and leaves out its overview. A long press marks the episode
-/// or its season.
-private struct EpisodeCard: View {
-    @Environment(AppContext.self) private var app
+/// An episode of the title on its page: selecting it lists its streams, and a long press marks the
+/// episode or its season.
+private struct EpisodeLink: View {
     let video: Video
     let show: MetaPreview
     let isSeasonWatched: Bool
     let setWatched: (WatchedTarget, Bool) -> Void
 
     var body: some View {
-        let hidesSpoilers = !video.isWatched && (app.preferences.state.preferences?.hidesSpoilers ?? false)
-        VStack(alignment: .leading, spacing: Metrics.captionSpacing) {
-            NavigationLink(value: Route.streams(StreamsRequest(preview: show, video: video.playable))) {
-                Artwork(url: video.thumbnail ?? show.background, title: video.name.rawValue)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .blur(radius: hidesSpoilers ? Metrics.spoilerBlurRadius : 0, opaque: true)
-                    .clipShape(.rect(cornerRadius: Metrics.cornerRadius, style: .continuous))
-            }
-            .cardButtonStyle()
-            .contextMenu {
-                WatchedButton(isWatched: video.isWatched) { setWatched(.video(video.playable), $0) }
-                if let season = video.season {
-                    WatchedButton(isWatched: isSeasonWatched, of: "Season") { setWatched(.season(show.media, season), $0) }
+        EpisodeCard(video: video, fallbackArtwork: show.background) { still in
+            NavigationLink(value: Route.streams(StreamsRequest(preview: show, video: video.playable))) { still }
+                .cardButtonStyle()
+                .contextMenu {
+                    WatchedButton(isWatched: video.isWatched) { setWatched(.video(video.playable), $0) }
+                    if let season = video.season {
+                        WatchedButton(isWatched: isSeasonWatched, of: "Season") { setWatched(.season(show.media, season), $0) }
+                    }
                 }
-            }
-            .accessibilityIdentifier("episode.\(video.playable.rawValue)")
-            HStack(spacing: 8) {
-                if video.isWatched {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.secondary).accessibilityLabel("Watched")
-                }
-                Text("\(video.episode.map { "\($0). " } ?? "")\(video.name.rawValue)").bold().labelLineLimit()
-            }
-            .font(.caption)
-            if let overview = video.overview, !hidesSpoilers {
-                Text(overview.rawValue).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(2)
-            }
+                .accessibilityIdentifier("episode.\(video.playable.rawValue)")
         }
-        .lockupFrame(.wide)
     }
 }
 

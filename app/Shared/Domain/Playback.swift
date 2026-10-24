@@ -268,6 +268,18 @@ struct UpNext: Equatable, Sendable {
     let stream: StreamCandidate?
 }
 
+/// What the tracker knows about the title a candidate plays, from its metadata.
+struct PlayingTitle: Equatable, Sendable {
+    /// The movie or series, such as "Twin Peaks".
+    let name: Redacted<String>
+    let description: Redacted<String>?
+    let backdrop: URL?
+    /// The title's videos, such as a series' episodes, as `TitleDetails.videos` lists them.
+    let videos: [Video]
+    /// The episode after the candidate's. Nil while there is none or it is not known yet.
+    let next: UpNext?
+}
+
 /// Records what the user watched, so progress, watched state and continue watching follow playback,
 /// and finds what to watch next.
 protocol PlaybackTracker: Sendable {
@@ -286,7 +298,7 @@ protocol PlaybackTracker: Sendable {
     /// episode, once known. Call it after `begin(candidate)`. Yields at most once, and finishes once
     /// another candidate replaces it.
     func remembered(for candidate: StreamCandidate, playing source: PlaybackSource) -> AsyncStream<TrackChoices>
-    /// The episode after `candidate`, now and after every change, nil while there is none or it is
-    /// not known yet. Finishes once another candidate replaces it.
-    func upNext(after candidate: StreamCandidate) -> AsyncStream<UpNext?>
+    /// What is known about `candidate`'s title, now and after every change, nil until its metadata
+    /// loads. Finishes once another candidate replaces it.
+    func title(of candidate: StreamCandidate) -> AsyncStream<PlayingTitle?>
 }

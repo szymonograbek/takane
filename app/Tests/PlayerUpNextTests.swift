@@ -8,6 +8,11 @@ struct PlayerUpNextTests {
     )
     private let nextStream = Fixture.candidate(index: 1)
 
+    /// The tracker's answer for a title whose next episode is `next`.
+    private func title(next: UpNext?) -> PlayingTitle {
+        PlayingTitle(name: Redacted("Game of Thrones"), description: nil, backdrop: nil, videos: [], next: next)
+    }
+
     /// Playing `Fixture.candidate()` at `position` of 100 s, with the tracker's answer `next`.
     private func offering(_ next: UpNext?, at position: Duration = .seconds(50), behavior: UpNextBehavior = .defaults) -> PlayerFeature.State {
         var session = PlayerFeature.Session(candidate: Fixture.candidate())
@@ -16,7 +21,7 @@ struct PlayerUpNextTests {
         session.duration = .seconds(100)
         session.upNextBehavior = behavior
         var state = PlayerFeature.State.active(session)
-        _ = PlayerFeature.reduce(&state, .upNext(.found(Fixture.candidate(), next)))
+        _ = PlayerFeature.reduce(&state, .titleFound(Fixture.candidate(), title(next: next)))
         return state
     }
 
@@ -39,7 +44,7 @@ struct PlayerUpNextTests {
 
     @Test func anAnswerForAnotherCandidateIsDropped() {
         var state = offering(nil, at: .seconds(90))
-        #expect(PlayerFeature.reduce(&state, .upNext(.found(Fixture.candidate(index: 2), next))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .titleFound(Fixture.candidate(index: 2), title(next: next))).isEmpty)
         #expect(state.session?.upNext == PlayerFeature.UpNextOffer.notFound)
     }
 
@@ -47,7 +52,7 @@ struct PlayerUpNextTests {
         var state = offering(next, at: .seconds(90))
         #expect(PlayerFeature.reduce(&state, .upNext(.dismiss)).isEmpty)
         #expect(state.session?.upNextCard == nil)
-        _ = PlayerFeature.reduce(&state, .upNext(.found(Fixture.candidate(), next)))
+        _ = PlayerFeature.reduce(&state, .titleFound(Fixture.candidate(), title(next: next)))
         #expect(state.session?.upNext == PlayerFeature.UpNextOffer.dismissed)
         #expect(PlayerFeature.reduce(&state, .upNext(.play)).isEmpty)
         #expect(PlayerFeature.reduce(&state, .engine(.ended)) == [.report(.ended)])
@@ -57,7 +62,7 @@ struct PlayerUpNextTests {
     @Test func playNowReportsTheMoveThenOpensTheNextStream() {
         var state = offering(next, at: .seconds(90))
         #expect(PlayerFeature.reduce(&state, .upNext(.play)) == [
-            .report(.movedToNext), .begin(nextStream, Fixture.source, from: .zero), .watchUpNext(nextStream),
+            .report(.movedToNext), .begin(nextStream, Fixture.source, from: .zero), .watchTitle(nextStream),
         ])
         #expect(state.session?.candidate == nextStream)
         #expect(state.session?.title.rawValue == "Game of Thrones · S1 E2")
@@ -79,7 +84,7 @@ struct PlayerUpNextTests {
     @Test func theNextEpisodePlaysByItselfWhenThisOneEnds() {
         var state = offering(next)
         #expect(PlayerFeature.reduce(&state, .engine(.ended)) == [
-            .report(.ended), .report(.movedToNext), .begin(nextStream, Fixture.source, from: .zero), .watchUpNext(nextStream),
+            .report(.ended), .report(.movedToNext), .begin(nextStream, Fixture.source, from: .zero), .watchTitle(nextStream),
         ])
         #expect(state.session?.candidate == nextStream)
     }

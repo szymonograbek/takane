@@ -197,15 +197,7 @@ struct CoreCatalogService: CatalogService {
             genres: item.preview.links.filter { $0.category == "Genres" }.map(\.name),
             runtime: item.preview.runtime,
             imdbRating: item.preview.links.first { $0.category == "imdb" }?.name,
-            videos: item.videos.compactMap { video in
-                PlayableID(video.id).map { playable in
-                    Video(
-                        playable: playable, name: Redacted(video.title), season: video.season, episode: video.episode,
-                        released: video.released.flatMap(Date.init(core:)), thumbnail: video.thumbnail.flatMap(URL.init(string:)),
-                        overview: video.overview.map(Redacted.init), isWatched: state.watchedVideos.contains(video.id)
-                    )
-                }
-            },
+            videos: item.videos.compactMap { $0.video(watched: state.watchedVideos) },
             isWatched: (state.libraryItem?.state.timesWatched ?? 0) > 0,
             isInLibrary: state.libraryItem?.isInLibrary ?? false,
             rating: rating(state.ratingInfo)

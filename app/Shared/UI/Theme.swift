@@ -184,6 +184,8 @@ enum Metrics {
     static let streamsInfoWidth: CGFloat = 520
     /// How far up the player's scrim reaches.
     static let scrimHeight: CGFloat = 520
+    /// How far up it reaches with a content tab open below the transport bar: the whole screen.
+    static let tabScrimHeight: CGFloat = 1_080
     /// The dashes of a cue's outline at its file's time: drawn, then skipped.
     static let cueOutlineDash: [CGFloat] = [8, 6]
     /// The dots of the speech lane where the audio has not played yet: a round dot, then a gap.

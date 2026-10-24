@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The transport bar: title, progress, and buttons for skipping, pausing and choosing tracks and speed.
+/// The transport bar, with the open content tab below it: title, progress, and buttons for
+/// skipping, pausing, opening tabs and choosing tracks and speed.
 struct PlayerControls: View {
     @Environment(AppContext.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -11,10 +12,24 @@ struct PlayerControls: View {
     let interacted: () -> Void
     /// Closes the panel and the controls and opens the subtitle timing strip.
     let openTiming: () -> Void
+    let tabs: PlayerTabs
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Spacer()
+            transportBar
+                .padding(.horizontal, Metrics.screenPadding)
+            tabs
+                .disabled(panel != nil)
+        }
+        .padding(.vertical, Metrics.screenPadding)
+        .background(alignment: .bottom) {
+            LinearGradient(colors: [.clear, Palette.scrim], startPoint: .top, endPoint: .bottom)
+                .frame(height: tabs.open == nil ? Metrics.scrimHeight : Metrics.tabScrimHeight)
+        }
+    }
+
+    private var transportBar: some View {
+        VStack(alignment: .leading, spacing: 18) {
             Text(session.title.rawValue.isEmpty ? session.candidate.name?.rawValue ?? "" : session.title.rawValue)
                 .font(.title3).bold()
                 .opacity(chapterReplacesTitle ? 0 : 1)
@@ -36,16 +51,21 @@ struct PlayerControls: View {
                 }
                 .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             }
+            // The tabs on the left, playback in the middle of the screen and the tracks on the right.
             HStack(spacing: 20) {
+                tabs.names
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 transportButtons
-                Spacer()
-                panelButton(.subtitles)
-                    .accessibilityIdentifier("player.subtitles")
-                panelButton(.audio)
-                    .disabled(state.tracks(.audio).isEmpty)
-                    .accessibilityIdentifier("player.audio")
-                panelButton(.speed)
-                    .accessibilityIdentifier("player.speed")
+                HStack(spacing: 20) {
+                    panelButton(.subtitles)
+                        .accessibilityIdentifier("player.subtitles")
+                    panelButton(.audio)
+                        .disabled(state.tracks(.audio).isEmpty)
+                        .accessibilityIdentifier("player.audio")
+                    panelButton(.speed)
+                        .accessibilityIdentifier("player.speed")
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             // An open panel keeps focus among its rows until a choice is made or Menu closes it.
             .disabled(panel != nil)
@@ -64,11 +84,6 @@ struct PlayerControls: View {
             }
             // Opening and closing only; moving between pages swaps the rows in place.
             .animation(Motion.appear, value: panel == nil)
-        }
-        .padding(Metrics.screenPadding)
-        .background(alignment: .bottom) {
-            LinearGradient(colors: [.clear, Palette.scrim], startPoint: .top, endPoint: .bottom)
-                .frame(height: Metrics.scrimHeight)
         }
     }
 
@@ -296,61 +311,6 @@ private struct TimelineBar: View {
         press = nil
     }
 }
-
-#if os(tvOS)
-/// A focusable UIKit view that reports the remote's arrows going down and up. SwiftUI on tvOS
-/// sees the Siri Remote's arrows only as move commands, with no release to tell a tap from a hold
-/// and nothing to tell a press on the clickpad's edge from a swipe. Swipes reach this view as
-/// focus moves, never as presses.
-struct RemotePresses: UIViewRepresentable {
-    /// Left or right going down (true) or up (false).
-    let arrow: (Bool, PlayerFeature.Direction) -> Void
-    /// Up or down pressed, by which. Without it they move focus.
-    var vertical: ((UIPress.PressType) -> Void)?
-    let select: () -> Void
-
-    func makeUIView(context: Context) -> PressView { PressView() }
-
-    func updateUIView(_ view: PressView, context: Context) {
-        view.arrow = arrow
-        view.vertical = vertical
-        view.select = select
-    }
-
-    final class PressView: UIView {
-        var arrow: (Bool, PlayerFeature.Direction) -> Void = { _, _ in }
-        var vertical: ((UIPress.PressType) -> Void)?
-        var select: () -> Void = {}
-
-        override var canBecomeFocused: Bool { true }
-
-        override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-            super.pressesBegan(presses.filter { !handle($0, isDown: true) }, with: event)
-        }
-
-        override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-            super.pressesEnded(presses.filter { !handle($0, isDown: false) }, with: event)
-        }
-
-        override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-            super.pressesCancelled(presses.filter { !handle($0, isDown: false) }, with: event)
-        }
-
-        private func handle(_ press: UIPress, isDown: Bool) -> Bool {
-            switch press.type {
-            case .leftArrow: arrow(isDown, .backward)
-            case .rightArrow: arrow(isDown, .forward)
-            case .upArrow, .downArrow:
-                guard let vertical else { return false }
-                if isDown { vertical(press.type) }
-            case .select: if !isDown { select() }
-            default: return false
-            }
-            return true
-        }
-    }
-}
-#endif
 
 extension MediaTrack {
     /// "English · 5.1 · eac3", "Polish (Forced)", or the track number when the stream says nothing.
