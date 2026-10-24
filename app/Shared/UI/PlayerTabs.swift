@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The content tabs below the transport bar, as in Apple's player: their names in a row and, once
-/// focus reaches a name, that tab below it. Down moves into the tab; selecting a name opens it, as a
-/// click does on macOS, and moves focus to what plays now in it.
+/// The content tabs, as in Apple's player: their names sit among the transport bar's buttons and
+/// the open tab shows below the bar. Selecting a name opens its tab and moves focus to what plays
+/// now in it; with a tab open, focusing another name switches to it.
 struct PlayerTabs: View {
     let session: PlayerFeature.Session
     /// Nil while only the names show.
@@ -12,42 +12,41 @@ struct PlayerTabs: View {
     let playEpisode: (Video) -> Void
     let playChapter: (Chapter) -> Void
 
+    /// The names, for the transport bar's row of buttons.
+    var names: some View {
+        HStack(spacing: 20) {
+            ForEach(session.tabs, id: \.self) { tab in
+                Button {
+                    openTab(tab)
+                    focus.wrappedValue = session.playingFocus(in: tab)
+                } label: {
+                    Text(tab.title).fontWeight(tab == open ? .bold : .regular)
+                }
+                .focused(focus, equals: .tab(tab))
+                .accessibilityIdentifier("player.tab.\(tab.name)")
+                .accessibilityAddTraits(tab == open ? .isSelected : [])
+            }
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Metrics.headerSpacing) {
-            HStack(spacing: 20) {
-                ForEach(session.tabs, id: \.self) { tab in
-                    Button(tab.title) {
-                        openTab(tab)
-                        focus.wrappedValue = playingFocus(in: tab)
-                    }
-                        .focused(focus, equals: .tab(tab))
-                        .accessibilityIdentifier("player.tab.\(tab.name)")
-                }
+        switch open {
+        case .info:
+            PlayingInfo(session: session)
+                .padding(.horizontal, Metrics.screenPadding)
+        case .episodes:
+            ScrollViewReader { shelf in
+                episodes.onAppear { scrollToPlaying(session.candidate.item, in: shelf) }
             }
-            .padding(.horizontal, Metrics.screenPadding)
-            // As wide as the screen, so focus moving up from anywhere in a tab finds the names.
-            .frame(maxWidth: .infinity, alignment: .leading)
-            #if os(tvOS)
-            .focusSection()
-            #endif
-            switch open {
-            case .info:
-                PlayingInfo(session: session)
-                    .padding(.horizontal, Metrics.screenPadding)
-            case .episodes:
-                ScrollViewReader { shelf in
-                    episodes.onAppear { scrollToPlaying(session.candidate.item, in: shelf) }
-                }
-                // A sideways scroll view would otherwise take all the height, pushing the transport bar up.
-                .fixedSize(horizontal: false, vertical: true)
-            case .chapters:
-                ScrollViewReader { shelf in
-                    chapters.onAppear { scrollToPlaying(session.currentChapter?.id, in: shelf) }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            case nil:
-                EmptyView()
+            // A sideways scroll view would otherwise take all the height, pushing the transport bar up.
+            .fixedSize(horizontal: false, vertical: true)
+        case .chapters:
+            ScrollViewReader { shelf in
+                chapters.onAppear { scrollToPlaying(session.currentChapter?.id, in: shelf) }
             }
+            .fixedSize(horizontal: false, vertical: true)
+        case nil:
+            EmptyView()
         }
     }
 
@@ -77,20 +76,11 @@ struct PlayerTabs: View {
         }
     }
 
-    /// Starts the shelf at the card of what plays now, so focus coming down from the names lands on it.
+    /// Starts the shelf at the card of what plays now, where focus lands on entering the tab.
     private func scrollToPlaying(_ id: (some Hashable)?, in shelf: ScrollViewProxy) {
         guard let id else { return }
         // Once the lazy row has laid out its cards.
         Task { shelf.scrollTo(id, anchor: .leading) }
-    }
-
-    /// The episode or chapter playing, where selecting a tab's name sends focus.
-    private func playingFocus(in tab: PlayerFeature.Tab) -> PlayerFocus {
-        switch tab {
-        case .info: .tab(.info)
-        case .episodes: .episode(session.candidate.item)
-        case .chapters: session.currentChapter.map { .chapter($0.id) } ?? .tab(.chapters)
-        }
     }
 }
 
@@ -153,6 +143,17 @@ private struct ChapterCard: View {
             .font(.caption)
         }
         .lockupFrame(.wide)
+    }
+}
+
+extension PlayerFeature.Session {
+    /// The episode or chapter playing, where focus goes on entering a tab.
+    func playingFocus(in tab: PlayerFeature.Tab) -> PlayerFocus {
+        switch tab {
+        case .info: .tab(.info)
+        case .episodes: .episode(candidate.item)
+        case .chapters: currentChapter.map { .chapter($0.id) } ?? .tab(.chapters)
+        }
     }
 }
 

@@ -138,12 +138,14 @@ struct PlayerScreen: View {
             // Moving between controls counts as using them, and leaving the progress bar keeps them up.
             guard let focused, focused != .surface else { return }
             interactions += 1
-            if case .tab(let tab) = focused {
-                let landing = tabLanding(reaching: tab, from: old)
-                controls = .tabs(landing)
-                if landing != tab { focus = .tab(landing) }
-            } else if controls.openTab != nil, focused.isOnTransportBar {
-                controls = .shown
+            if case .tab(let tab) = focused, controls.openTab != nil {
+                controls = .tabs(tab)
+            } else if case .tab(let tab) = old, focused.isInTab, let session = state.session {
+                // Down from a name lands on what plays now, not on the card that happens to be below it.
+                focus = session.playingFocus(in: tab)
+            } else if let open = controls.openTab, focused.isOnTransportBar {
+                // Up from a tab's cards returns to its name; reaching another button closes it.
+                if old?.isInTab == true { focus = .tab(open) } else { controls = .shown }
             } else if controls == .peeking, focused != .progress {
                 controls = .shown
             }
@@ -258,14 +260,6 @@ struct PlayerScreen: View {
 
     /// Which tab opens when focus reaches `tab`'s name: the first coming down from the transport bar,
     /// the open one coming up from its content, else `tab` itself.
-    private func tabLanding(reaching tab: PlayerFeature.Tab, from old: PlayerFocus?) -> PlayerFeature.Tab {
-        switch old {
-        case .episode, .chapter: controls.openTab ?? tab
-        case let old? where old.isOnTransportBar: app.player.state.session?.tabs.first ?? tab
-        case .some, nil: tab
-        }
-    }
-
     private func backToTransportBar() {
         controls = .shown
         focus = .playPause
@@ -345,6 +339,15 @@ enum PlayerFocus: Hashable {
         switch self {
         case .progress, .back, .playPause, .forward, .subtitles, .audio, .speed: true
         case .surface, .timing, .option, .link, .skip, .playNext, .dismissNext, .tab, .episode, .chapter: false
+        }
+    }
+
+    /// A card in an open content tab.
+    var isInTab: Bool {
+        switch self {
+        case .episode, .chapter: true
+        case .progress, .back, .playPause, .forward, .subtitles, .audio, .speed, .surface, .timing, .option, .link, .skip,
+             .playNext, .dismissNext, .tab: false
         }
     }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The transport bar, with the content tabs below it: title, progress, and buttons for skipping,
-/// pausing and choosing tracks and speed.
+/// The transport bar, with the open content tab below it: title, progress, and buttons for
+/// skipping, pausing, opening tabs and choosing tracks and speed.
 struct PlayerControls: View {
     @Environment(AppContext.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -53,6 +53,8 @@ struct PlayerControls: View {
             }
             HStack(spacing: 20) {
                 transportButtons
+                Spacer()
+                tabs.names
                 Spacer()
                 panelButton(.subtitles)
                     .accessibilityIdentifier("player.subtitles")
