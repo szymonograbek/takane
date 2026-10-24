@@ -199,7 +199,10 @@ protocol PlaybackEngine: AnyObject, Sendable {
     func setSpeed(_ speed: PlaybackSpeed)
     /// Shows the subtitles `delay` away from their file's times, at once. A new load starts at zero.
     func setSubtitleDelay(_ delay: SubtitleDelay)
-    /// Where people spoke in `range`, timed like `position`, from the audio played since the stream loaded.
+    /// Starts or stops hearing the playing audio for speech. A new load starts stopped. What was
+    /// heard stays readable after stopping.
+    func hearSpeech(_ hearing: Bool)
+    /// Where people spoke in `range`, timed like `position`, from the audio heard since the stream loaded.
     func speechActivity(in range: Range<Duration>) -> SpeechActivity
     func stop()
     /// Output health by name (route, decoders, audio delivery, frame counters), for logs and the smoke test.

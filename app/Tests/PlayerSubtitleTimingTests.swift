@@ -125,7 +125,8 @@ struct PlayerSubtitleTimingTests {
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
         let saved = TrackChoices(subtitles: .builtIn(TrackChoices.Track(number: 4, language: "pol")), subtitleDelay: delay(800))
         _ = PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), saved))
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish]))) == [.select(polish.id), .setSubtitleDelay(delay(800))])
+        let restored: [PlayerFeature.Effect] = [.select(polish.id), .setSubtitleDelay(delay(800))]
+        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish]))) == restored + Fixture.startsHearing)
     }
 
     @Test func aRememberedDelayWaitsForItsAddonFile() {
@@ -145,7 +146,7 @@ struct PlayerSubtitleTimingTests {
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
         let saved = TrackChoices(subtitles: .builtIn(TrackChoices.Track(number: 9, language: "jpn")), subtitleDelay: delay(800))
         _ = PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), saved))
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish]))) == Fixture.startsHearing)
         #expect(state.session?.subtitleDelay == .zero)
     }
 
@@ -197,21 +198,21 @@ struct PlayerSubtitleTimingTests {
     @Test func theOpenStripSamplesTheSpeechAroundThePlayhead() {
         var state = playing()
         _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(70))))
-        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.listen)) == [.sampleSpeech(.seconds(-110) ..< .seconds(85))])
-        #expect(state.session?.heardSpeech == PlayerFeature.HeardSpeech())
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.listen)) == [.sampleSpeech(.seconds(-110) ..< .seconds(85), after: .zero)])
+        #expect(state.session?.speech.lane == .empty)
         let heard = dialogue(needing: .seconds(2)).speech
         _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(71))))
-        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(heard))) == [.sampleSpeech(.seconds(-109) ..< .seconds(86))])
-        #expect(state.session?.heardSpeech?.lane == heard.slice(.seconds(60) ..< .seconds(82)))
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(heard))) == [.sampleSpeech(.seconds(-109) ..< .seconds(86), after: .milliseconds(250))])
+        #expect(state.session?.speech.lane == heard.slice(.seconds(60) ..< .seconds(82)))
     }
 
-    @Test func aClosedStripKeepsNoSpeech() {
+    @Test func aClosedStripKeepsNoLane() {
         var state = playing()
         _ = PlayerFeature.reduce(&state, .subtitleTiming(.listen))
         #expect(PlayerFeature.reduce(&state, .subtitleTiming(.stopListening)).isEmpty)
-        #expect(state.session?.heardSpeech == nil)
-        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(dialogue(needing: .zero).speech))).isEmpty)
-        #expect(state.session?.heardSpeech == nil)
+        #expect(state.session?.speech.lane == nil)
+        #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(.empty))) == [.sampleSpeech(.seconds(-180) ..< .seconds(15), after: .seconds(5))])
+        #expect(state.session?.speech.lane == nil)
     }
 
     @Test func upAppliesTheDelayTheSpeechSuggests() {
@@ -243,7 +244,7 @@ struct PlayerSubtitleTimingTests {
         _ = PlayerFeature.reduce(&state, .subtitleTiming(.listen))
         for _ in 0..<3 { _ = PlayerFeature.reduce(&state, .subtitleTiming(.nudge(.forward, .coarse))) }
         _ = PlayerFeature.reduce(&state, .subtitleTiming(.heard(speech)))
-        #expect(state.session?.heardSpeech?.suggestion == delay(1_400))
+        #expect(state.session?.suggestion == delay(1_400))
         #expect(state.session?.offeredDelay == nil)
         #expect(PlayerFeature.reduce(&state, .subtitleTiming(.applySuggestion)).isEmpty)
     }

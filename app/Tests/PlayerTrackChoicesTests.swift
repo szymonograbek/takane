@@ -164,7 +164,7 @@ struct PlayerTrackChoicesTests {
             id: MediaTrack.ID(kind: .subtitle, number: 9), title: nil, language: "pol", codec: "subrip",
             channelCount: nil, isForced: false, externalFile: untimed.url, isSelected: true
         )
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, added]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, added]))) == Fixture.startsHearing)
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source(Fixture.manifest, .loading)])).isEmpty)
         let timed = [source(Fixture.manifest, .loaded([synced, untimed]))]
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), timed)) == [.addSubtitles(synced)])

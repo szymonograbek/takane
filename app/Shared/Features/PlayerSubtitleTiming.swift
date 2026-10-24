@@ -10,7 +10,7 @@ extension PlayerFeature {
         case align
         /// Puts the subtitles back where their file times them.
         case reset
-        /// The timing strip opened: sample the speech for it until `stopListening`.
+        /// The timing strip opened: hear the speech for its lane until `stopListening`.
         case listen
         case stopListening
         /// What a sample heard around the playhead.
@@ -19,17 +19,26 @@ extension PlayerFeature {
         case applySuggestion
     }
 
-    /// What the open timing strip knows of the speech.
-    struct HeardSpeech: Equatable, Sendable {
-        /// The speech within `speechLaneReach` of the playhead, for its lane.
-        var lane = SpeechActivity.empty
-        /// The delay that lines the cues up with the speech, from the last sample whose evidence
-        /// was clear. A sample at the edge of clear does not take it away, so the offer stays put.
-        var suggestion: SubtitleDelay?
+    /// What the player knows of the speech heard.
+    struct SpeechTiming: Equatable, Sendable {
+        /// The speech within `speechLaneReach` of the playhead, while the timing strip is open.
+        var lane: SpeechActivity?
+        /// The delay that lines the cues up with the speech, once a sample's evidence was clear.
+        /// Kept, since the player stops hearing once it has one, and a sample at the edge of clear
+        /// does not take it away.
+        var suggestion: Suggestion?
+    }
+
+    /// A suggested delay, for the subtitle track that showed when it was found.
+    struct Suggestion: Equatable, Sendable {
+        let subtitles: MediaTrack.ID
+        let delay: SubtitleDelay
     }
 
     /// How often the open strip samples the speech.
     static let speechSampleInterval = Duration.milliseconds(250)
+    /// How often the speech is sampled for a suggestion while the strip is closed.
+    static let speechBackgroundInterval = Duration.seconds(5)
     /// How far the speech lane reaches either side of the playhead: the alignment window, plus
     /// what the playhead glides between position reports.
     static let speechLaneReach = alignmentWindow + .seconds(1)
@@ -65,6 +74,21 @@ extension PlayerFeature {
     }
 }
 
+extension PlayerFeature {
+    /// Hears speech only while `Session.hearsSpeech` says so: whatever an event changes (the
+    /// subtitles, the strip, a suggestion found, a new session), this starts or stops it once.
+    static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
+        let wasHearing = state.session?.hearsSpeech ?? false
+        let effects = reduceEvent(&state, event)
+        let session = state.session
+        let isHearing = session?.hearsSpeech ?? false
+        guard isHearing != wasHearing else { return effects }
+        guard isHearing, let session else { return effects + [.hearSpeech(false)] }
+        let sampling = effects.contains { if case .sampleSpeech = $0 { true } else { false } }
+        return effects + [.hearSpeech(true)] + (sampling ? [] : [session.nextSpeechSample])
+    }
+}
+
 extension PlayerFeature.Session {
     /// The cue "this line starts now" would move now.
     var alignmentTarget: TimedCue? {
@@ -81,16 +105,19 @@ extension PlayerFeature.Session {
         case .reset:
             return retime(to: .zero)
         case .listen:
-            heardSpeech = PlayerFeature.HeardSpeech()
-            return [.sampleSpeech(speechEvidence)]
+            speech.lane = .empty
+            return [.sampleSpeech(speechEvidence, after: .zero)]
         case .stopListening:
-            heardSpeech = nil
+            speech.lane = nil
             return []
-        case .heard(let speech) where heardSpeech != nil:
-            let lane = position - PlayerFeature.speechLaneReach ..< position + PlayerFeature.speechLaneReach
-            let suggestion = PlayerFeature.suggestedDelay(speech: speech, cues: cueTimeline) ?? heardSpeech?.suggestion
-            heardSpeech = PlayerFeature.HeardSpeech(lane: speech.slice(lane), suggestion: suggestion)
-            return [.sampleSpeech(speechEvidence)]
+        case .heard(let heard) where hearsSpeech:
+            if let shownSubtitles, let delay = PlayerFeature.suggestedDelay(speech: heard, cues: cueTimeline) {
+                speech.suggestion = PlayerFeature.Suggestion(subtitles: shownSubtitles, delay: delay)
+            }
+            if speech.lane != nil {
+                speech.lane = heard.slice(position - PlayerFeature.speechLaneReach ..< position + PlayerFeature.speechLaneReach)
+            }
+            return hearsSpeech ? [nextSpeechSample] : []
         case .applySuggestion where subtitleChoice != .off:
             guard let offeredDelay else { return [] }
             return retime(to: offeredDelay)
@@ -99,11 +126,32 @@ extension PlayerFeature.Session {
         }
     }
 
+    /// The subtitle track showing, built in or added from a file.
+    var shownSubtitles: MediaTrack.ID? {
+        tracks.first { $0.id.kind == .subtitle && $0.isSelected }?.id
+    }
+
+    /// The delay the speech suggested for the subtitles showing.
+    var suggestion: SubtitleDelay? {
+        guard let found = speech.suggestion, found.subtitles == shownSubtitles else { return nil }
+        return found.delay
+    }
+
     /// The suggested delay, while it differs enough from the current one to be worth offering.
     var offeredDelay: SubtitleDelay? {
-        guard let suggestion = heardSpeech?.suggestion,
-              abs(suggestion.duration - subtitleDelay.duration) >= PlayerFeature.suggestionThreshold else { return nil }
+        guard let suggestion, abs(suggestion.duration - subtitleDelay.duration) >= PlayerFeature.suggestionThreshold else { return nil }
         return suggestion
+    }
+
+    /// Whether the player hears the speech: while subtitles show, until it suggests a delay for
+    /// them, and while the timing strip is open, for its lane.
+    var hearsSpeech: Bool {
+        shownSubtitles != nil && (speech.lane != nil || suggestion == nil)
+    }
+
+    /// The next sample of the speech: often for the open strip's lane, now and then otherwise.
+    var nextSpeechSample: Effect {
+        .sampleSpeech(speechEvidence, after: speech.lane == nil ? PlayerFeature.speechBackgroundInterval : PlayerFeature.speechSampleInterval)
     }
 
     private var speechEvidence: Range<Duration> {

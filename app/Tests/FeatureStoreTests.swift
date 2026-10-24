@@ -26,6 +26,7 @@ private final class FakeEngine: PlaybackEngine {
     }
     func setSpeed(_ speed: PlaybackSpeed) { commands.append("speed \(speed.rawValue)") }
     func setSubtitleDelay(_ delay: SubtitleDelay) { commands.append("subtitle delay \(delay.duration)") }
+    func hearSpeech(_ hearing: Bool) { commands.append("hear speech \(hearing)") }
     func speechActivity(in range: Range<Duration>) -> SpeechActivity { .empty }
     func stop() { commands.append("stop") }
     func diagnostics() -> [String: String] { [:] }

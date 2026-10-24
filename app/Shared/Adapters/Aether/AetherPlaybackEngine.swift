@@ -31,6 +31,8 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private var observations: Set<AnyCancellable> = []
     /// Hears where people spoke in the audio since the current load.
     private var speech = SpeechListener()
+    /// Whether the feature asked to hear speech, until the next load.
+    private var hearing = false
     /// Hears the playing session's audio into `speech`.
     private var listening: Task<Void, Never>?
 
@@ -129,6 +131,16 @@ final class AetherPlaybackEngine: PlaybackEngine {
 
     func setSubtitleDelay(_ delay: SubtitleDelay) {
         subtitleDelay.send(delay.duration / .seconds(1))
+    }
+
+    func hearSpeech(_ hearing: Bool) {
+        Log.player.info("hearing speech \(hearing ? "on" : "off")")
+        self.hearing = hearing
+        if hearing {
+            listenForSpeech(phase: player.playbackPhase, backend: player.playbackBackend)
+        } else {
+            endListening()
+        }
     }
 
     func speechActivity(in range: Range<Duration>) -> SpeechActivity {
@@ -305,11 +317,11 @@ final class AetherPlaybackEngine: PlaybackEngine {
 
 /// Hearing speech in the playing session's audio.
 private extension AetherPlaybackEngine {
-    /// Starts hearing the playing session's audio into `speech`, once it plays. A reload of the
-    /// session, such as for another audio track, ends what the engine sends, and the next play
-    /// starts it again.
+    /// Starts hearing the playing session's audio into `speech`, while asked to and once it plays.
+    /// A reload of the session, such as for another audio track, ends what the engine sends, and
+    /// the next play starts it again.
     func listenForSpeech(phase: PlaybackPhase, backend: PlaybackBackend) {
-        guard listening == nil, phase == .playing, backend != .none else { return }
+        guard hearing, listening == nil, phase == .playing, backend != .none else { return }
         let taps = player.installAudioTap()
         guard player.audioTapHasDeliverySource else {
             Log.player.info("no audio to hear speech in")
@@ -317,10 +329,13 @@ private extension AetherPlaybackEngine {
         }
         let speech = speech
         listening = Task { [weak self] in
+            // A new tap does not follow on from audio heard before it.
+            var continuing = false
             for await tap in taps {
                 guard let channel = tap.buffer.floatChannelData?[0] else { continue }
                 let samples = Array(UnsafeBufferPointer(start: channel, count: Int(tap.buffer.frameLength)))
-                await speech.hear(samples, from: tap.sourceTime, continuing: !tap.discontinuity)
+                await speech.hear(samples, from: tap.sourceTime, continuing: continuing && !tap.discontinuity)
+                continuing = true
             }
             // A load or a stop cancelled it and cleared `listening` itself.
             guard !Task.isCancelled else { return }
@@ -328,11 +343,18 @@ private extension AetherPlaybackEngine {
         }
     }
 
-    /// Forgets the speech heard. The engine ends its tap with the session.
+    /// Stops hearing and forgets the speech heard, for a new load or a stop.
     func stopListening() {
+        hearing = false
+        endListening()
+        speech = SpeechListener()
+    }
+
+    /// Stops hearing and removes the tap, keeping what was heard.
+    func endListening() {
         listening?.cancel()
         listening = nil
-        speech = SpeechListener()
+        player.removeAudioTap()
     }
 }
 

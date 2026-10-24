@@ -210,7 +210,7 @@ private struct CueLanes: View {
             .frame(width: Metrics.timingLabelWidth, alignment: .leading)
             TimelineView(.animation(paused: !isMoving)) { context in
                 VStack(spacing: Metrics.timingLaneSpacing) {
-                    SpeechTrack(speech: session.heardSpeech?.lane ?? .empty, playhead: playhead(at: context.date))
+                    SpeechTrack(speech: session.speech.lane ?? .empty, playhead: playhead(at: context.date))
                     CueTrack(cues: cues, delay: session.subtitleDelay, target: target?.id, playhead: playhead(at: context.date))
                 }
             }

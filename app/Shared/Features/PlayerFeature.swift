@@ -46,8 +46,8 @@ enum PlayerFeature: Feature {
         var subtitleDelay = SubtitleDelay.zero
         /// The selected subtitle track's cues, for timing them.
         var cueTimeline: [TimedCue] = []
-        /// Nil while the subtitle timing strip is closed.
-        var heardSpeech: HeardSpeech?
+        /// What was heard of the speech, for the timing strip and the delay it suggests.
+        var speech = SpeechTiming()
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
         /// Where to find `segments`, from the preferences.
@@ -118,8 +118,9 @@ enum PlayerFeature: Feature {
         case addSubtitles(AddonSubtitle)
         case setSpeed(PlaybackSpeed)
         case setSubtitleDelay(SubtitleDelay)
-        /// Sends `.subtitleTiming(.heard)` with the speech in the range after `speechSampleInterval`.
-        case sampleSpeech(Range<Duration>)
+        case hearSpeech(Bool)
+        /// Sends `.subtitleTiming(.heard)` with the speech in the range, once `after` has passed.
+        case sampleSpeech(Range<Duration>, after: Duration)
         case findSegments(PlayableID, duration: Duration, from: SkipSegmentSource)
         case stop
         case report(Report)
@@ -130,7 +131,8 @@ enum PlayerFeature: Feature {
         return effect == .scanTick ? "scanTick" : nil
     }
 
-    static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
+    /// `reduce` without hearing speech, which `reduce` starts and stops around it.
+    static func reduceEvent(_ state: inout State, _ event: Event) -> [Effect] {
         switch (state, event) {
         case (_, .open(let candidate, let start, let title)):
             return open(candidate, from: start, title: title, replacing: &state)
@@ -326,8 +328,9 @@ extension PlayerFeature {
             engine.setSpeed(speed)
         case .setSubtitleDelay(let delay):
             engine.setSubtitleDelay(delay)
-        case .sampleSpeech(let range):
-            guard (try? await Task.sleep(for: speechSampleInterval)) != nil else { return }
+        case .hearSpeech(let hearing): engine.hearSpeech(hearing)
+        case .sampleSpeech(let range, let delay):
+            guard (try? await Task.sleep(for: delay)) != nil else { return }
             send(.subtitleTiming(.heard(engine.speechActivity(in: range))))
         case .findSegments(let item, let duration, let source):
             do {
