@@ -5,16 +5,22 @@ import Testing
 
 @MainActor
 private final class FakeEngine: PlaybackEngine {
-    let events: AsyncStream<PlaybackEvent>
-    let emit: AsyncStream<PlaybackEvent>.Continuation
+    let events: AsyncStream<(PlaybackLoad, PlaybackEvent)>
+    private let emit: AsyncStream<(PlaybackLoad, PlaybackEvent)>.Continuation
+    /// What each load reports once it starts.
+    private let playing: [PlaybackEvent]
     private(set) var commands: [String] = []
 
-    init() {
-        (events, emit) = AsyncStream.makeStream(of: PlaybackEvent.self)
+    init(playing: [PlaybackEvent] = []) {
+        (events, emit) = AsyncStream.makeStream(of: (PlaybackLoad, PlaybackEvent).self)
+        self.playing = playing
     }
 
-    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) {
+    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) -> PlaybackLoad {
         commands.append("load \(source.url.rawValue.lastPathComponent) from \(start) \(languages.subtitles?.primary.code ?? "-")")
+        let load = PlaybackLoad()
+        playing.forEach { emit.yield((load, $0)) }
+        return load
     }
     func setPaused(_ paused: Bool) { commands.append("paused \(paused)") }
     func seek(by offset: Duration) { commands.append("seek \(offset)") }
@@ -60,20 +66,10 @@ struct FeatureStoreTests {
     private struct TimedOut: Error {}
 
     @Test func runsEffectsAndFeedsEngineEventsBack() async throws {
-        let engine = FakeEngine()
+        let engine = FakeEngine(playing: [.duration(.seconds(60)), .loaded, .position(.seconds(2))])
         let tracker = FakeTracker()
-        let store = FeatureStore<PlayerFeature>(
-            .idle,
-            dependencies: PlayerFeature.Dependencies(
-                engine: engine, tracker: tracker, skipSegments: { _ in NoSegments() }, preferences: FixedPreferences(),
-                subtitles: OneSubtitleSource()
-            ),
-            start: [.listen]
-        )
+        let store = player(engine, tracker)
         store.send(.open(Fixture.candidate(), from: .seconds(30)))
-        engine.emit.yield(.duration(.seconds(60)))
-        engine.emit.yield(.loaded)
-        engine.emit.yield(.position(.seconds(2)))
         let session = try await store.until(timeout: .seconds(2), onTimeout: TimedOut()) { state in
             state.session.map { $0.position == .seconds(2) && !$0.addonSubtitles.isEmpty ? .done($0) : .pending } ?? .pending
         }
@@ -84,6 +80,28 @@ struct FeatureStoreTests {
         var reports = tracker.reports.stream.makeAsyncIterator()
         #expect(await reports.next() == "begin movie.mkv")
         #expect(await reports.next() == "progress 2.0 seconds")
+    }
+
+    @Test func aCandidateReplacedBeforeItLoadsNeverLoads() async throws {
+        let engine = FakeEngine(playing: [.loaded])
+        let store = player(engine, FakeTracker())
+        store.send(.open(Fixture.candidate(), from: .seconds(10)))
+        store.send(.open(Fixture.candidate(index: 1), from: .seconds(20)))
+        _ = try await store.until(timeout: .seconds(2), onTimeout: TimedOut()) { state in
+            state.session.map { $0.phase == .playing ? Probe<Void, TimedOut>.done(()) : .pending } ?? .pending
+        }
+        #expect(engine.commands == ["load movie.mkv from 20.0 seconds pol"])
+    }
+
+    private func player(_ engine: FakeEngine, _ tracker: FakeTracker) -> FeatureStore<PlayerFeature> {
+        FeatureStore<PlayerFeature>(
+            .idle,
+            dependencies: PlayerFeature.Dependencies(
+                engine: engine, tracker: tracker, skipSegments: { _ in NoSegments() }, preferences: FixedPreferences(),
+                subtitles: OneSubtitleSource()
+            ),
+            start: [.listen]
+        )
     }
 
     @Test func aNewerSearchCancelsTheOneStillWaiting() async throws {

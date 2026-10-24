@@ -15,7 +15,7 @@ struct PlayerUpNextTests {
 
     /// Playing `Fixture.candidate()` at `position` of 100 s, with the tracker's answer `next`.
     private func offering(_ next: UpNext?, at position: Duration = .seconds(50), behavior: UpNextBehavior = .defaults) -> PlayerFeature.State {
-        var session = PlayerFeature.Session(candidate: Fixture.candidate())
+        var session = PlayerFeature.Session(candidate: Fixture.candidate(), load: Fixture.load)
         session.phase = .playing
         session.position = position
         session.duration = .seconds(100)
@@ -28,9 +28,9 @@ struct PlayerUpNextTests {
     @Test func theCardShowsFromTheNoticeBeforeTheEnd() {
         var state = offering(next, at: .seconds(64))
         #expect(state.session?.upNextCard == nil)
-        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(65))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(65))))
         #expect(state.session?.upNextCard == next)
-        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(30))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(30))))
         #expect(state.session?.upNextCard == nil)
     }
 
@@ -55,7 +55,7 @@ struct PlayerUpNextTests {
         _ = PlayerFeature.reduce(&state, .titleFound(Fixture.candidate(), title(next: next)))
         #expect(state.session?.upNext == PlayerFeature.UpNextOffer.dismissed)
         #expect(PlayerFeature.reduce(&state, .upNext(.play)).isEmpty)
-        #expect(PlayerFeature.reduce(&state, .engine(.ended)) == [.report(.ended)])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .ended)) == [.report(.ended)])
         #expect(state.session?.phase == .ended)
     }
 
@@ -77,13 +77,13 @@ struct PlayerUpNextTests {
         #expect(state.session?.upNextCard == nil)
 
         state = offering(unready)
-        #expect(PlayerFeature.reduce(&state, .engine(.ended)) == [.report(.ended)])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .ended)) == [.report(.ended)])
         #expect(state.session?.upNextCard == unready)
     }
 
     @Test func theNextEpisodePlaysByItselfWhenThisOneEnds() {
         var state = offering(next)
-        #expect(PlayerFeature.reduce(&state, .engine(.ended)) == [
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .ended)) == [
             .report(.ended), .report(.movedToNext), .begin(nextStream, Fixture.source, from: .zero), .watchTitle(nextStream),
         ])
         #expect(state.session?.candidate == nextStream)
@@ -91,7 +91,7 @@ struct PlayerUpNextTests {
 
     @Test func withoutAutoplayTheEndKeepsTheCardUp() {
         var state = offering(next, behavior: UpNextBehavior(notice: .defaults, autoplay: false))
-        #expect(PlayerFeature.reduce(&state, .engine(.ended)) == [.report(.ended)])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .ended)) == [.report(.ended)])
         #expect(state.session?.phase == .ended)
         #expect(state.session?.upNextCard == next)
     }

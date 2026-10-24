@@ -36,7 +36,8 @@ struct PlayerSpeechHearingTests {
     private func opened(with tracks: [MediaTrack]) -> (PlayerFeature.State, [PlayerFeature.Effect]) {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        let effects = PlayerFeature.reduce(&state, .engine(.tracks(tracks)))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        let effects = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks(tracks)))
         return (state, effects)
     }
 
@@ -44,7 +45,7 @@ struct PlayerSpeechHearingTests {
         var (state, shown) = opened(with: [subtitles(3, "eng", selected: true)])
         #expect(Array(shown.suffix(2)) == Fixture.startsHearing)
         _ = PlayerFeature.reduce(&state, .chooseSubtitles(.off))
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([subtitles(3, "eng", selected: false)]))) == [.hearSpeech(false)])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([subtitles(3, "eng", selected: false)]))) == [.hearSpeech(false)])
         #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(.empty))).isEmpty)
     }
 
@@ -56,7 +57,7 @@ struct PlayerSpeechHearingTests {
 
     @Test func hearingStopsOnceASuggestionIsFoundAndTheStripHearsAgain() {
         var (state, _) = opened(with: [subtitles(3, "eng", selected: true)])
-        _ = PlayerFeature.reduce(&state, .engine(.cueTimeline(dialogue.cues)))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .cueTimeline(dialogue.cues)))
         #expect(PlayerFeature.reduce(&state, .subtitleTiming(.heard(dialogue.speech))) == [.hearSpeech(false)])
         #expect(state.session?.suggestion == SubtitleDelay(clamping: .milliseconds(1_400)))
         #expect(PlayerFeature.reduce(&state, .subtitleTiming(.listen)) == [.sampleSpeech(.seconds(-180) ..< .seconds(15), after: .zero), .hearSpeech(true)])
@@ -66,10 +67,10 @@ struct PlayerSpeechHearingTests {
 
     @Test func anotherSubtitleFileIsHeardAfresh() {
         var (state, _) = opened(with: [subtitles(3, "eng", selected: true), subtitles(4, "pol", selected: false)])
-        _ = PlayerFeature.reduce(&state, .engine(.cueTimeline(dialogue.cues)))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .cueTimeline(dialogue.cues)))
         _ = PlayerFeature.reduce(&state, .subtitleTiming(.heard(dialogue.speech)))
         let switched = [subtitles(3, "eng", selected: false), subtitles(4, "pol", selected: true)]
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks(switched))) == Fixture.startsHearing)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks(switched))) == Fixture.startsHearing)
         #expect(state.session?.suggestion == nil)
     }
 }

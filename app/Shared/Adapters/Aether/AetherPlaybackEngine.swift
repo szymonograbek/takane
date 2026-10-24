@@ -11,9 +11,11 @@ import SwiftUI
 /// `PlaybackEvent`s, each sent once per change. Time comes from its `clock`, which ticks without
 /// waking the engine's other observers.
 final class AetherPlaybackEngine: PlaybackEngine {
-    let events: AsyncStream<PlaybackEvent>
+    let events: AsyncStream<(PlaybackLoad, PlaybackEvent)>
 
-    private let continuation: AsyncStream<PlaybackEvent>.Continuation
+    private let continuation: AsyncStream<(PlaybackLoad, PlaybackEvent)>.Continuation
+    /// The load that events belong to: the latest, from the moment `load` is called.
+    private var currentLoad = PlaybackLoad()
     private let player: AetherEngine
     /// The load in flight. A newer load or a stop cancels it.
     private var loading: Task<Void, Never>?
@@ -36,7 +38,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
     init(muted: Bool) throws(PlaybackError) {
         // Lines arrive from the engine's own threads; `Log` queues its writes.
         EngineLog.handler = { @Sendable line in Log.player.debug(RedactedMask.engineLine(line)) }
-        (events, continuation) = AsyncStream.makeStream(of: PlaybackEvent.self)
+        (events, continuation) = AsyncStream.makeStream(of: (PlaybackLoad, PlaybackEvent).self)
         do {
             player = try AetherEngine()
         } catch {
@@ -58,8 +60,9 @@ final class AetherPlaybackEngine: PlaybackEngine {
         AetherPlayerSurface(engine: player)
     }
 
-    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) {
+    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) -> PlaybackLoad {
         loading?.cancel()
+        currentLoad = PlaybackLoad()
         reported = Reported()
         externalFiles = [:]
         subtitleDelay.send(0)
@@ -83,6 +86,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
                 Log.player.error("load failed: \(error)")
             }
         }
+        return currentLoad
     }
 
     func setPaused(_ paused: Bool) {
@@ -131,7 +135,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
     func setSpeed(_ speed: PlaybackSpeed) {
         player.setRate(Float(speed.rawValue))
         // The engine publishes no rate. The one set holds until the next source.
-        continuation.yield(.speed(speed))
+        emit(.speed(speed))
     }
 
     func setSubtitleDelay(_ delay: SubtitleDelay) {
@@ -235,7 +239,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private func phaseChanged(_ phase: PlaybackPhase) {
         switch phase {
         case .idle:
-            continuation.yield(.stopped)
+            emit(.stopped)
         case .loading, .seeking, .rebuffering, .stalled:
             send(.buffering(true), on: \.buffering)
         case .playing, .paused:
@@ -243,10 +247,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
             send(.buffering(false), on: \.buffering)
             send(.paused(phase == .paused), on: \.paused)
         case .ended:
-            continuation.yield(.ended)
+            emit(.ended)
         case .error(let message):
             Log.player.error("playback failed (\(player.errorInfo?.kind.rawValue ?? "unclassified")): \(message)")
-            continuation.yield(.failed(reason: message))
+            emit(.failed(reason: message))
         }
     }
 
@@ -270,7 +274,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
 
     private func positionChanged(_ seconds: Double) {
         if let seeking, seconds != seeking.target { return }
-        continuation.yield(.position(.seconds(seconds)))
+        emit(.position(.seconds(seconds)))
     }
 
     /// A seek begins before the clock moves to its target, so the jump never reads as watched time.
@@ -278,12 +282,12 @@ final class AetherPlaybackEngine: PlaybackEngine {
         switch seek.outcome {
         case .began:
             seeking = seek
-            continuation.yield(.seeking(to: .seconds(seek.target)))
+            emit(.seeking(to: .seconds(seek.target)))
         case .landed, .stalled:
             guard seek.id == seeking?.id else { return }
             seeking = nil
             // Where it landed, or the target a stalled seek holds the clock at.
-            continuation.yield(.position(.seconds(player.clock.currentTime)))
+            emit(.position(.seconds(player.clock.currentTime)))
         case .superseded, .rejected:
             // A newer seek's `.began` follows, or the seek ended without moving the clock.
             if seek.id == seeking?.id { seeking = nil }
@@ -296,11 +300,16 @@ final class AetherPlaybackEngine: PlaybackEngine {
         send(.videoSize(size), on: \.videoSize)
     }
 
+    /// Sends `event` as part of the current load.
+    private func emit(_ event: PlaybackEvent) {
+        continuation.yield((currentLoad, event))
+    }
+
     /// Sends `event` unless it is what this load last sent on `channel`.
     private func send(_ event: PlaybackEvent, on channel: WritableKeyPath<Reported, PlaybackEvent?>) {
         guard reported[keyPath: channel] != event else { return }
         reported[keyPath: channel] = event
-        continuation.yield(event)
+        emit(event)
     }
 }
 

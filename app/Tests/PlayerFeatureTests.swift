@@ -3,7 +3,7 @@ import Testing
 
 struct PlayerFeatureTests {
     private func playing(position: Duration = .zero, reportedSecond: Int64? = nil) -> PlayerFeature.State {
-        var session = PlayerFeature.Session(candidate: Fixture.candidate())
+        var session = PlayerFeature.Session(candidate: Fixture.candidate(), load: Fixture.load)
         session.phase = .playing
         session.position = position
         session.duration = .seconds(100)
@@ -27,36 +27,38 @@ struct PlayerFeatureTests {
 
     @Test func progressIsReportedOncePerWholeSecond() {
         var state = playing(position: .seconds(12.2), reportedSecond: 12)
-        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(12.9)))).isEmpty)
-        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(13)))) == [.report(.progress(.seconds(13), of: .seconds(100)))])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(12.9)))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(13)))) == [.report(.progress(.seconds(13), of: .seconds(100)))])
         #expect(state.session?.reportedSecond == 13)
     }
 
     @Test func progressWaitsForTheDuration() {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(1)))).isEmpty)
-        _ = PlayerFeature.reduce(&state, .engine(.duration(.seconds(60))))
-        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(1)))) == [.report(.progress(.seconds(1), of: .seconds(60)))])
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(1)))).isEmpty)
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .duration(.seconds(60))))
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(1)))) == [.report(.progress(.seconds(1), of: .seconds(60)))])
     }
 
     @Test func aSeekIsReportedAsASeekAndNotAgainAsProgress() {
         var state = playing(position: .seconds(12.2), reportedSecond: 12)
-        #expect(PlayerFeature.reduce(&state, .engine(.seeking(to: .seconds(72.5)))) == [.report(.seek(to: .seconds(72.5), of: .seconds(100)))])
-        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(72.5)))).isEmpty)
-        #expect(PlayerFeature.reduce(&state, .engine(.position(.seconds(73)))) == [.report(.progress(.seconds(73), of: .seconds(100)))])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .seeking(to: .seconds(72.5)))) == [.report(.seek(to: .seconds(72.5), of: .seconds(100)))])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(72.5)))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(73)))) == [.report(.progress(.seconds(73), of: .seconds(100)))])
     }
 
     @Test func aSeekBeforeTheDurationIsNotReported() {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(PlayerFeature.reduce(&state, .engine(.seeking(to: .seconds(30)))).isEmpty)
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .seeking(to: .seconds(30)))).isEmpty)
         #expect(state.session?.reportedSecond == nil)
     }
 
     @Test func negativePositionsClampToZero() {
         var state = playing()
-        _ = PlayerFeature.reduce(&state, .engine(.position(.seconds(-0.04))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .position(.seconds(-0.04))))
         #expect(state.session?.position == .zero)
     }
 
@@ -64,7 +66,7 @@ struct PlayerFeatureTests {
         var state = playing()
         #expect(PlayerFeature.reduce(&state, .togglePause) == [.setPaused(true)])
         #expect(state.session?.phase == .playing)
-        #expect(PlayerFeature.reduce(&state, .engine(.paused(true))) == [.report(.paused(true))])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .paused(true))) == [.report(.paused(true))])
         #expect(state.session?.phase == .paused)
         #expect(PlayerFeature.reduce(&state, .togglePause) == [.setPaused(false)])
     }
@@ -72,22 +74,23 @@ struct PlayerFeatureTests {
     @Test func aStopWhileOpeningIsThePreviousFileMakingWay() {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        _ = PlayerFeature.reduce(&state, .engine(.stopped))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .stopped))
         #expect(state.session?.phase == .opening)
-        _ = PlayerFeature.reduce(&state, .engine(.loaded))
-        _ = PlayerFeature.reduce(&state, .engine(.stopped))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .loaded))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .stopped))
         #expect(state == .idle)
     }
 
     @Test func endOfFileIsReported() {
         var state = playing()
-        #expect(PlayerFeature.reduce(&state, .engine(.ended)) == [.report(.ended)])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .ended)) == [.report(.ended)])
         #expect(state.session?.phase == .ended)
     }
 
     @Test func engineFailureKeepsTheCandidate() {
         var state = playing()
-        _ = PlayerFeature.reduce(&state, .engine(.failed(reason: "error: loading failed")))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .failed(reason: "error: loading failed")))
         #expect(state == .failed(Fixture.candidate(), .failed(reason: "error: loading failed")))
         #expect(PlayerFeature.reduce(&state, .stop) == [.stop])
         #expect(state == .idle)
@@ -97,37 +100,37 @@ struct PlayerFeatureTests {
         var state = PlayerFeature.State.idle
         #expect(PlayerFeature.reduce(&state, .togglePause).isEmpty)
         #expect(PlayerFeature.reduce(&state, .stop).isEmpty)
-        #expect(PlayerFeature.reduce(&state, .engine(.loaded)).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .loaded)).isEmpty)
         #expect(state == .idle)
     }
 
     @Test func statusLineShowsTimePhaseVideoAndDecoder() {
         var state = playing(position: .seconds(3_725))
-        _ = PlayerFeature.reduce(&state, .engine(.videoSize(VideoSize(width: 1920, height: 1080))))
-        _ = PlayerFeature.reduce(&state, .engine(.decoder("VideoToolbox HEVC (HW)")))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .videoSize(VideoSize(width: 1920, height: 1080))))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .decoder("VideoToolbox HEVC (HW)")))
         #expect(state.statusLine == "1:02:05 / 0:01:40 · playing · 1920×1080 · VideoToolbox HEVC (HW)")
     }
 
     @Test func subtitlesShowForTheSession() {
         var state = playing()
         let line = SubtitleCue.text(SubtitleText("Get busy living,\nor get busy dying."))
-        #expect(PlayerFeature.reduce(&state, .engine(.subtitles([line]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .subtitles([line]))).isEmpty)
         #expect(state.session?.subtitles == [line])
     }
 
     @Test func aNewLoadStartsWithoutSubtitles() {
         var state = playing()
-        _ = PlayerFeature.reduce(&state, .engine(.subtitles([.text(SubtitleText("Hope is a good thing."))])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .subtitles([.text(SubtitleText("Hope is a good thing."))])))
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
         #expect(state == .active(PlayerFeature.Session(candidate: Fixture.candidate())))
     }
 
     @Test func subtitlesWithoutASessionAreDropped() {
         var state = PlayerFeature.State.idle
-        #expect(PlayerFeature.reduce(&state, .engine(.subtitles([.text(SubtitleText("Brooks was here"))]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .subtitles([.text(SubtitleText("Brooks was here"))]))).isEmpty)
         #expect(state == .idle)
         state = .failed(Fixture.candidate(), .failed(reason: "refused"))
-        _ = PlayerFeature.reduce(&state, .engine(.subtitles([.text(SubtitleText("So was Red"))])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .subtitles([.text(SubtitleText("So was Red"))])))
         #expect(state == .failed(Fixture.candidate(), .failed(reason: "refused")))
     }
 }
@@ -136,7 +139,7 @@ struct PlayerTimelineTests {
     private let start = ContinuousClock.now
 
     private func playing(at position: Duration = .seconds(50), seekStep: SeekStep = .ten) -> PlayerFeature.State {
-        var session = PlayerFeature.Session(candidate: Fixture.candidate())
+        var session = PlayerFeature.Session(candidate: Fixture.candidate(), load: Fixture.load)
         session.seekStep = seekStep
         session.phase = .playing
         session.position = position
@@ -173,7 +176,7 @@ struct PlayerTimelineTests {
     }
 
     @Test func aLiveChannelNeitherJumpsNorScans() {
-        var session = PlayerFeature.Session(candidate: Fixture.candidate(item: Fixture.channel))
+        var session = PlayerFeature.Session(candidate: Fixture.candidate(item: Fixture.channel), load: Fixture.load)
         session.phase = .playing
         var state = PlayerFeature.State.active(session)
         #expect(PlayerFeature.reduce(&state, .jump(.forward)).isEmpty)
@@ -229,7 +232,7 @@ struct PlayerTimelineTests {
 
     @Test func playPauseEndsTheScan() {
         var state = scanning(.forward)
-        _ = PlayerFeature.reduce(&state, .engine(.paused(true)))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .paused(true)))
         #expect(PlayerFeature.reduce(&state, .togglePause) == [.setPaused(false)])
         #expect(state.session?.scan == nil)
     }
@@ -269,7 +272,7 @@ struct PlayerControlsTests {
     private let intro = SkipSegment(kind: .intro, range: .seconds(60)..<(.seconds(90)), fit: .matched, confidence: 1)
 
     private func playing(at position: Duration = .zero) -> PlayerFeature.State {
-        var session = PlayerFeature.Session(candidate: Fixture.candidate())
+        var session = PlayerFeature.Session(candidate: Fixture.candidate(), load: Fixture.load)
         session.phase = .playing
         session.position = position
         session.tracks = [english]
@@ -282,7 +285,7 @@ struct PlayerControlsTests {
         let remembered = TrackChoices(subtitles: .builtIn(TrackChoices.Track(number: 1, language: "eng")), speed: .normal)
         #expect(PlayerFeature.reduce(&state, .select(english.id)) == [.select(english.id), .report(.choices(remembered))])
         #expect(PlayerFeature.reduce(&state, .select(MediaTrack.ID(kind: .subtitle, number: 9))).isEmpty)
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english.selected])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english.selected])))
         #expect(PlayerFeature.reduce(&state, .select(english.id)).isEmpty)
     }
 
@@ -300,12 +303,12 @@ struct PlayerControlsTests {
             id: MediaTrack.ID(kind: .subtitle, number: 2), title: Redacted("Synced"), language: "pol", codec: "subrip",
             channelCount: nil, isForced: false, externalFile: synced.url, isSelected: true
         )
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, added])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, added])))
         #expect(state.session?.subtitleChoice == choice)
         #expect(state.session?.builtInSubtitles == [english])
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)).isEmpty)
 
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english.selected, added.unselected])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english.selected, added.unselected])))
         #expect(state.session?.subtitleChoice == .builtIn(english.id))
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(choice)) == [.select(added.id), .report(.choices(remembered))])
         #expect(PlayerFeature.reduce(&state, .chooseSubtitles(.off)) == [.turnOffSubtitles, .report(.choices(TrackChoices(speed: .normal)))])
@@ -336,24 +339,26 @@ struct PlayerControlsTests {
         var state = playing()
         #expect(PlayerFeature.reduce(&state, .setSpeed(.normal)).isEmpty)
         #expect(PlayerFeature.reduce(&state, .setSpeed(.oneAndAHalf)) == [.setSpeed(.oneAndAHalf), .report(.choices(TrackChoices(speed: .oneAndAHalf)))])
-        _ = PlayerFeature.reduce(&state, .engine(.speed(.oneAndAHalf)))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .speed(.oneAndAHalf)))
         #expect(state.session?.speed == .oneAndAHalf)
     }
 
     @Test func segmentsAreLookedUpOnceTheDurationIsKnown() {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
-        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_000)))) == [
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .duration(.seconds(3_000)))) == [
             .findSegments(Fixture.movie, duration: .seconds(3_000), from: .introDB),
         ])
-        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_001)))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .duration(.seconds(3_001)))).isEmpty)
     }
 
     @Test func segmentsComeFromTheSourceInThePreferences() {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
         _ = PlayerFeature.reduce(&state, .preferencesRead(Fixture.candidate(), Fixture.preferences(skipSegmentSource: .skipDB)))
-        #expect(PlayerFeature.reduce(&state, .engine(.duration(.seconds(3_000)))) == [
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .duration(.seconds(3_000)))) == [
             .findSegments(Fixture.movie, duration: .seconds(3_000), from: .skipDB),
         ])
     }

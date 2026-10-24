@@ -25,12 +25,13 @@ struct PlayerTrackChoicesTests {
     private func opened() -> PlayerFeature.State {
         var state = PlayerFeature.State.idle
         _ = PlayerFeature.reduce(&state, .open(Fixture.candidate()))
+        _ = PlayerFeature.reduce(&state, .loadStarted(Fixture.candidate(), Fixture.load))
         return state
     }
 
     @Test func choosingAudioRemembersEverythingPlayingNow() {
         var state = opened()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, polish, subtitles.selected])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish, subtitles.selected])))
         let remembered = TrackChoices(
             audio: TrackChoices.Track(number: 2, language: "pol"),
             subtitles: .builtIn(TrackChoices.Track(number: 3, language: "eng")),
@@ -47,22 +48,22 @@ struct PlayerTrackChoicesTests {
             speed: .oneAndAHalf
         )
         #expect(PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), remembered)).isEmpty)
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish, subtitles]))) == [
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish, subtitles]))) == [
             .select(polish.id), .select(subtitles.id), .setSpeed(.oneAndAHalf),
         ])
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish, subtitles]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish, subtitles]))).isEmpty)
     }
 
     @Test func aRememberedTrackRenumberedInAnotherEpisodeIsFoundByLanguage() {
         var state = opened()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, polish])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish])))
         let remembered = TrackChoices(audio: TrackChoices.Track(number: 7, language: "pol"))
         #expect(PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), remembered)) == [.select(polish.id)])
     }
 
     @Test func aRememberedAddonFileWaitsForItsAddon() {
         var state = opened()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english])))
         let remembered = TrackChoices(subtitles: .addon(synced.url, language: "pol"))
         #expect(PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), remembered)).isEmpty)
         let loading = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitle Sync"), subtitles: .loading)
@@ -74,16 +75,16 @@ struct PlayerTrackChoicesTests {
 
     @Test func theViewersChoiceOutranksWhatArrivesLater() {
         var state = opened()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, polish])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish])))
         _ = PlayerFeature.reduce(&state, .setSpeed(.double))
         let remembered = TrackChoices(audio: TrackChoices.Track(number: 2, language: "pol"), speed: .half)
         #expect(PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), remembered)).isEmpty)
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish]))).isEmpty)
     }
 
     @Test func theViewersChoiceCancelsAnAddonFileStillWaiting() {
         var state = opened()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, subtitles])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, subtitles])))
         _ = PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), TrackChoices(subtitles: .addon(synced.url, language: "pol"))))
         _ = PlayerFeature.reduce(&state, .chooseSubtitles(.builtIn(subtitles.id)))
         let loaded = SubtitleSource(addon: Fixture.manifest, addonName: Redacted("Subtitle Sync"), subtitles: .loaded([synced]))
@@ -92,13 +93,13 @@ struct PlayerTrackChoicesTests {
 
     @Test func withNothingRememberedTheTracksStayAsTheyStarted() {
         var state = opened()
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, polish, subtitles]))).isEmpty)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish, subtitles]))).isEmpty)
         #expect(state.session?.restore == .awaiting)
     }
 
     @Test func choicesRememberedForAnotherCandidateAreDropped() {
         var state = opened()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, polish])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polish])))
         let remembered = TrackChoices(audio: TrackChoices.Track(number: 2, language: "pol"))
         #expect(PlayerFeature.reduce(&state, .remembered(Fixture.candidate(index: 1), remembered)).isEmpty)
         #expect(state.session?.restore == .awaiting)
@@ -130,7 +131,7 @@ struct PlayerTrackChoicesTests {
 
     @Test func theFirstAddonFileInThePreferredLanguageShowsWhenTheStreamHasNone() {
         var state = openedPreferringPolish()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, subtitles])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, subtitles])))
         let found = [source(Fixture.manifest, .loaded([file("en", language: "eng"), synced, file("pl-2", language: "pol")]))]
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), found)) == [.addSubtitles(synced)])
     }
@@ -141,13 +142,13 @@ struct PlayerTrackChoicesTests {
             id: MediaTrack.ID(kind: .subtitle, number: 4), title: nil, language: "pol", codec: "subrip",
             channelCount: nil, isForced: false, externalFile: nil, isSelected: true
         )
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, polishTrack])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, polishTrack])))
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source(Fixture.manifest, .loaded([synced]))])).isEmpty)
     }
 
     @Test func aFallbackFileWaitsUntilNoAddonOffersThePreferredLanguage() {
         var state = openedPreferringPolish()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english])))
         let englishFile = file("en", language: "eng", addon: Fixture.otherManifest)
         let answering = [source(Fixture.manifest, .loading), source(Fixture.otherManifest, .loaded([englishFile]))]
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), answering)).isEmpty)
@@ -157,14 +158,14 @@ struct PlayerTrackChoicesTests {
 
     @Test func aLaterAnswerReplacesThePick() {
         var state = openedPreferringPolish()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english])))
         let untimed = file("pl-untimed", language: "pol")
         _ = PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source(Fixture.manifest, .loaded([untimed]))]))
         let added = MediaTrack(
             id: MediaTrack.ID(kind: .subtitle, number: 9), title: nil, language: "pol", codec: "subrip",
             channelCount: nil, isForced: false, externalFile: untimed.url, isSelected: true
         )
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, added]))) == Fixture.startsHearing)
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, added]))) == Fixture.startsHearing)
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source(Fixture.manifest, .loading)])).isEmpty)
         let timed = [source(Fixture.manifest, .loaded([synced, untimed]))]
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), timed)) == [.addSubtitles(synced)])
@@ -172,7 +173,7 @@ struct PlayerTrackChoicesTests {
 
     @Test func theViewersChoiceStopsThePicking() {
         var state = openedPreferringPolish()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english, subtitles])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, subtitles])))
         _ = PlayerFeature.reduce(&state, .chooseSubtitles(.builtIn(subtitles.id)))
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source(Fixture.manifest, .loaded([synced]))])).isEmpty)
     }
@@ -181,13 +182,13 @@ struct PlayerTrackChoicesTests {
         var state = openedPreferringPolish()
         let remembered = TrackChoices(subtitles: .builtIn(TrackChoices.Track(number: 3, language: "eng")))
         _ = PlayerFeature.reduce(&state, .remembered(Fixture.candidate(), remembered))
-        #expect(PlayerFeature.reduce(&state, .engine(.tracks([english, subtitles]))) == [.select(subtitles.id)])
+        #expect(PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english, subtitles]))) == [.select(subtitles.id)])
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source(Fixture.manifest, .loaded([synced]))])).isEmpty)
     }
 
     @Test func withoutSubtitleLanguagesNothingIsPicked() {
         var state = opened()
-        _ = PlayerFeature.reduce(&state, .engine(.tracks([english])))
+        _ = PlayerFeature.reduce(&state, .engine(Fixture.load, .tracks([english])))
         #expect(PlayerFeature.reduce(&state, .subtitlesFound(Fixture.candidate(), [source(Fixture.manifest, .loaded([synced]))])).isEmpty)
     }
 }

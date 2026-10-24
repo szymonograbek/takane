@@ -147,6 +147,12 @@ struct SubtitleAlignment: Hashable, Sendable {
     }
 }
 
+/// One call to `PlaybackEngine.load`. The load's events carry it, so a reader can tell them from
+/// the events of the load it replaced.
+struct PlaybackLoad: Hashable, Sendable {
+    private let id = UUID()
+}
+
 /// What a playback engine reports, in the order it happened.
 enum PlaybackEvent: Equatable, Sendable {
     case loaded
@@ -203,11 +209,12 @@ enum PlaybackError: Error, Equatable, Sendable {
 /// composition root hands it to the UI (`Services.videoSurface`).
 @MainActor
 protocol PlaybackEngine: AnyObject, Sendable {
-    /// Every event for the engine's lifetime. Iterate it from one place only.
-    var events: AsyncStream<PlaybackEvent> { get }
+    /// Every event for the engine's lifetime, with the load it belongs to. Iterate it from one place only.
+    var events: AsyncStream<(PlaybackLoad, PlaybackEvent)> { get }
 
-    /// Plays `source` from `start`, picking tracks in `languages` when the stream has them.
-    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages)
+    /// Plays `source` from `start`, picking tracks in `languages` when the stream has them. Returns
+    /// the load its events carry, which events from then on carry until the next load.
+    func load(_ source: PlaybackSource, from start: Duration, languages: TrackLanguages) -> PlaybackLoad
     func setPaused(_ paused: Bool)
     func seek(by offset: Duration)
     func seek(to position: Duration)

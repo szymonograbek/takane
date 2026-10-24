@@ -1,5 +1,20 @@
 import Foundation
 
+extension PlayerFeature {
+    /// Applies an event of the session's own load: it can fail or close the session, and its end
+    /// can move on to the next episode.
+    static func receive(_ event: PlaybackEvent, in session: Session, replacing state: inout State) -> [Effect] {
+        var session = session
+        let effects = session.apply(event)
+        switch event {
+        case .failed(let reason): state = .failed(session.candidate, .failed(reason: reason))
+        case .stopped where session.phase != .opening: state = .idle
+        default: state = .active(session)
+        }
+        return event == .ended ? effects + autoplayNext(after: session, replacing: &state) : effects
+    }
+}
+
 /// What the engine reports, kept in the session.
 extension PlayerFeature.Session {
     /// Updates the session for an engine event. A `.stopped` while opening is the previous file
