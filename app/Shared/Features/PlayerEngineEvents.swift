@@ -47,11 +47,13 @@ extension PlayerFeature.Session {
             decoder = name
         case .tracks(let tracks):
             self.tracks = tracks
-            return continueRestore() + preferredSubtitles()
+            return continueRestore() + preferredSubtitles() + keepSecondSubtitlesApart()
         case .speed(let speed):
             self.speed = speed
         case .subtitles(let cues):
             subtitles = cues
+        case .secondSubtitles(let cues):
+            secondSubtitles = cues
         case .cueTimeline(let cues):
             cueTimeline = cues
         case .chapters(let chapters):

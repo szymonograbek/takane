@@ -57,7 +57,7 @@ struct PlayerControls: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 transportButtons
                 HStack(spacing: 20) {
-                    panelButton(.subtitles)
+                    panelButton(.subtitles(.first))
                         .accessibilityIdentifier("player.subtitles")
                     panelButton(.audio)
                         .disabled(state.tracks(.audio).isEmpty)
@@ -147,72 +147,19 @@ struct PlayerControls: View {
     }
 
     private func sections(for page: PlayerPanel) -> [PanelSection] {
+        let subtitles = SubtitlePages(
+            session: session, preferredLanguages: app.preferences.state.preferences?.languages.subtitles?.inPreferenceOrder ?? []
+        )
         switch page {
-        case .subtitles:
-            let choice = session.subtitleChoice
-            let builtIn = [PanelRow.choice("Off", isSelected: choice == .off, .chooseSubtitles(.off))]
-                + session.builtInSubtitles.map { track in
-                    .choice(track.label, isSelected: choice == .builtIn(track.id), .chooseSubtitles(.builtIn(track.id)))
-                }
-            let timing = choice == .off ? [] : [PanelSection(title: nil, rows: timingRows)]
-            guard !session.addonSubtitles.isEmpty || !timing.isEmpty else { return [PanelSection(title: nil, rows: builtIn)] }
-            let addons = session.addonSubtitles.isEmpty ? [] : [
-                PanelSection(title: "Add-ons", rows: session.addonSubtitles.map { addonRow($0, choice: choice) }),
-            ]
-            return timing + [PanelSection(title: "Built-in", rows: builtIn)] + addons
-        case .addonSubtitles(let addon):
-            let files = session.addonSubtitles.first { $0.addon == addon }?.subtitles.value ?? []
-            return languageGroups(files).map { group in
-                let name = languageName(group.language)
-                return PanelSection(title: name, rows: group.files.enumerated().map { index, file in
-                    .choice(
-                        file.label?.rawValue ?? "\(name) \(index + 1)",
-                        isSelected: session.subtitleChoice == .addon(file.id), .chooseSubtitles(.addon(file.id))
-                    )
-                })
-            }
+        case .subtitles(let line):
+            return subtitles.sections(for: line)
+        case .addonSubtitles(let addon, let line):
+            return subtitles.sections(for: addon, as: line)
         case .audio:
             return [PanelSection(title: nil, rows: state.tracks(.audio).map { .choice($0.label, isSelected: $0.isSelected, .select($0.id)) })]
         case .speed:
             return [PanelSection(title: nil, rows: PlaybackSpeed.allCases.map { .choice($0.label, isSelected: $0 == session.speed, .setSpeed($0)) })]
         }
-    }
-
-    /// Timing, reading the delay, and Reset Timing while the subtitles are moved.
-    private var timingRows: [PanelRow] {
-        let delay = session.subtitleDelay
-        return [.timing(value: delay.label)] + (delay == .zero ? [] : [.choice("Reset Timing", isSelected: false, .subtitleTiming(.reset))])
-    }
-
-    /// An add-on's files open on their own page; until it has some, the row says why not.
-    private func addonRow(_ source: SubtitleSource, choice: PlayerFeature.SubtitleChoice) -> PanelRow {
-        switch source.subtitles {
-        case .loading: return .note(source.addonName.rawValue, detail: "Loading…")
-        case .failed: return .note(source.addonName.rawValue, detail: "Unavailable")
-        case .loaded(let files) where files.isEmpty: return .note(source.addonName.rawValue, detail: "None Found")
-        case .loaded:
-            let isChosen = if case .addon(let id) = choice { id.addon == source.addon } else { false }
-            return .link(source.addonName.rawValue, isSelected: isChosen, opens: .addonSubtitles(source.addon))
-        }
-    }
-
-    /// Files grouped by language in the add-on's order, the preferred languages first.
-    private func languageGroups(_ files: [AddonSubtitle]) -> [(language: String, files: [AddonSubtitle])] {
-        var groups: [(language: String, files: [AddonSubtitle])] = []
-        for file in files {
-            if let index = groups.firstIndex(where: { $0.language == file.language }) {
-                groups[index].files.append(file)
-            } else {
-                groups.append((file.language, [file]))
-            }
-        }
-        let preferred = app.preferences.state.preferences?.languages.subtitles?.inPreferenceOrder ?? []
-        for language in preferred.reversed() {
-            if let index = groups.firstIndex(where: { Language($0.language) == language }) {
-                groups.insert(groups.remove(at: index), at: 0)
-            }
-        }
-        return groups
     }
 }
 
@@ -338,7 +285,7 @@ extension MediaTrack {
 }
 
 /// "English" for `eng` or `en`, or the code itself when the system does not know it.
-private func languageName(_ code: String) -> String {
+func languageName(_ code: String) -> String {
     Locale.current.localizedString(forLanguageCode: code) ?? code
 }
 

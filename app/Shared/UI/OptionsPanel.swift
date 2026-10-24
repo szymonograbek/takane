@@ -2,9 +2,10 @@ import SwiftUI
 
 /// A page of choices a transport-bar button opens.
 enum PlayerPanel: Hashable {
-    case subtitles
-    /// One add-on's subtitle files, opened from the subtitles page.
-    case addonSubtitles(ManifestURL)
+    /// The first subtitles, from the transport bar, or the second, from the first's page.
+    case subtitles(PlayerFeature.SubtitleLine)
+    /// One add-on's subtitle files, opened from that line's subtitles page.
+    case addonSubtitles(ManifestURL, PlayerFeature.SubtitleLine)
     case audio, speed
 
     /// The transport-bar button this page belongs to, where focus goes back when a choice is made.
@@ -18,7 +19,11 @@ enum PlayerPanel: Hashable {
 
     /// The page Menu goes back to, or nil when Menu closes the panel.
     var parent: PlayerPanel? {
-        if case .addonSubtitles = self { .subtitles } else { nil }
+        switch self {
+        case .subtitles(.first), .audio, .speed: nil
+        case .subtitles(.second): .subtitles(.first)
+        case .addonSubtitles(_, let line): .subtitles(line)
+        }
     }
 
     var title: String {
@@ -46,8 +51,9 @@ struct PanelSection {
 enum PanelRow {
     /// Sends the event and closes the panel.
     case choice(String, isSelected: Bool, PlayerFeature.Event)
-    /// Opens another page, checked when the current choice is on it.
-    case link(String, isSelected: Bool, opens: PlayerPanel)
+    /// Opens another page, checked when the current choice is on it, and naming the choice made
+    /// there as its `value`.
+    case link(String, isSelected: Bool, value: String? = nil, opens: PlayerPanel)
     /// Says why there is nothing to choose, such as an add-on still answering.
     case note(String, detail: String)
     /// Opens the subtitle timing strip; `value` is the delay in words.
@@ -55,7 +61,7 @@ enum PanelRow {
 
     var isSelected: Bool {
         switch self {
-        case .choice(_, let isSelected, _), .link(_, let isSelected, _): isSelected
+        case .choice(_, let isSelected, _), .link(_, let isSelected, _, _): isSelected
         case .note, .timing: false
         }
     }
@@ -64,7 +70,7 @@ enum PanelRow {
     func focus(at index: Int) -> PlayerFocus? {
         switch self {
         case .choice, .timing: .option(index)
-        case .link(_, _, let page): .link(page)
+        case .link(_, _, _, let page): .link(page)
         case .note: nil
         }
     }
@@ -105,15 +111,16 @@ struct OptionsPanel: View {
             Button { choose(event) } label: { CheckedLabel(title: label, isChecked: isSelected) }
                 .focused(focus, equals: .option(index))
                 .accessibilityIdentifier("player.option")
-        case .link(let label, let isSelected, let page):
+        case .link(let label, let isSelected, let value, let page):
             Button { open(page) } label: {
                 HStack {
                     CheckedLabel(title: label, isChecked: isSelected)
+                    if let value { Text(value).foregroundStyle(.secondary).lineLimit(1) }
                     Image(systemName: "chevron.right").foregroundStyle(.secondary)
                 }
             }
             .focused(focus, equals: .link(page))
-            .accessibilityIdentifier("player.option")
+            .accessibilityIdentifier(page == .subtitles(.second) ? "player.subtitles.second" : "player.option")
         case .timing(let value):
             Button(action: openTiming) {
                 HStack {

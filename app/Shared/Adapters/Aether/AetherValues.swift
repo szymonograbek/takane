@@ -14,9 +14,14 @@ extension MediaTrack {
             channelCount: kind == .audio && track.channels > 0 ? track.channels : nil,
             isForced: track.isForced,
             externalFile: file,
-            isSelected: track.id == selected
+            isSelected: track.id == selected,
+            isImageBased: kind == .subtitle && Self.imageCodecs.contains { track.codec.lowercased().contains($0) }
         )
     }
+
+    /// Picture subtitle codecs by part of their name, as the engine's own `isBitmapSubtitleCodec`,
+    /// which is not public, tells them apart.
+    private static let imageCodecs = ["pgs", "hdmv", "dvb_sub", "dvbsub", "dvd_sub", "dvdsub", "vobsub", "xsub"]
 
     /// The stream's own title. The engine names an untitled track after its language or number and
     /// its codec, which the track menu shows already.
@@ -27,6 +32,15 @@ extension MediaTrack {
 }
 
 extension SubtitleCue {
+    /// `cue` as drawn on a video of `video`'s shape.
+    init(_ cue: AetherEngine::SubtitleCue, on video: VideoSize?) {
+        switch cue.body {
+        case .image(let image): self.init(image, on: video)
+        case .text(let plain): self = .text(SubtitleText(runs: [SubtitleTextRun(text: plain, color: nil)], placement: cue.placement))
+        case .richText(let runs): self = .text(SubtitleText(runs: runs, placement: cue.placement))
+        }
+    }
+
     /// `image` placed on a video of `video`'s shape. The engine places a bitmap on its subtitle
     /// canvas, which a cropped rip can make taller than the video, so the canvas is fitted to the
     /// video's width and centered on it.
@@ -103,5 +117,12 @@ extension SubtitlePlacement {
         let alignment = placement.alignment.flatMap(SubtitleAlignment.init(numpad:))
         guard alignment != nil || placement.position != nil else { return nil }
         self.init(alignment: alignment ?? .bottomCenter, position: placement.position)
+    }
+}
+
+extension AetherEngine::SubtitleCue {
+    /// Whether the cue is on screen at `time`, in source seconds.
+    func isShown(at time: Double) -> Bool {
+        startTime <= time && time < endTime
     }
 }

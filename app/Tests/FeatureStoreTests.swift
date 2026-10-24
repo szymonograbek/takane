@@ -24,6 +24,11 @@ private final class FakeEngine: PlaybackEngine {
     func addSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String) {
         commands.append("add \(file.rawValue.lastPathComponent)")
     }
+    func selectSecond(_ track: MediaTrack.ID) { commands.append("second \(track.number)") }
+    func addSecondSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String) {
+        commands.append("add second \(file.rawValue.lastPathComponent)")
+    }
+    func turnOffSecondSubtitles() { commands.append("second off") }
     func setSpeed(_ speed: PlaybackSpeed) { commands.append("speed \(speed.rawValue)") }
     func setSubtitleDelay(_ delay: SubtitleDelay) { commands.append("subtitle delay \(delay.duration)") }
     func hearSpeech(_ hearing: Bool) { commands.append("hear speech \(hearing)") }

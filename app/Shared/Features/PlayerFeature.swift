@@ -18,6 +18,11 @@ enum PlayerFeature: Feature {
         case addon(AddonSubtitle.ID)
     }
 
+    /// The subtitles, or the second ones shown above them.
+    enum SubtitleLine: Hashable, Sendable {
+        case first, second
+    }
+
     enum Phase: String, Sendable {
         case opening, playing, paused, ended
     }
@@ -43,6 +48,11 @@ enum PlayerFeature: Feature {
         var seekStep = SeekStep.defaults
         /// The subtitles visible now.
         var subtitles: [SubtitleCue] = []
+        /// What shows above the subtitles, such as a language the viewer is learning. Never the
+        /// same as `subtitleChoice`.
+        var secondSubtitleChoice = SubtitleChoice.off
+        /// The second subtitles visible now.
+        var secondSubtitles: [SubtitleCue] = []
         /// How far the subtitles are moved from their file's times.
         var subtitleDelay = SubtitleDelay.zero
         /// The selected subtitle track's cues, for timing them.
@@ -82,7 +92,7 @@ enum PlayerFeature: Feature {
         case jump(Direction)
         case timeline(TimelineEvent)
         case select(MediaTrack.ID)
-        case chooseSubtitles(SubtitleChoice)
+        case chooseSubtitles(SubtitleChoice, for: SubtitleLine = .first)
         case setSpeed(PlaybackSpeed)
         case subtitleTiming(SubtitleTimingEvent)
         case skip(SkipSegment)
@@ -123,6 +133,9 @@ enum PlayerFeature: Feature {
         case select(MediaTrack.ID)
         case turnOffSubtitles
         case addSubtitles(AddonSubtitle)
+        case selectSecond(MediaTrack.ID)
+        case addSecondSubtitles(AddonSubtitle)
+        case turnOffSecondSubtitles
         case setSpeed(PlaybackSpeed)
         case setSubtitleDelay(SubtitleDelay)
         case hearSpeech(Bool)
@@ -157,8 +170,8 @@ enum PlayerFeature: Feature {
         case (.active(let session), .select(let track)):
             return update(&state, session) { $0.select(track) }
 
-        case (.active(let session), .chooseSubtitles(let choice)):
-            return update(&state, session) { $0.chooseSubtitles(choice) }
+        case (.active(let session), .chooseSubtitles(let choice, let line)):
+            return update(&state, session) { $0.choose(choice, for: line) }
 
         case (.active(let session), .setSpeed(let speed)):
             return update(&state, session) { $0.setSpeed(speed) }
@@ -278,7 +291,13 @@ extension PlayerFeature {
         case .turnOffSubtitles:
             engine.turnOffSubtitles()
         case .addSubtitles(let subtitle):
-            engine.addSubtitles(subtitle.url, from: subtitle.source, title: subtitle.label?.rawValue ?? subtitle.language, language: subtitle.language)
+            engine.addSubtitles(subtitle.url, from: subtitle.source, title: subtitle.title, language: subtitle.language)
+        case .selectSecond(let track):
+            engine.selectSecond(track)
+        case .addSecondSubtitles(let subtitle):
+            engine.addSecondSubtitles(subtitle.url, from: subtitle.source, title: subtitle.title, language: subtitle.language)
+        case .turnOffSecondSubtitles:
+            engine.turnOffSecondSubtitles()
         case .setSpeed(let speed):
             engine.setSpeed(speed)
         case .setSubtitleDelay(let delay):

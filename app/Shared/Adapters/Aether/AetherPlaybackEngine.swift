@@ -112,13 +112,20 @@ final class AetherPlaybackEngine: PlaybackEngine {
     }
 
     func addSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String) {
-        Log.player.info("add subtitles \(file) \(language) headers=\(source.headers.keys.sorted())")
-        // Headers of their own, never the stream's: those can be another server's credentials.
-        let track = player.addExternalSubtitleTrack(
-            ExternalSubtitleTrack(url: source.url.rawValue, name: title, language: language, httpHeaders: source.headers)
-        )
-        externalFiles[track.id] = file
-        player.selectSubtitleTrack(index: track.id)
+        player.selectSubtitleTrack(index: add(file, from: source, title: title, language: language))
+    }
+
+    func selectSecond(_ track: MediaTrack.ID) {
+        player.selectSecondarySubtitleTrack(index: track.number)
+    }
+
+    func addSecondSubtitles(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String) {
+        // As a track rather than a bare file, so a reload for another audio track keeps its headers.
+        player.selectSecondarySubtitleTrack(index: add(file, from: source, title: title, language: language))
+    }
+
+    func turnOffSecondSubtitles() {
+        player.clearSecondarySubtitle()
     }
 
     func setSpeed(_ speed: PlaybackSpeed) {
@@ -216,23 +223,13 @@ final class AetherPlaybackEngine: PlaybackEngine {
             .store(in: &observations)
         // Cues arrive ahead of time, stamped with source PTS; `sourceTime` is the PTS on screen.
         Publishers.CombineLatest3(player.$subtitleCues, player.clock.$sourceTime, subtitleDelay)
-            .map { cues, time, delay in
-                let shown = time - delay
-                return cues.filter { $0.startTime <= shown && shown < $0.endTime }
-            }
+            .map { cues, time, delay in cues.filter { $0.isShown(at: time - delay) } }
             .sink { [weak self] visible in
                 guard let self else { return }
-                let video = reported.video
-                let cues = visible.map { cue -> SubtitleCue in
-                    switch cue.body {
-                    case .image(let image): SubtitleCue(image, on: video)
-                    case .text(let plain): .text(SubtitleText(runs: [SubtitleTextRun(text: plain, color: nil)], placement: cue.placement))
-                    case .richText(let runs): .text(SubtitleText(runs: runs, placement: cue.placement))
-                    }
-                }
-                send(.subtitles(cues), on: \.subtitles)
+                send(.subtitles(visible.map { SubtitleCue($0, on: self.reported.video) }), on: \.subtitles)
             }
             .store(in: &observations)
+        observeSecondSubtitles()
     }
 
     private func phaseChanged(_ phase: PlaybackPhase) {
@@ -308,6 +305,28 @@ final class AetherPlaybackEngine: PlaybackEngine {
 }
 
 private extension AetherPlaybackEngine {
+    /// Adds `file`, fetched from `source`, as a subtitle track, and returns the engine's id for it.
+    func add(_ file: Redacted<URL>, from source: PlaybackSource, title: String, language: String) -> Int {
+        Log.player.info("add subtitles \(file) \(language) headers=\(source.headers.keys.sorted())")
+        // Headers of their own, never the stream's: those can be another server's credentials.
+        let track = player.addExternalSubtitleTrack(
+            ExternalSubtitleTrack(url: source.url.rawValue, name: title, language: language, httpHeaders: source.headers)
+        )
+        externalFiles[track.id] = file
+        return track.id
+    }
+
+    /// The second subtitles keep their file's timing: the delay moves the first only.
+    func observeSecondSubtitles() {
+        player.$secondarySubtitleCues.combineLatest(player.clock.$sourceTime)
+            .map { cues, time in cues.filter { $0.isShown(at: time) } }
+            .sink { [weak self] visible in
+                guard let self else { return }
+                send(.secondSubtitles(visible.map { SubtitleCue($0, on: self.reported.video) }), on: \.secondSubtitles)
+            }
+            .store(in: &observations)
+    }
+
     /// The engine's container chapters start where its `seek(to:)` lands, which is the position's
     /// axis, so they need no `sourceClock`.
     func observeChapters() {
@@ -328,6 +347,7 @@ private struct Reported {
     var decoder: PlaybackEvent?
     var tracks: PlaybackEvent?
     var subtitles: PlaybackEvent?
+    var secondSubtitles: PlaybackEvent?
     var cueTimeline: PlaybackEvent?
     var chapters: PlaybackEvent?
 
