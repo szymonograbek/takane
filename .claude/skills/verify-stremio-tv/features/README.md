@@ -5,7 +5,7 @@ The maintained source for verifying what a user can do in Takane. Read this inde
 ## Baseline preconditions
 
 - `$T launch` succeeded and `$T doctor` passes: tvOS app in the "Stremio Apple TV" simulator on the Welcome screen, fresh core profile `verify-<run-id>`.
-- A fresh profile has the six default add-ons (Cinemeta, YouTube, WatchHub, Public Domain Movies, OpenSubtitles v3, Local Files) and an empty continue-watching list.
+- A fresh profile has the seven default add-ons (Open Movies, Cinemeta, YouTube, WatchHub, Public Domain Movies, OpenSubtitles v3, Local Files) and an empty continue-watching list. Open Movies' Free Movies row is the first add-on row on Home.
 - `STREMIO_SMOKE_ADDON_URL` is set or present in `.env.smoke` (the user's AIOStreams debrid add-on).
 - Never drive an app instance this run did not launch.
 
@@ -15,6 +15,7 @@ The maintained source for verifying what a user can do in Takane. Read this inde
 - Move focus with `$T focus <id> <direction>`, then `$T select`. Never tap by coordinates.
 - Read state with `$T text <id>` and `$T wait-text "<label>"`, which use raw snapshots.
 - Treat ids and labels as literal.
+- Each tab keeps its pushed screens while another tab is shown. Before a recipe that starts from a tab's root, press Menu until `$T focused` prints that root's ids, or the presses land on a screen left open earlier.
 - `$T cleanup` at the end of every run, passed or failed.
 
 ## Proof and skip reporting
@@ -32,7 +33,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Onboarding and sign-in](./onboarding.md) covers Welcome, the link code, email sign-in errors and continuing without an account.
 - [Install an add-on](./install-addon.md) covers Settings › Add-ons: install by manifest URL, remove, persistence.
 - [Find streams](./find-streams.md) covers Home, Search and Details leading to the stream list.
-- [Playback](./playback.md) covers the player: controls, speed, subtitles, audio, seek, timeline scrubbing and stop.
+- [Playback](./playback.md) covers the player: controls, speed, subtitles and their timing, second subtitles, audio, seek, timeline scrubbing, chapter and skip markers, the Info, Episodes and Chapters tabs, live channels and stop.
 - [Continue watching](./continue-watching.md) covers the Home row and resuming from the saved position.
 - [Playback settings](./playback-settings.md) covers Settings › Playback (audio languages, skip interval, Up Next card, autoplay, hide spoilers) and Settings › Subtitles (languages, style, reset).
 - [Media sources](./sources.md) covers Settings › Sources: adding a Jellyfin server or WebDAV folder, sign-in errors, renaming, removing and persistence.
