@@ -40,7 +40,7 @@ targetTemplates:
     info:
       properties:
         CFBundleDisplayName: Takane
-        CFBundleShortVersionString: "1.4.0" # x-release-please-version
+        CFBundleShortVersionString: "1.5.0" # x-release-please-version
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.entertainment
         NSLocalNetworkUsageDescription: Takane shares its logs with devices on your network when you ask it to.
