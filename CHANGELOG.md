@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/szymonograbek/takane/compare/v1.5.0...v1.5.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **features:** drop engine events from a replaced load ([#81](https://github.com/szymonograbek/takane/issues/81)) ([188c259](https://github.com/szymonograbek/takane/commit/188c259ef0a6844c1786711c97721c10f42cea80))
+
 ## [1.5.0](https://github.com/szymonograbek/takane/compare/v1.4.0...v1.5.0) (2026-10-24)
 
 
