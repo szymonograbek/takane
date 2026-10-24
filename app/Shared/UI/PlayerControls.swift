@@ -51,18 +51,21 @@ struct PlayerControls: View {
                 }
                 .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             }
+            // The tabs on the left, playback in the middle of the screen and the tracks on the right.
             HStack(spacing: 20) {
-                transportButtons
-                Spacer()
                 tabs.names
-                Spacer()
-                panelButton(.subtitles)
-                    .accessibilityIdentifier("player.subtitles")
-                panelButton(.audio)
-                    .disabled(state.tracks(.audio).isEmpty)
-                    .accessibilityIdentifier("player.audio")
-                panelButton(.speed)
-                    .accessibilityIdentifier("player.speed")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                transportButtons
+                HStack(spacing: 20) {
+                    panelButton(.subtitles)
+                        .accessibilityIdentifier("player.subtitles")
+                    panelButton(.audio)
+                        .disabled(state.tracks(.audio).isEmpty)
+                        .accessibilityIdentifier("player.audio")
+                    panelButton(.speed)
+                        .accessibilityIdentifier("player.speed")
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             // An open panel keeps focus among its rows until a choice is made or Menu closes it.
             .disabled(panel != nil)
