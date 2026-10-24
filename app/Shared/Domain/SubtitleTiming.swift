@@ -45,3 +45,37 @@ struct TimedCue: Identifiable, Hashable, Sendable {
     /// Its first line, a line of the title's dialogue. Empty for a bitmap subtitle.
     let text: Redacted<String>
 }
+
+/// Where people speak in a stretch of the stream, a `frameDuration` at a time.
+struct SpeechActivity: Hashable, Sendable {
+    enum Frame: Hashable, Sendable {
+        /// The audio there has not played since the stream loaded, or not recently.
+        case unheard
+        case quiet
+        case speech
+    }
+
+    static let frameDuration = Duration.milliseconds(100)
+    static let empty = SpeechActivity(firstFrame: 0, frames: [])
+
+    /// The number of the first frame, counted in `frameDuration`s from position zero.
+    let firstFrame: Int
+    let frames: [Frame]
+
+    /// The stretch covered, timed like the playback position.
+    var range: Range<Duration> {
+        Self.frameDuration * firstFrame ..< Self.frameDuration * (firstFrame + frames.count)
+    }
+
+    /// The frames that overlap `range`.
+    func slice(_ range: Range<Duration>) -> SpeechActivity {
+        let lower = min(max(Self.frame(containing: range.lowerBound), firstFrame), firstFrame + frames.count)
+        let upper = min(max(Self.frame(containing: range.upperBound - .nanoseconds(1)) + 1, lower), firstFrame + frames.count)
+        return SpeechActivity(firstFrame: lower, frames: Array(frames[(lower - firstFrame) ..< (upper - firstFrame)]))
+    }
+
+    /// The number of the frame that holds `time`.
+    static func frame(containing time: Duration) -> Int {
+        Int((time / frameDuration).rounded(.down))
+    }
+}

@@ -19,6 +19,9 @@ enum Palette {
     static let secondary = Color(cream.opacity(0.6), increasedContrast: .white.opacity(0.85))
     /// The box behind the subtitle timing lanes, letting the video show through.
     static let lane = Color(cream.opacity(0.08), increasedContrast: Color(red: 0.08, green: 0.05, blue: 0.05).opacity(0.9))
+    /// Where people speak in the timing strip's speech lane, and where the audio played quiet.
+    static let speech = Color(cream.opacity(0.55), increasedContrast: .white.opacity(0.85))
+    static let heard = Color(cream.opacity(0.2), increasedContrast: .white.opacity(0.45))
     /// Dims the video behind the controls and the timing strip, from clear at the top to this.
     static let scrim = Color.black.opacity(0.85)
     /// The border of a cue block in the timing strip other than the line select starts.
@@ -127,6 +130,8 @@ enum Metrics {
     static let cueBorder: CGFloat = 2
     static let playheadWidth: CGFloat = 4
     static let playheadGlowRadius: CGFloat = 8
+    /// The line in the speech lane where the audio played without speech.
+    static let heardLineHeight: CGFloat = 4
     #else
     static let wideCardWidth: CGFloat = 280
     static let shelfSpacing: CGFloat = 16
@@ -161,6 +166,7 @@ enum Metrics {
     static let cueBorder: CGFloat = 1
     static let playheadWidth: CGFloat = 2
     static let playheadGlowRadius: CGFloat = 4
+    static let heardLineHeight: CGFloat = 2
     #endif
 
     /// The title column beside the stream list.
@@ -169,6 +175,8 @@ enum Metrics {
     static let scrimHeight: CGFloat = 520
     /// The dashes of a cue's outline at its file's time: drawn, then skipped.
     static let cueOutlineDash: [CGFloat] = [8, 6]
+    /// The dots of the speech lane where the audio has not played yet: a round dot, then a gap.
+    static let unheardDash: [CGFloat] = [0, 10]
     /// The share of the timing lane's width over which it fades in at each end.
     static let timingLaneFade: CGFloat = 0.08
 

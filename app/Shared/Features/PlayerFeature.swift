@@ -46,6 +46,8 @@ enum PlayerFeature: Feature {
         var subtitleDelay = SubtitleDelay.zero
         /// The selected subtitle track's cues, for timing them.
         var cueTimeline: [TimedCue] = []
+        /// What was heard of the speech, for the timing strip and the delay it suggests.
+        var speech = SpeechTiming()
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
         /// Where to find `segments`, from the preferences.
@@ -116,16 +118,21 @@ enum PlayerFeature: Feature {
         case addSubtitles(AddonSubtitle)
         case setSpeed(PlaybackSpeed)
         case setSubtitleDelay(SubtitleDelay)
+        case hearSpeech(Bool)
+        /// Sends `.subtitleTiming(.heard)` with the speech in the range, once `after` has passed.
+        case sampleSpeech(Range<Duration>, after: Duration)
         case findSegments(PlayableID, duration: Duration, from: SkipSegmentSource)
         case stop
         case report(Report)
     }
 
     static func key(_ effect: Effect) -> AnyHashable? {
-        effect == .scanTick ? "scanTick" : nil
+        if case .sampleSpeech = effect { return "sampleSpeech" }
+        return effect == .scanTick ? "scanTick" : nil
     }
 
-    static func reduce(_ state: inout State, _ event: Event) -> [Effect] {
+    /// `reduce` without hearing speech, which `reduce` starts and stops around it.
+    static func reduceEvent(_ state: inout State, _ event: Event) -> [Effect] {
         switch (state, event) {
         case (_, .open(let candidate, let start, let title)):
             return open(candidate, from: start, title: title, replacing: &state)
@@ -321,6 +328,10 @@ extension PlayerFeature {
             engine.setSpeed(speed)
         case .setSubtitleDelay(let delay):
             engine.setSubtitleDelay(delay)
+        case .hearSpeech(let hearing): engine.hearSpeech(hearing)
+        case .sampleSpeech(let range, let delay):
+            guard (try? await Task.sleep(for: delay)) != nil else { return }
+            send(.subtitleTiming(.heard(engine.speechActivity(in: range))))
         case .findSegments(let item, let duration, let source):
             do {
                 let found = try await dependencies.skipSegments(source).segments(for: item, duration: duration)
@@ -331,18 +342,20 @@ extension PlayerFeature {
         case .stop:
             engine.stop()
             tracker.stop()
-        case .report(.progress(let position, let duration)):
-            tracker.progress(position, of: duration)
-        case .report(.seek(let position, let duration)):
-            tracker.seek(to: position, of: duration)
-        case .report(.paused(let paused)):
-            tracker.paused(paused)
-        case .report(.ended):
-            tracker.ended()
-        case .report(.choices(let choices)):
-            tracker.remember(choices)
-        case .report(.movedToNext):
-            tracker.movedToNext()
+        case .report(let report):
+            deliver(report, to: tracker)
+        }
+    }
+
+    @MainActor
+    private static func deliver(_ report: Report, to tracker: any PlaybackTracker) {
+        switch report {
+        case .progress(let position, let duration): tracker.progress(position, of: duration)
+        case .seek(let position, let duration): tracker.seek(to: position, of: duration)
+        case .paused(let paused): tracker.paused(paused)
+        case .ended: tracker.ended()
+        case .choices(let choices): tracker.remember(choices)
+        case .movedToNext: tracker.movedToNext()
         }
     }
 }

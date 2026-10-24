@@ -288,8 +288,8 @@ private struct TimelineBar: View {
 struct RemotePresses: UIViewRepresentable {
     /// Left or right going down (true) or up (false).
     let arrow: (Bool, PlayerFeature.Direction) -> Void
-    /// Up or down pressed. Without it they move focus.
-    var vertical: (() -> Void)?
+    /// Up or down pressed, by which. Without it they move focus.
+    var vertical: ((UIPress.PressType) -> Void)?
     let select: () -> Void
 
     func makeUIView(context: Context) -> PressView { PressView() }
@@ -302,7 +302,7 @@ struct RemotePresses: UIViewRepresentable {
 
     final class PressView: UIView {
         var arrow: (Bool, PlayerFeature.Direction) -> Void = { _, _ in }
-        var vertical: (() -> Void)?
+        var vertical: ((UIPress.PressType) -> Void)?
         var select: () -> Void = {}
 
         override var canBecomeFocused: Bool { true }
@@ -325,7 +325,7 @@ struct RemotePresses: UIViewRepresentable {
             case .rightArrow: arrow(isDown, .forward)
             case .upArrow, .downArrow:
                 guard let vertical else { return false }
-                if isDown { vertical() }
+                if isDown { vertical(press.type) }
             case .select: if !isDown { select() }
             default: return false
             }

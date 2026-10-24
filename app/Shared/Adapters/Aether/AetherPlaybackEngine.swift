@@ -29,6 +29,8 @@ final class AetherPlaybackEngine: PlaybackEngine {
     /// How far the clock the cues are stamped on runs ahead of the position reported.
     private var sourceClock = SourceClock()
     private var observations: Set<AnyCancellable> = []
+    /// Hears where people spoke in the audio since the current load.
+    private let speech: SpeechHearing
 
     /// `muted` plays every stream silently, for automated runs.
     init(muted: Bool) throws(PlaybackError) {
@@ -40,6 +42,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
         } catch {
             throw .failed(reason: "\(error)")
         }
+        speech = SpeechHearing(player: player)
         if muted {
             // The engine remembers it and applies it to every session it builds later.
             player.volume = 0
@@ -60,6 +63,7 @@ final class AetherPlaybackEngine: PlaybackEngine {
         externalFiles = [:]
         subtitleDelay.send(0)
         sourceClock = SourceClock()
+        speech.reset()
         let url = source.url.rawValue
         let startPosition = start > .zero ? start / .seconds(1) : nil
         let options = LoadOptions(
@@ -126,9 +130,18 @@ final class AetherPlaybackEngine: PlaybackEngine {
         subtitleDelay.send(delay.duration / .seconds(1))
     }
 
+    func hearSpeech(_ hearing: Bool) {
+        speech.hear(hearing)
+    }
+
+    func speechActivity(in range: Range<Duration>) -> SpeechActivity {
+        speech.history.activity(in: range, on: sourceClock)
+    }
+
     func stop() {
         loading?.cancel()
         loading = nil
+        speech.reset()
         player.stop()
     }
 
@@ -160,6 +173,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
     private func observe() {
         player.$playbackPhase.removeDuplicates()
             .sink { [weak self] phase in self?.phaseChanged(phase) }
+            .store(in: &observations)
+        // Published before they change: read once both have.
+        player.$playbackPhase.combineLatest(player.$playbackBackend).receive(on: DispatchQueue.main)
+            .sink { [weak self] phase, backend in self?.speech.sessionChanged(phase: phase, backend: backend) }
             .store(in: &observations)
         player.clock.$currentTime.removeDuplicates()
             .sink { [weak self] seconds in self?.positionChanged(seconds) }
