@@ -63,6 +63,17 @@ extension TimedCue {
     }
 }
 
+extension Chapter {
+    /// `chapter` as the engine lists it, whose `id` is its place in order from zero. Release files
+    /// often title chapters with their start time ("00:21:04.000"), which names nothing, so those
+    /// get the engine's own name for an untitled chapter.
+    init(_ chapter: ChapterInfo) {
+        let isTime = chapter.name.allSatisfy { $0.isNumber || $0 == ":" || $0 == "." }
+        let title = isTime ? "Chapter \(chapter.id + 1)" : chapter.name
+        self.init(id: ID(number: chapter.id), title: Redacted(title), start: .seconds(chapter.startSeconds))
+    }
+}
+
 extension SubtitleText {
     /// The runs of a text cue, placed where the cue asks.
     init(runs: [SubtitleTextRun], placement: SubtitleTextPlacement?) {

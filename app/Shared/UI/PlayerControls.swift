@@ -17,10 +17,12 @@ struct PlayerControls: View {
             Spacer()
             Text(session.title.rawValue.isEmpty ? session.candidate.name?.rawValue ?? "" : session.title.rawValue)
                 .font(.title3).bold()
+                .opacity(chapterReplacesTitle ? 0 : 1)
+                .animation(.easeOut(duration: 0.15), value: chapterReplacesTitle)
             if session.isLive {
                 LiveBadge()
             } else {
-                TimelineBar(session: session, focus: focus, interacted: interacted)
+                TimelineBar(session: session, focus: focus, chapterReplacesTitle: chapterReplacesTitle, interacted: interacted)
                     .disabled(panel != nil)
                 HStack {
                     Text(session.displayedPosition.clock)
@@ -68,6 +70,10 @@ struct PlayerControls: View {
             LinearGradient(colors: [.clear, Palette.scrim], startPoint: .top, endPoint: .bottom)
                 .frame(height: Metrics.scrimHeight)
         }
+    }
+
+    private var chapterReplacesTitle: Bool {
+        (focus.wrappedValue == .progress || session.scan != nil) && session.currentChapter != nil
     }
 
     private var transportButtons: some View {
@@ -222,16 +228,26 @@ private struct TimelineBar: View {
     @Environment(AppContext.self) private var app
     let session: PlayerFeature.Session
     var focus: FocusState<PlayerFocus?>.Binding
+    let chapterReplacesTitle: Bool
     let interacted: () -> Void
     @State private var press: Press?
 
     var body: some View {
         let focused = focus.wrappedValue == .progress
+        let fraction = session.duration > .zero ? session.displayedPosition / session.duration : 0
+        let markers = session.timelineMarkers
         ProgressLine(
-            fraction: session.duration > .zero ? session.displayedPosition / session.duration : 0,
-            height: focused ? Metrics.focusedProgressHeight : Metrics.progressHeight
+            fraction: fraction,
+            height: focused ? Metrics.focusedProgressHeight : Metrics.progressHeight,
+            breaks: markers.chapterStarts,
+            highlights: markers.skippable
         )
         .frame(height: Metrics.focusedProgressHeight)
+        .overlay(alignment: .topLeading) {
+            if chapterReplacesTitle, let chapter = session.currentChapter {
+                ChapterTitle(title: chapter.title.rawValue, at: fraction)
+            }
+        }
         .animation(.easeOut(duration: 0.15), value: focused)
         #if os(tvOS)
         .overlay {
@@ -250,6 +266,7 @@ private struct TimelineBar: View {
         }
         #endif
         .accessibilityIdentifier("player.progress")
+        .accessibilityValue(session.currentChapter?.title.rawValue ?? "")
     }
 
     private func togglePause() {

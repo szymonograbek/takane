@@ -172,6 +172,22 @@ enum PlaybackEvent: Equatable, Sendable {
     /// Every cue the selected subtitle track holds so far, timed like `position`, after any change
     /// to them. Empty without one.
     case cueTimeline([TimedCue])
+    /// The stream's chapters in order, once its file is open. Empty when it has none.
+    case chapters([Chapter])
+}
+
+/// A part of the stream its file names, such as a film's scene. It lasts until the next one starts.
+struct Chapter: Identifiable, Hashable, Sendable {
+    struct ID: Hashable, Sendable {
+        /// The engine's number for the chapter, unique within a load.
+        let number: Int
+    }
+
+    let id: ID
+    /// Such as "The Heist", which says what happens. Files that name none get "Chapter 3".
+    let title: Redacted<String>
+    /// Timed like the playback position, so seeking there plays the chapter.
+    let start: Duration
 }
 
 enum PlaybackError: Error, Equatable, Sendable {

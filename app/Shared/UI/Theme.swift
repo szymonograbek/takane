@@ -28,6 +28,11 @@ enum Palette {
     static let cueEdge = text.opacity(0.45)
     /// The glow around the timing strip's playhead.
     static let playheadGlow = text.opacity(0.9)
+    /// Parts of the stream the viewer may skip, such as the intro, on the progress bar.
+    static let skippable = Color(
+        Color(red: 0.902, green: 0.659, blue: 0.341).opacity(0.85),
+        increasedContrast: Color(red: 1, green: 0.749, blue: 0.392)
+    )
 
     private static let cream = Color(red: 0.937, green: 0.910, blue: 0.871)
 
@@ -116,6 +121,10 @@ enum Metrics {
     static let progressHeight: CGFloat = 5
     /// The player's progress bar while it has focus.
     static let focusedProgressHeight: CGFloat = 14
+    /// The gap in the progress bar where a chapter begins.
+    static let progressBreak: CGFloat = 4
+    /// Room between the progress bar and the chapter named above its playhead.
+    static let chapterTitleSpacing: CGFloat = 14
     /// The color dot beside a subtitle color choice.
     static let swatchSize: CGFloat = 36
     /// How strongly an unwatched episode's still blurs while spoilers are hidden.
@@ -156,6 +165,8 @@ enum Metrics {
     static let qrCodeSize: CGFloat = 220
     static let progressHeight: CGFloat = 5
     static let focusedProgressHeight: CGFloat = 9
+    static let progressBreak: CGFloat = 2
+    static let chapterTitleSpacing: CGFloat = 6
     static let swatchSize: CGFloat = 14
     static let spoilerBlurRadius: CGFloat = 16
     static let timingLaneHeight: CGFloat = 32

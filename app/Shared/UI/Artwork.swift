@@ -43,12 +43,37 @@ private extension AsyncImagePhase {
 struct ProgressLine: View {
     let fraction: Double
     var height = Metrics.progressHeight
+    /// Where the line breaks, such as where chapters begin, as shares of its length.
+    var breaks: [Double] = []
+    /// Stretches tinted `Palette.skippable` over the progress, as shares of its length.
+    var highlights: [Range<Double>] = []
 
     var body: some View {
         GeometryReader { proxy in
+            let width = proxy.size.width
             Capsule().fill(.white.opacity(0.3))
                 .overlay(alignment: .leading) {
-                    Capsule().fill(Palette.text).frame(width: proxy.size.width * min(max(fraction, 0), 1))
+                    Capsule().fill(Palette.text).frame(width: width * min(max(fraction, 0), 1))
+                }
+                .overlay(alignment: .leading) {
+                    ForEach(highlights, id: \.lowerBound) { highlight in
+                        Rectangle().fill(Palette.skippable)
+                            .frame(width: width * (highlight.upperBound - highlight.lowerBound))
+                            .offset(x: width * highlight.lowerBound)
+                    }
+                }
+                .clipShape(.capsule)
+                .mask(alignment: .leading) {
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                        ForEach(breaks, id: \.self) { share in
+                            Rectangle()
+                                .frame(width: Metrics.progressBreak)
+                                .offset(x: width * share - Metrics.progressBreak / 2)
+                                .blendMode(.destinationOut)
+                        }
+                    }
+                    .compositingGroup()
                 }
         }
         .frame(height: height)
