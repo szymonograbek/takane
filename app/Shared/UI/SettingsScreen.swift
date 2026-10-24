@@ -8,32 +8,36 @@ struct SettingsScreen: View {
         SettingsPage(title: "Settings") {
             AppLogo(size: Metrics.emblemSize)
         } rows: {
-            NavigationLink {
-                AccountSettings()
-            } label: {
-                LabeledContent("Account", value: app.account.state.account.email?.rawValue ?? "Not Signed In")
+            SettingsSection(note: "Add-ons find streams online, and sources play videos from your own server.") {
+                NavigationLink {
+                    AccountSettings()
+                } label: {
+                    LabeledContent("Account", value: app.account.state.account.email?.rawValue ?? "Not Signed In")
+                }
+                .accessibilityIdentifier("settings.account")
+                NavigationLink {
+                    AddonSettings()
+                } label: {
+                    LabeledContent("Add-ons", value: "\(app.addons.state.installed.count) installed")
+                }
+                .accessibilityIdentifier("settings.addons")
+                NavigationLink(value: Route.sourceSettings) {
+                    LabeledContent("Sources", value: Self.count(app.sources.state.sources))
+                }
+                .accessibilityIdentifier("settings.sources")
             }
-            .accessibilityIdentifier("settings.account")
-            NavigationLink {
-                AddonSettings()
-            } label: {
-                LabeledContent("Add-ons", value: "\(app.addons.state.installed.count) installed")
+            SettingsSection {
+                NavigationLink("Playback") { PlaybackSettings() }
+                    .accessibilityIdentifier("settings.playback")
+                NavigationLink {
+                    SubtitleSettings()
+                } label: {
+                    LabeledContent("Subtitles", value: app.preferences.state.preferences?.languages.subtitles?.primary.displayName ?? "Off")
+                }
+                .accessibilityIdentifier("settings.subtitles")
+                NavigationLink("About") { AboutSettings() }
+                    .accessibilityIdentifier("settings.about")
             }
-            .accessibilityIdentifier("settings.addons")
-            NavigationLink(value: Route.sourceSettings) {
-                LabeledContent("Sources", value: Self.count(app.sources.state.sources))
-            }
-            .accessibilityIdentifier("settings.sources")
-            NavigationLink("Playback") { PlaybackSettings() }
-                .accessibilityIdentifier("settings.playback")
-            NavigationLink {
-                SubtitleSettings()
-            } label: {
-                LabeledContent("Subtitles", value: app.preferences.state.preferences?.languages.subtitles?.primary.displayName ?? "Off")
-            }
-            .accessibilityIdentifier("settings.subtitles")
-            NavigationLink("About") { AboutSettings() }
-                .accessibilityIdentifier("settings.about")
         }
     }
 }
@@ -111,6 +115,43 @@ struct SettingsSection<Rows: View>: View {
     }
 }
 
+/// Rarely changed settings behind a More Options row, which shows them below it in place and keeps
+/// focus. Collapsed, the row counts the hidden settings changed from their defaults, so a viewer
+/// never loses track of one they changed. `rows` are `SettingsSection`s.
+struct MoreOptions<Rows: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isExpanded = false
+    /// How many of the hidden settings differ from their defaults.
+    let changed: Int
+    var note: String?
+    @ViewBuilder let rows: () -> Rows
+
+    var body: some View {
+        SettingsSection(note: note) {
+            Button {
+                withAnimation(reduceMotion ? nil : Motion.appear) { isExpanded.toggle() }
+            } label: {
+                LabeledContent("More Options") {
+                    HStack(spacing: Metrics.headerSpacing) {
+                        if let hint { Text(hint) }
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    }
+                }
+            }
+            .accessibilityValue(isExpanded ? "Expanded" : ["Collapsed", hint].compactMap(\.self).joined(separator: ", "))
+            .accessibilityIdentifier("settings.moreOptions")
+        }
+        if isExpanded {
+            rows()
+        }
+    }
+
+    private var hint: String? {
+        isExpanded || changed == 0 ? nil : "\(changed) changed"
+    }
+}
+
 /// A row that shows a value. On tvOS it still takes focus, so it highlights like the other rows,
 /// the list scrolls to it, Menu has something to leave from, and a long press opens its context menu.
 struct ValueRow: View {
@@ -147,23 +188,24 @@ private struct AccountSettings: View {
         } rows: {
             switch app.account.state.account {
             case .anonymous:
-                SettingsSection(
-                    note: "Sync add-ons, library and watch progress with your Stremio account. "
-                        + "Watch progress on this device is replaced by your account's."
-                ) {
+                SettingsSection(note: "Keeps your add-ons, library and watch progress in step with Stremio, replacing the progress on this device.") {
                     NavigationLink("Sign In") { SignInScreen() }
                         .accessibilityIdentifier("account.signIn")
                 }
             case .signedIn(let email, _, let trakt):
-                ValueRow(title: "Email", value: email.rawValue)
-                NavigationLink {
-                    TraktSettings()
-                } label: {
-                    LabeledContent("Trakt", value: trakt == .linked ? "Connected" : "Not Connected")
+                SettingsSection(note: "Trakt marks what you watch here as watched there too.") {
+                    ValueRow(title: "Email", value: email.rawValue)
+                    NavigationLink {
+                        TraktSettings()
+                    } label: {
+                        LabeledContent("Trakt", value: trakt == .linked ? "Connected" : "Not Connected")
+                    }
+                    .accessibilityIdentifier("settings.trakt")
                 }
-                .accessibilityIdentifier("settings.trakt")
-                Button("Sign Out", role: .destructive) { confirmingSignOut = true }
-                    .accessibilityIdentifier("account.signOut")
+                SettingsSection {
+                    Button("Sign Out", role: .destructive) { confirmingSignOut = true }
+                        .accessibilityIdentifier("account.signOut")
+                }
             }
         }
         .confirmationDialog("Sign Out?", isPresented: $confirmingSignOut) {
@@ -196,14 +238,16 @@ private struct TraktSettings: View {
         } rows: {
             switch (account.state.account.trakt, account.state.trakt) {
             case (.linked, _):
-                ValueRow(title: "Status", value: "Connected")
+                SettingsSection(note: "What you watch here is marked watched on Trakt.") {
+                    ValueRow(title: "Status", value: "Connected")
+                }
                 Button("Disconnect", role: .destructive) { confirmingDisconnect = true }
                     .accessibilityIdentifier("trakt.disconnect")
             case (.unlinked, .failed):
                 Button("Try Again") { account.send(.startTraktLink) }
                     .accessibilityIdentifier("trakt.retry")
             case (.unlinked, .idle), (.unlinked, .waiting):
-                SettingsSection(note: "Scan with your phone to connect Trakt. What you watch here is then marked watched on Trakt.") {
+                SettingsSection(note: "Scan the code with your phone to mark what you watch here as watched on Trakt.") {
                     ValueRow(title: "Status", value: "Waiting for Trakt")
                 }
             case (nil, _):
@@ -253,7 +297,7 @@ private struct AboutSettings: View {
         SettingsPage(title: "About") {
             AppLogo(size: Metrics.emblemSize)
         } rows: {
-            SettingsSection(note: "Takane plays streams from the add-ons you install. Built on stremio-core and AetherEngine.") {
+            SettingsSection(note: "Takane plays streams from the add-ons you install, and is built on stremio-core and AetherEngine.") {
                 ValueRow(title: "Version", value: Bundle.main.version)
             }
             SettingsSection(note: "Download this device's logs on a phone or computer on the same network, to report a problem.") {

@@ -12,7 +12,7 @@ struct AddonSettings: View {
         SettingsPage(title: "Add-ons") {
             SettingsSymbol(name: "puzzlepiece.extension")
         } rows: {
-            SettingsSection {
+            SettingsSection(note: "Add one from the link its website gives you, such as a debrid service's.") {
                 NavigationLink("Install Add-on") { InstallAddonScreen() }
                     .accessibilityIdentifier("addons.install")
             }
@@ -51,11 +51,11 @@ struct AddonSettings: View {
     }
 
     #if os(tvOS)
-    private static let hint = "Turning an add-on off affects this Apple TV only. To move or remove one, press and hold it. \(orderNote)"
+    private static let hint = "\(orderNote) Press and hold one to move or remove it, or switch it off on this Apple TV only."
     #else
-    private static let hint = "Turning an add-on off affects this Mac only. To move or remove one, Control-click it. \(orderNote)"
+    private static let hint = "\(orderNote) Control-click one to move or remove it, or switch it off on this Mac only."
     #endif
-    private static let orderNote = "Streams and subtitles list add-ons in this order, which your account keeps."
+    private static let orderNote = "Streams and subtitles list add-ons in this order."
 }
 
 /// Typing or pasting a manifest URL, such as a debrid add-on's.
@@ -99,8 +99,9 @@ private struct InstallAddonScreen: View {
     }
 }
 
-/// The languages to pick audio tracks in, how far back and forward skip, and whether unwatched
-/// episodes hide spoilers.
+/// The languages to pick audio tracks in, how far back and forward skip and what happens near an
+/// episode's end; where skip data comes from and whether unwatched episodes hide spoilers sit
+/// behind More Options.
 struct PlaybackSettings: View {
     @Environment(AppContext.self) private var app
 
@@ -109,10 +110,13 @@ struct PlaybackSettings: View {
         let seekStep = preferences?.seekStep ?? .defaults
         let upNext = preferences?.upNext ?? .defaults
         let skipSegmentSource = preferences?.skipSegmentSource ?? .defaults
+        let hidesSpoilers = preferences?.hidesSpoilers ?? false
+        let hasPremium = app.account.state.account.hasPremium
+        let defaultSkipSegmentSource = SkipSegmentSource.resolved(nil, hasPremium: hasPremium)
         SettingsPage(title: "Playback") {
             SettingsSymbol(name: "play.rectangle")
         } rows: {
-            SettingsSection(title: "Audio", note: "Used when a stream has it. You can switch during playback.") {
+            SettingsSection(title: "Audio", note: "Streams start with this audio when they have it, and you can switch while watching.") {
                 PreferredLanguagesPicker(
                     title: "Language", none: "Stream Default", selection: preferences?.languages.audio,
                     ids: (primary: "playback.audioLanguage", fallback: "playback.secondAudioLanguage")
@@ -120,7 +124,7 @@ struct PlaybackSettings: View {
                     app.preferences.send(.setAudioLanguages($0))
                 }
             }
-            SettingsSection(title: "Player", note: "Quick presses in a row skip further, up to a minute.") {
+            SettingsSection(title: "Player", note: "How far a press of left or right jumps, adding up when you press quickly in a row.") {
                 NavigationLink {
                     ChoiceList(
                         title: "Skip Interval", symbol: "goforward",
@@ -133,21 +137,10 @@ struct PlaybackSettings: View {
                 }
                 .accessibilityIdentifier("playback.seekStep")
             }
-            SettingsSection(title: "Skip Intro", note: "Where the player finds intros, recaps and credits to skip.") {
-                NavigationLink {
-                    ChoiceList(
-                        title: "Skip Data", symbol: "forward.frame",
-                        choices: SkipSegmentSource.available(hasPremium: app.account.state.account.hasPremium).map { (name: $0.name, value: $0) },
-                        selection: skipSegmentSource
-                    ) {
-                        app.preferences.send(.setSkipSegmentSource($0))
-                    }
-                } label: {
-                    LabeledContent("Skip Data", value: skipSegmentSource.name)
-                }
-                .accessibilityIdentifier("playback.skipSegmentSource")
-            }
-            SettingsSection(title: "Next Episode", note: "Autoplay needs a matching stream from the same add-on.") {
+            SettingsSection(
+                title: "Next Episode",
+                note: "A card offers the next episode before the end, and autoplay starts it when the same add-on has a stream for it."
+            ) {
                 NavigationLink {
                     ChoiceList(
                         title: "Up Next Card", symbol: "forward.end",
@@ -164,14 +157,31 @@ struct PlaybackSettings: View {
                 })
                 .accessibilityIdentifier("playback.autoplayNext")
             }
-            SettingsSection(
-                title: "Episodes",
-                note: app.preferences.state.failure?.message ?? "Blurs stills and hides summaries of episodes you haven't watched."
+            MoreOptions(
+                changed: [skipSegmentSource != defaultSkipSegmentSource, hidesSpoilers].count { $0 },
+                note: app.preferences.state.failure?.message
             ) {
-                Toggle("Hide Spoilers", isOn: Binding { preferences?.hidesSpoilers ?? false } set: { hides in
-                    app.preferences.send(.setHidesSpoilers(hides))
-                })
-                .accessibilityIdentifier("playback.hideSpoilers")
+                SettingsSection(title: "Skip Intro", note: "Where Takane learns when intros, recaps and credits play, so it can offer to skip them.") {
+                    NavigationLink {
+                        ChoiceList(
+                            title: "Skip Data", symbol: "forward.frame",
+                            choices: SkipSegmentSource.available(hasPremium: hasPremium).map { (name: $0.name, value: $0) },
+                            selection: skipSegmentSource,
+                            note: "Each database covers different shows, so try another if Skip Intro rarely appears."
+                        ) {
+                            app.preferences.send(.setSkipSegmentSource($0))
+                        }
+                    } label: {
+                        LabeledContent("Skip Data", value: skipSegmentSource.name)
+                    }
+                    .accessibilityIdentifier("playback.skipSegmentSource")
+                }
+                SettingsSection(title: "Episodes", note: "Blurs stills and hides summaries of episodes you haven't watched.") {
+                    Toggle("Hide Spoilers", isOn: Binding { hidesSpoilers } set: { hides in
+                        app.preferences.send(.setHidesSpoilers(hides))
+                    })
+                    .accessibilityIdentifier("playback.hideSpoilers")
+                }
             }
         }
     }

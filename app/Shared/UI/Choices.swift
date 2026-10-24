@@ -292,24 +292,28 @@ struct ChoiceList<Value: Hashable>: View {
     let symbol: String
     let choices: [(name: String, value: Value)]
     let selection: Value
+    /// Below the choices, for choices whose names don't say how they differ.
+    var note: String?
     let choose: (Value) -> Void
 
     var body: some View {
         SettingsPage(title: title) {
             SettingsSymbol(name: symbol)
         } rows: {
-            ForEach(choices, id: \.value) { choice in
-                Button {
-                    choose(choice.value)
-                    dismiss()
-                } label: {
-                    HStack {
-                        Text(choice.name)
-                        Spacer()
-                        if choice.value == selection { Image(systemName: "checkmark") }
+            SettingsSection(note: note) {
+                ForEach(choices, id: \.value) { choice in
+                    Button {
+                        choose(choice.value)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(choice.name)
+                            Spacer()
+                            if choice.value == selection { Image(systemName: "checkmark") }
+                        }
                     }
+                    .focused($focused, equals: choice.value)
                 }
-                .focused($focused, equals: choice.value)
             }
         }
         .defaultFocus($focused, selection)
