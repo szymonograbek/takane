@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.5.0](https://github.com/szymonograbek/takane/compare/v1.4.0...v1.5.0) (2026-10-24)
+
+
+### Features
+
+* **bridge:** list free films first when signed out ([#52](https://github.com/szymonograbek/takane/issues/52)) ([8fcae93](https://github.com/szymonograbek/takane/commit/8fcae932ea08e98fe2c1c5166665e38c9a7db197))
+* **bridge:** list source add-ons on this device only ([#59](https://github.com/szymonograbek/takane/issues/59)) ([115e8b6](https://github.com/szymonograbek/takane/commit/115e8b6a793f41d7683acb94b0098508ccbf9c04))
+* **core:** answer source add-ons in the app and resolve their links ([#61](https://github.com/szymonograbek/takane/issues/61)) ([0ed5fa8](https://github.com/szymonograbek/takane/commit/0ed5fa83e91aa6276396e424b0a51f45d5c593f4))
+* **features:** connect trakt and scrobble what plays ([#45](https://github.com/szymonograbek/takane/issues/45)) ([d606eae](https://github.com/szymonograbek/takane/commit/d606eae2abb62a2e2cc80403763ea08d1bf5b491))
+* **features:** like or love a title from its details ([#47](https://github.com/szymonograbek/takane/issues/47)) ([846f811](https://github.com/szymonograbek/takane/commit/846f811afd709c7bb5c52af2da42a7f2a3530237))
+* **features:** list other streaming services under the streams ([#51](https://github.com/szymonograbek/takane/issues/51)) ([9c6320a](https://github.com/szymonograbek/takane/commit/9c6320a57f6570f7c817eaa24288d25cb759d5a8))
+* **features:** reorder add-ons from their press-and-hold menu ([#50](https://github.com/szymonograbek/takane/issues/50)) ([7ac5be5](https://github.com/szymonograbek/takane/commit/7ac5be558dd0ccb994208b55c34d96b1d248beef))
+* **features:** show add-on subtitles in the preferred language ([#49](https://github.com/szymonograbek/takane/issues/49)) ([5e5aec4](https://github.com/szymonograbek/takane/commit/5e5aec47210f277aee00e6c56ef8209efe3d07b0))
+* show a second subtitle track beside the first ([#77](https://github.com/szymonograbek/takane/issues/77)) ([25b6ed4](https://github.com/szymonograbek/takane/commit/25b6ed4841b50eb4e70b05c6a929d85a537f73b6))
+* **sources:** let webdav folders say what they hold and read nfo ids ([#71](https://github.com/szymonograbek/takane/issues/71)) ([383b795](https://github.com/szymonograbek/takane/commit/383b79561558e0a8857b5e9475cd99f504bebb56))
+* **sources:** match untagged webdav titles by name ([#69](https://github.com/szymonograbek/takane/issues/69)) ([8659062](https://github.com/szymonograbek/takane/commit/8659062636bcff9381db1193544474dd944db020))
+* **sources:** play a jellyfin server's films and shows ([#65](https://github.com/szymonograbek/takane/issues/65)) ([2fa74d4](https://github.com/szymonograbek/takane/commit/2fa74d4a2ab218cb80aef59e0f84257f92c80093))
+* **sources:** play a webdav folder ([#66](https://github.com/szymonograbek/takane/issues/66)) ([e22aa21](https://github.com/szymonograbek/takane/commit/e22aa21a742b23a6341046ca27ad1f2f3a29f46f))
+* **sources:** store media sources in the keychain and sign in to them ([#62](https://github.com/szymonograbek/takane/issues/62)) ([22d4546](https://github.com/szymonograbek/takane/commit/22d4546555875ca22aa6a464b3272d320333456d))
+* **ui:** add, edit and remove media sources in settings ([#67](https://github.com/szymonograbek/takane/issues/67)) ([88ec43f](https://github.com/szymonograbek/takane/commit/88ec43fb18f6f6d2c95912bc5a3970264a05b992))
+* **ui:** animate surfaces that appear and symbols that change ([#48](https://github.com/szymonograbek/takane/issues/48)) ([bacad21](https://github.com/szymonograbek/takane/commit/bacad217a174c4ea6106eebca7714d360195304e))
+* **ui:** browse a source's folders ([#68](https://github.com/szymonograbek/takane/issues/68)) ([b87c011](https://github.com/szymonograbek/takane/commit/b87c011fcc92916ebf15289391ecdff0f7e2ceb1))
+* **ui:** explain settings in notes and fold rare ones into more options ([#78](https://github.com/szymonograbek/takane/issues/78)) ([b81e888](https://github.com/szymonograbek/takane/commit/b81e888128d30addca6ad9738743e93ff83c7353))
+* **ui:** mark chapters and skip segments on the progress bar ([#75](https://github.com/szymonograbek/takane/issues/75)) ([fed1854](https://github.com/szymonograbek/takane/commit/fed1854f143af04d4f9137bf1efd55569fb41933))
+* **ui:** open Info, Episodes and Chapters tabs below the transport bar ([#76](https://github.com/szymonograbek/takane/issues/76)) ([8c8d4e6](https://github.com/szymonograbek/takane/commit/8c8d4e6aeb5f3ffe28c50b57cd557d6520266d8a))
+* **ui:** see a source's titles in library and lead home with sources ([#72](https://github.com/szymonograbek/takane/issues/72)) ([e423e79](https://github.com/szymonograbek/takane/commit/e423e79f9fe85c13f7537f51fba452e15a62e95f))
+* **ui:** show where people speak and suggest the subtitle delay ([#74](https://github.com/szymonograbek/takane/issues/74)) ([270af07](https://github.com/szymonograbek/takane/commit/270af070d7c377023ac6b12abcf79ee429604ab4))
+* **ui:** sync subtitles with the remote while the video plays ([#73](https://github.com/szymonograbek/takane/issues/73)) ([1571ce1](https://github.com/szymonograbek/takane/commit/1571ce1328740f5bfe844793d8e88c5aea8fa1b3))
+
+
+### Bug Fixes
+
+* **scripts:** expect open movies in the smoke journey ([#60](https://github.com/szymonograbek/takane/issues/60)) ([520482e](https://github.com/szymonograbek/takane/commit/520482ebf443ccd2aaf14c53e12010d23535b30c))
+* **ui:** drop torrent and debrid wording from stream errors ([#55](https://github.com/szymonograbek/takane/issues/55)) ([9ec6e8a](https://github.com/szymonograbek/takane/commit/9ec6e8a504cc32cd55b04ca476df39923b94f532))
+* **ui:** name stremio only where it identifies the account ([#54](https://github.com/szymonograbek/takane/issues/54)) ([3c202dd](https://github.com/szymonograbek/takane/commit/3c202ddcbebac67e4910c14deeef84f40bc4df01))
+
 ## [1.4.0](https://github.com/szymonograbek/takane/compare/v1.3.0...v1.4.0) (2026-10-21)
 
 
