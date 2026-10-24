@@ -175,6 +175,8 @@ enum Metrics {
     static let scrimHeight: CGFloat = 520
     /// The dashes of a cue's outline at its file's time: drawn, then skipped.
     static let cueOutlineDash: [CGFloat] = [8, 6]
+    /// The dots of the speech lane where the audio has not played yet: a round dot, then a gap.
+    static let unheardDash: [CGFloat] = [0, 10]
     /// The share of the timing lane's width over which it fades in at each end.
     static let timingLaneFade: CGFloat = 0.08
 
