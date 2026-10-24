@@ -12,6 +12,14 @@ extension PlayerFeature.State {
         return ([time] + parts).joined(separator: " · ")
     }
 
+    var phaseName: String {
+        switch self {
+        case .idle: "idle"
+        case .active(let session): session.phase.rawValue
+        case .failed(_, let error): "failed: \(error)"
+        }
+    }
+
     private static func clock(_ duration: Duration) -> String {
         let total = Int(duration.components.seconds)
         return String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)

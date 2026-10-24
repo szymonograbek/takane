@@ -17,6 +17,14 @@ enum Palette {
     static let text = Color(cream, increasedContrast: .white)
     /// Metadata and labels: the text color, dimmed.
     static let secondary = Color(cream.opacity(0.6), increasedContrast: .white.opacity(0.85))
+    /// The box behind the subtitle timing lanes, letting the video show through.
+    static let lane = Color(cream.opacity(0.08), increasedContrast: Color(red: 0.08, green: 0.05, blue: 0.05).opacity(0.9))
+    /// Dims the video behind the controls and the timing strip, from clear at the top to this.
+    static let scrim = Color.black.opacity(0.85)
+    /// The border of a cue block in the timing strip other than the line select starts.
+    static let cueEdge = text.opacity(0.45)
+    /// The glow around the timing strip's playhead.
+    static let playheadGlow = text.opacity(0.9)
 
     private static let cream = Color(red: 0.937, green: 0.910, blue: 0.871)
 
@@ -109,6 +117,16 @@ enum Metrics {
     static let swatchSize: CGFloat = 36
     /// How strongly an unwatched episode's still blurs while spoilers are hidden.
     static let spoilerBlurRadius: CGFloat = 24
+    /// A lane of the subtitle timing strip, its label's column and the space between lanes.
+    static let timingLaneHeight: CGFloat = 64
+    static let timingLabelWidth: CGFloat = 170
+    static let timingLaneSpacing: CGFloat = 12
+    /// The narrowest a cue block gets, and the narrowest that still shows its words.
+    static let cueMinWidth: CGFloat = 12
+    static let cueTextMinWidth: CGFloat = 90
+    static let cueBorder: CGFloat = 2
+    static let playheadWidth: CGFloat = 4
+    static let playheadGlowRadius: CGFloat = 8
     #else
     static let wideCardWidth: CGFloat = 280
     static let shelfSpacing: CGFloat = 16
@@ -135,10 +153,24 @@ enum Metrics {
     static let focusedProgressHeight: CGFloat = 9
     static let swatchSize: CGFloat = 14
     static let spoilerBlurRadius: CGFloat = 16
+    static let timingLaneHeight: CGFloat = 32
+    static let timingLabelWidth: CGFloat = 80
+    static let timingLaneSpacing: CGFloat = 6
+    static let cueMinWidth: CGFloat = 6
+    static let cueTextMinWidth: CGFloat = 50
+    static let cueBorder: CGFloat = 1
+    static let playheadWidth: CGFloat = 2
+    static let playheadGlowRadius: CGFloat = 4
     #endif
 
     /// The title column beside the stream list.
     static let streamsInfoWidth: CGFloat = 520
+    /// How far up the player's scrim reaches.
+    static let scrimHeight: CGFloat = 520
+    /// The dashes of a cue's outline at its file's time: drawn, then skipped.
+    static let cueOutlineDash: [CGFloat] = [8, 6]
+    /// The share of the timing lane's width over which it fades in at each end.
+    static let timingLaneFade: CGFloat = 0.08
 
     // Subtitles scale with the picture rather than the screen, so the preview in Settings is the
     // player's overlay in miniature.

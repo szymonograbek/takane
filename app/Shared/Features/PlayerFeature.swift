@@ -42,6 +42,10 @@ enum PlayerFeature: Feature {
         var seekStep = SeekStep.defaults
         /// The subtitles visible now.
         var subtitles: [SubtitleCue] = []
+        /// How far the subtitles are moved from their file's times.
+        var subtitleDelay = SubtitleDelay.zero
+        /// The selected subtitle track's cues, for timing them.
+        var cueTimeline: [TimedCue] = []
         /// Parts of the stream the viewer may skip, found once the duration is known.
         var segments: Remote<[SkipSegment], SkipSegmentError>?
         /// Where to find `segments`, from the preferences.
@@ -73,6 +77,7 @@ enum PlayerFeature: Feature {
         case select(MediaTrack.ID)
         case chooseSubtitles(SubtitleChoice)
         case setSpeed(PlaybackSpeed)
+        case subtitleTiming(SubtitleTimingEvent)
         case skip(SkipSegment)
         case stop
         case engine(PlaybackEvent)
@@ -110,6 +115,7 @@ enum PlayerFeature: Feature {
         case turnOffSubtitles
         case addSubtitles(AddonSubtitle)
         case setSpeed(PlaybackSpeed)
+        case setSubtitleDelay(SubtitleDelay)
         case findSegments(PlayableID, duration: Duration, from: SkipSegmentSource)
         case stop
         case report(Report)
@@ -125,12 +131,7 @@ enum PlayerFeature: Feature {
             return open(candidate, from: start, title: title, replacing: &state)
 
         case (.active(let session), .togglePause):
-            guard session.scan == nil else { return update(&state, session) { $0.endScan() } }
-            switch session.phase {
-            case .playing: return [.setPaused(true)]
-            case .paused: return [.setPaused(false)]
-            case .opening, .ended: return []
-            }
+            return update(&state, session) { $0.togglePause() }
 
         // A live channel plays where its broadcast is: nothing to seek to.
         case (.active(let session), .jump(let direction)) where !session.isLive:
@@ -147,6 +148,9 @@ enum PlayerFeature: Feature {
 
         case (.active(let session), .setSpeed(let speed)):
             return update(&state, session) { $0.setSpeed(speed) }
+
+        case (.active(let session), .subtitleTiming(let event)):
+            return update(&state, session) { $0.apply(event) }
 
         case (.active(let session), .skip(let segment)) where session.segments?.value?.contains(segment) == true:
             return update(&state, session) { $0.endScan() + [.seekTo(segment.range.upperBound)] }
@@ -186,8 +190,8 @@ enum PlayerFeature: Feature {
             }
             return event == .ended ? effects + autoplayNext(after: session, replacing: &state) : effects
 
-        case (.idle, .togglePause), (.idle, .jump), (.idle, .stop), (.idle, .engine),
-             (.failed, .togglePause), (.failed, .jump), (.failed, .engine),
+        case (.idle, .togglePause), (.idle, .jump), (.idle, .stop), (.idle, .engine), (.idle, .subtitleTiming),
+             (.failed, .togglePause), (.failed, .jump), (.failed, .engine), (.failed, .subtitleTiming),
              (.idle, .select), (.idle, .chooseSubtitles), (.idle, .setSpeed), (.idle, .skip), (.idle, .segmentsFound),
              (.failed, .select), (.failed, .chooseSubtitles), (.failed, .setSpeed), (.failed, .skip), (.failed, .segmentsFound),
              (.idle, .subtitlesFound), (.failed, .subtitlesFound), (.idle, .timeline), (.failed, .timeline),
@@ -269,6 +273,8 @@ enum PlayerFeature: Feature {
             session.speed = speed
         case .subtitles(let cues):
             session.subtitles = cues
+        case .cueTimeline(let cues):
+            session.cueTimeline = cues
         }
         return []
     }
@@ -313,6 +319,8 @@ extension PlayerFeature {
             engine.addSubtitles(subtitle.url, from: subtitle.source, title: subtitle.label?.rawValue ?? subtitle.language, language: subtitle.language)
         case .setSpeed(let speed):
             engine.setSpeed(speed)
+        case .setSubtitleDelay(let delay):
+            engine.setSubtitleDelay(delay)
         case .findSegments(let item, let duration, let source):
             do {
                 let found = try await dependencies.skipSegments(source).segments(for: item, duration: duration)
@@ -351,19 +359,6 @@ extension PlayerFeature.Session {
     var isLive: Bool {
         if case .liveChannel = candidate.item { true } else { false }
     }
-
-    /// The stream's own subtitle tracks, without files added from add-ons.
-    var builtInSubtitles: [MediaTrack] {
-        tracks.filter { $0.id.kind == .subtitle && $0.externalFile == nil }
-    }
-
-    var subtitleChoice: PlayerFeature.SubtitleChoice {
-        tracks.first { $0.id.kind == .subtitle && $0.isSelected }.map(subtitleChoice(of:)) ?? .off
-    }
-
-    func addonSubtitle(_ id: AddonSubtitle.ID) -> AddonSubtitle? {
-        addonSubtitles.first { $0.addon == id.addon }?.subtitles.value?.first { $0.id == id }
-    }
 }
 
 extension PlayerFeature.State {
@@ -388,13 +383,5 @@ extension PlayerFeature.State {
 
     func tracks(_ kind: TrackKind) -> [MediaTrack] {
         session?.tracks.filter { $0.id.kind == kind } ?? []
-    }
-
-    var phaseName: String {
-        switch self {
-        case .idle: "idle"
-        case .active(let session): session.phase.rawValue
-        case .failed(_, let error): "failed: \(error)"
-        }
     }
 }

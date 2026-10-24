@@ -24,6 +24,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
     /// pre-seek position: before the engine's host takes the clock over, and after AVPlayer misses its
     /// landing deadline. Core would count that as watched, so only the target gets through.
     private var seeking: SeekEvent?
+    /// The subtitle delay in seconds, which moves the cues shown against the clock.
+    private let subtitleDelay = CurrentValueSubject<Double, Never>(0)
+    /// How far the clock the cues are stamped on runs ahead of the position reported.
+    private var sourceClock = SourceClock()
     private var observations: Set<AnyCancellable> = []
 
     /// `muted` plays every stream silently, for automated runs.
@@ -54,6 +58,8 @@ final class AetherPlaybackEngine: PlaybackEngine {
         loading?.cancel()
         reported = Reported()
         externalFiles = [:]
+        subtitleDelay.send(0)
+        sourceClock = SourceClock()
         let url = source.url.rawValue
         let startPosition = start > .zero ? start / .seconds(1) : nil
         let options = LoadOptions(
@@ -114,6 +120,10 @@ final class AetherPlaybackEngine: PlaybackEngine {
         player.setRate(Float(speed.rawValue))
         // The engine publishes no rate. The one set holds until the next source.
         continuation.yield(.speed(speed))
+    }
+
+    func setSubtitleDelay(_ delay: SubtitleDelay) {
+        subtitleDelay.send(delay.duration / .seconds(1))
     }
 
     func stop() {
@@ -179,9 +189,19 @@ final class AetherPlaybackEngine: PlaybackEngine {
                 send(.tracks(tracks), on: \.tracks)
             }
             .store(in: &observations)
+        // Published before they change: read once the engine has set both clocks for the tick.
+        player.clock.$currentTime.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.clockTicked() }
+            .store(in: &observations)
+        player.$subtitleCues.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.sendCueTimeline() }
+            .store(in: &observations)
         // Cues arrive ahead of time, stamped with source PTS; `sourceTime` is the PTS on screen.
-        player.$subtitleCues.combineLatest(player.clock.$sourceTime)
-            .map { cues, time in cues.filter { $0.startTime <= time && time < $0.endTime } }
+        Publishers.CombineLatest3(player.$subtitleCues, player.clock.$sourceTime, subtitleDelay)
+            .map { cues, time, delay in
+                let shown = time - delay
+                return cues.filter { $0.startTime <= shown && shown < $0.endTime }
+            }
             .sink { [weak self] visible in
                 guard let self else { return }
                 let video = reported.video
@@ -213,6 +233,24 @@ final class AetherPlaybackEngine: PlaybackEngine {
             Log.player.error("playback failed (\(player.errorInfo?.kind.rawValue ?? "unclassified")): \(message)")
             continuation.yield(.failed(reason: message))
         }
+    }
+
+    /// Learns how far the source clock runs ahead of the position, away from seeks, which can leave
+    /// the source clock on the old frame.
+    private func clockTicked() {
+        guard seeking == nil, sourceClock.read(position: player.clock.currentTime, source: player.clock.sourceTime) else { return }
+        Log.player.info("source clock ahead of the position by \(sourceClock.offset)s")
+        sendCueTimeline()
+    }
+
+    /// The selected track's cues, timed like the position. Sent only when they differ from the last.
+    private func sendCueTimeline() {
+        let cues = player.subtitleCues
+        let starts = cues.map(\.startTime).sorted()
+        let timeline = cues.map { cue in
+            TimedCue(number: cue.id, start: cue.startTime, end: cue.endTime, text: cue.text, starts: starts, clock: sourceClock)
+        }
+        send(.cueTimeline(timeline), on: \.cueTimeline)
     }
 
     private func positionChanged(_ seconds: Double) {
@@ -262,6 +300,7 @@ private struct Reported {
     var decoder: PlaybackEvent?
     var tracks: PlaybackEvent?
     var subtitles: PlaybackEvent?
+    var cueTimeline: PlaybackEvent?
 
     var video: VideoSize? {
         if case .videoSize(let size)? = videoSize { size } else { nil }

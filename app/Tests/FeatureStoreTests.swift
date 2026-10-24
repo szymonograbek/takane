@@ -25,6 +25,7 @@ private final class FakeEngine: PlaybackEngine {
         commands.append("add \(file.rawValue.lastPathComponent)")
     }
     func setSpeed(_ speed: PlaybackSpeed) { commands.append("speed \(speed.rawValue)") }
+    func setSubtitleDelay(_ delay: SubtitleDelay) { commands.append("subtitle delay \(delay.duration)") }
     func stop() { commands.append("stop") }
     func diagnostics() -> [String: String] { [:] }
     func snapshot() async -> CGImage? { nil }

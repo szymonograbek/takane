@@ -77,8 +77,8 @@ extension PlayerState {
 }
 
 /// core's `StreamItemState`: what the viewer changed from the defaults for one video. The app manages
-/// the track and speed keys and sends the others back as core gave them, since core replaces the
-/// whole state on `StreamStateChanged`.
+/// the track, subtitle delay and speed keys and sends the others back as core gave them, since core
+/// replaces the whole state on `StreamStateChanged`.
 struct StreamItemState: Codable, Equatable, Sendable {
     struct SubtitleTrack: Codable, Equatable, Sendable {
         /// The engine's track number for an embedded track, the file's URL for an add-on's.
@@ -94,11 +94,13 @@ struct StreamItemState: Codable, Equatable, Sendable {
 
     var subtitleTrack: SubtitleTrack?
     var audioTrack: AudioTrack?
+    /// In milliseconds, positive showing subtitles later, as Stremio's other apps keep it.
+    var subtitleDelay: Int64?
     var playbackSpeed: Double?
-    /// Keys the app does not manage, such as delays and the subtitle size.
+    /// Keys the app does not manage, such as the audio delay and the subtitle size.
     var others: [String: JSONValue] = [:]
 
-    private enum CodingKeys: String, CodingKey { case subtitleTrack, audioTrack, playbackSpeed }
+    private enum CodingKeys: String, CodingKey { case subtitleTrack, audioTrack, subtitleDelay, playbackSpeed }
 
     init() {}
 
@@ -106,6 +108,7 @@ struct StreamItemState: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         subtitleTrack = try container.decodeIfPresent(SubtitleTrack.self, forKey: .subtitleTrack)
         audioTrack = try container.decodeIfPresent(AudioTrack.self, forKey: .audioTrack)
+        subtitleDelay = try container.decodeIfPresent(Int64.self, forKey: .subtitleDelay)
         playbackSpeed = try container.decodeIfPresent(Double.self, forKey: .playbackSpeed)
         others = try [String: JSONValue](from: decoder).filter { key, _ in CodingKeys(stringValue: key) == nil }
     }
@@ -117,7 +120,40 @@ struct StreamItemState: Codable, Equatable, Sendable {
         }
         try container.encodeIfPresent(subtitleTrack, forKey: DynamicKey(CodingKeys.subtitleTrack.stringValue))
         try container.encodeIfPresent(audioTrack, forKey: DynamicKey(CodingKeys.audioTrack.stringValue))
+        try container.encodeIfPresent(subtitleDelay, forKey: DynamicKey(CodingKeys.subtitleDelay.stringValue))
         try container.encodeIfPresent(playbackSpeed, forKey: DynamicKey(CodingKeys.playbackSpeed.stringValue))
+    }
+}
+
+extension StreamItemState {
+    /// The managed keys, in core's terms: an embedded track by the engine's number, an add-on's file
+    /// by its URL. Ids the app did not write read as nothing chosen, and no delay as zero.
+    var choices: TrackChoices {
+        get {
+            let subtitles: TrackChoices.Subtitles? = subtitleTrack.flatMap { track in
+                if track.embedded {
+                    Int(track.id).map { .builtIn(TrackChoices.Track(number: $0, language: track.language)) }
+                } else {
+                    URL(string: track.id).map { .addon(Redacted($0), language: track.language) }
+                }
+            }
+            return TrackChoices(
+                audio: audioTrack.flatMap { track in Int(track.id).map { TrackChoices.Track(number: $0, language: track.language) } },
+                subtitles: subtitles,
+                speed: playbackSpeed.flatMap(PlaybackSpeed.init(rawValue:)),
+                subtitleDelay: subtitleDelay.map { SubtitleDelay(clamping: .milliseconds($0)) } ?? .zero
+            )
+        }
+        set {
+            audioTrack = newValue.audio.map { AudioTrack(id: String($0.number), language: $0.language) }
+            subtitleTrack = switch newValue.subtitles {
+            case nil: nil
+            case .builtIn(let track): SubtitleTrack(id: String(track.number), embedded: true, language: track.language)
+            case .addon(let url, let language): SubtitleTrack(id: url.rawValue.absoluteString, embedded: false, language: language)
+            }
+            playbackSpeed = newValue.speed?.rawValue
+            subtitleDelay = newValue.subtitleDelay == .zero ? nil : Int64((newValue.subtitleDelay.duration / .milliseconds(1)).rounded())
+        }
     }
 }
 

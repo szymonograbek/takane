@@ -55,6 +55,35 @@ struct CorePlayerWireTests {
         #expect(state.skipSegments(for: Fixture.episode, within: stream) == SkipSegments(item: Fixture.episode, segments: [], introLengthEstimate: nil))
     }
 
+    @Test func theSubtitleDelayGoesBackWithTheKeysTheAppLeavesAlone() throws {
+        var state = try JSONDecoder().decode(StreamItemState.self, from: Data(#"{"subtitleDelay": -1500, "subtitleSize": 120}"#.utf8))
+        #expect(state.subtitleDelay == -1_500)
+        state.subtitleDelay = 800
+        let sent = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(state))
+        #expect(sent == .object(["subtitleDelay": .number(800), "subtitleSize": .number(120)]))
+    }
+
+    @Test func subtitlesInSyncLeaveNoDelayForCore() throws {
+        var state = try JSONDecoder().decode(StreamItemState.self, from: Data(#"{"subtitleDelay": 800}"#.utf8))
+        state.choices = TrackChoices(speed: .normal)
+        let sent = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(state))
+        #expect(sent == .object(["playbackSpeed": .number(1)]))
+    }
+
+    @Test func aDelayGoesToCoreInWholeMilliseconds() {
+        var state = StreamItemState()
+        state.choices = TrackChoices(subtitleDelay: SubtitleDelay(clamping: .microseconds(1_250_600)))
+        #expect(state.subtitleDelay == 1_251)
+        state.choices = TrackChoices(subtitleDelay: SubtitleDelay(clamping: .microseconds(-400_400)))
+        #expect(state.subtitleDelay == -400)
+    }
+
+    @Test func aStoredDelayReadsBackWithinTheLimit() throws {
+        let state = try JSONDecoder().decode(StreamItemState.self, from: Data(#"{"subtitleDelay": -45000}"#.utf8))
+        #expect(state.choices.subtitleDelay == SubtitleDelay(clamping: .seconds(-30)))
+        #expect(StreamItemState().choices.subtitleDelay == .zero)
+    }
+
     @Test func noAnswerUntilCoreHasOneForThisEpisode() throws {
         #expect(try player(playing: "tt0944947:1:1", introOutro: nil).skipSegments(for: Fixture.episode, within: stream) == nil)
         let otherEpisode = try player(playing: "tt0944947:1:2", introOutro: #"{"intro": null, "outro": 2880000}"#)
